@@ -1,0 +1,1025 @@
+import { create } from 'zustand';
+import {
+  DistrictId,
+  Language,
+  MissionStep,
+  PlayerOutfit,
+  RadioStationId,
+  ToolWeapon,
+  ToolWeaponId,
+  TransactionRecord,
+  VehicleType,
+  WeatherType,
+} from '../types/game';
+import {
+  DHAKA_GAME_LOCATIONS,
+  PLAYER_OUTFITS,
+  SIDE_MISSIONS,
+  STORY_MISSIONS,
+  TOOL_WEAPONS,
+} from '../data/dhakaWorldData';
+import { dhakaAudio } from '../audio/dhakaAudioEngine';
+
+export type GamePhase = 'main_menu' | 'playing' | 'paused';
+export type PauseTab =
+  | 'map'
+  | 'missions'
+  | 'sketchfab'
+  | 'inventory'
+  | 'character'
+  | 'settings'
+  | 'controls';
+
+export interface NearbyPrompt {
+  type: 'vehicle' | 'poi' | 'npc' | 'mission';
+  id: string;
+  labelEn: string;
+  labelBn: string;
+}
+
+interface GameState {
+  gamePhase: GamePhase;
+  pauseTab: PauseTab;
+  language: Language;
+  graphicsQuality: 'high' | 'low';
+  cameraMode: 'third_person' | 'far_chase' | 'hood_close';
+
+  // Player & Vehicle telemetry
+  playerX: number;
+  playerZ: number;
+  playerRotation: number;
+  health: number;
+  maxHealth: number;
+  armor: number;
+  maxArmor: number;
+  stamina: number;
+  taka: number;
+  inVehicleId: string | null;
+  currentVehicleType: VehicleType | null;
+  currentVehicleSpeedKmh: number;
+  currentVehicleHealth: number;
+  currentVehicleMaxHealth: number;
+  currentDistrict: DistrictId;
+  isAimingDownSights: boolean;
+  isNitroActive: boolean;
+
+  // Customization & inventory
+  outfits: PlayerOutfit[];
+  equippedOutfitId: string;
+  tools: ToolWeapon[];
+  equippedToolId: ToolWeaponId;
+  weaponAmmo: Record<ToolWeaponId, { clip: number; reserve: number }>;
+  isReloading: boolean;
+  transactions: TransactionRecord[];
+
+  // World & Police
+  wantedLevel: number;
+  wantedCooldown: number;
+  timeOfDay: number; // 0 - 24
+  weather: WeatherType;
+  radioStation: RadioStationId;
+  musicVolume: number;
+  sfxVolume: number;
+  ambienceVolume: number;
+
+  // Missions & Narrative
+  activeMissionId: string | null;
+  activeMissionStepIndex: number;
+  missionTimer: number | null;
+  completedMissionIds: string[];
+  storyHonor: number;
+  storyEndingEn: string | null;
+  storyEndingBn: string | null;
+
+  // Interactive overlays
+  nearbyPrompt: NearbyPrompt | null;
+  activeDialogue: {
+    speakerEn: string;
+    speakerBn: string;
+    textEn: string;
+    textBn: string;
+  } | null;
+  activeChoicePrompt: MissionStep['choicePrompt'] | null;
+  bannerAlert: {
+    titleEn: string;
+    titleBn: string;
+    subtitleEn: string;
+    subtitleBn: string;
+    rewardTaka?: number;
+    tone: 'gold' | 'green' | 'red' | 'blue';
+  } | null;
+  customWaypoint: { x: number; z: number; name: string } | null;
+  districtArrivalNotice: { districtId: DistrictId; key: number } | null;
+  discoveredLocations: string[];
+
+  // Engine command bridge callbacks
+  spawnVehicleRequest: VehicleType | null;
+  spawnSketchfabRequest: {
+    spawnType: string;
+    thumbnail: string;
+    name: string;
+  } | null;
+  customGlbUrlRequest: string | null;
+  repairVehicleRequest: boolean;
+  teleportRequest: { x: number; z: number } | null;
+
+  // Actions
+  startNewGame: () => void;
+  continueGame: () => void;
+  setGamePhase: (phase: GamePhase, tab?: PauseTab) => void;
+  setPauseTab: (tab: PauseTab) => void;
+  toggleLanguage: () => void;
+  setGraphicsQuality: (q: 'high' | 'low') => void;
+  cycleCameraMode: () => void;
+
+  updateTelemetry: (data: {
+    x: number;
+    z: number;
+    rotation: number;
+    district: DistrictId;
+    inVehicleId: string | null;
+    vehicleType: VehicleType | null;
+    speedKmh: number;
+    vehicleHealth: number;
+    vehicleMaxHealth: number;
+    stamina?: number;
+    isAimingDownSights?: boolean;
+    isNitroActive?: boolean;
+  }) => void;
+
+  setNearbyPrompt: (prompt: NearbyPrompt | null) => void;
+  setDialogue: (
+    dialogue: {
+      speakerEn: string;
+      speakerBn: string;
+      textEn: string;
+      textBn: string;
+    } | null
+  ) => void;
+
+  addTaka: (amount: number, titleEn: string, titleBn: string) => void;
+  spendTaka: (amount: number, titleEn: string, titleBn: string) => boolean;
+  damagePlayer: (amount: number) => void;
+  healPlayer: (healthGain: number, armorGain?: number) => void;
+
+  setWantedLevel: (level: number) => void;
+  tickWorldClock: (dt: number) => void;
+  setWeather: (weather: WeatherType) => void;
+  setTimeOfDay: (hour: number) => void;
+  setRadioStation: (station: RadioStationId) => void;
+  setVolumes: (music: number, sfx: number, ambience: number) => void;
+
+  startMission: (missionId: string) => void;
+  advanceMissionStep: () => void;
+  resolveMissionChoice: (option: 'A' | 'B') => void;
+  abandonMission: () => void;
+
+  equipOutfit: (outfitId: string) => void;
+  equipTool: (toolId: ToolWeaponId) => void;
+  cycleWeapon: (direction: 1 | -1) => void;
+  reloadActiveWeapon: () => boolean;
+  fireActiveWeapon: () => { canFire: boolean; isGun: boolean; remainingClip: number; needsReload: boolean };
+  dismissDistrictArrival: () => void;
+  discoverLocation: (locationId: string) => void;
+  setCustomWaypoint: (wp: { x: number; z: number; name: string } | null) => void;
+  requestSpawnVehicle: (type: VehicleType | null) => void;
+  requestSpawnSketchfabAsset: (req: {
+    spawnType: string;
+    thumbnail: string;
+    name: string;
+  }) => void;
+  requestCustomGlbUrl: (url: string) => void;
+  requestRepairVehicle: () => void;
+  clearEngineRequests: () => void;
+  requestTeleport: (x: number, z: number) => void;
+
+  showBanner: (banner: GameState['bannerAlert']) => void;
+  saveGameToStorage: () => void;
+  hasSavedGame: () => boolean;
+}
+
+const SAVE_KEY = 'dhaka_city_save_v1';
+
+const INITIAL_WEAPON_AMMO: Record<ToolWeaponId, { clip: number; reserve: number }> = {
+  fists: { clip: 0, reserve: 0 },
+  cricket_bat: { clip: 0, reserve: 0 },
+  bamboo_lathi: { clip: 0, reserve: 0 },
+  stun_baton: { clip: 0, reserve: 0 },
+  ramda: { clip: 0, reserve: 0 },
+  chapati: { clip: 0, reserve: 0 },
+  pipe_gun: { clip: 1, reserve: 24 },
+  shutter_pistol: { clip: 6, reserve: 54 },
+  tt_pistol: { clip: 8, reserve: 56 },
+  katta: { clip: 2, reserve: 24 },
+  type56_ak: { clip: 30, reserve: 150 },
+};
+
+export const useGameStore = create<GameState>((set, get) => ({
+  gamePhase: 'playing',
+  pauseTab: 'map',
+  language: 'en',
+  graphicsQuality: 'high',
+  cameraMode: 'third_person',
+
+  playerX: 10,
+  playerZ: 18,
+  playerRotation: 0,
+  health: 100,
+  maxHealth: 100,
+  armor: 35,
+  maxArmor: 100,
+  stamina: 100,
+  taka: 1850,
+  inVehicleId: null,
+  currentVehicleType: null,
+  currentVehicleSpeedKmh: 0,
+  currentVehicleHealth: 120,
+  currentVehicleMaxHealth: 120,
+  currentDistrict: 'farmgate',
+  isAimingDownSights: false,
+  isNitroActive: false,
+
+  outfits: PLAYER_OUTFITS,
+  equippedOutfitId: 'dhaka_casual',
+  tools: TOOL_WEAPONS,
+  equippedToolId: 'katta',
+  weaponAmmo: INITIAL_WEAPON_AMMO,
+  isReloading: false,
+  transactions: [
+    {
+      id: 'tx_init',
+      timestamp: '16:30',
+      titleEn: 'Arrival Cash at Hazrat Shahjalal Airport',
+      titleBn: 'ঢাকায় আগমনী নগদ অর্থ',
+      amount: 1850,
+      type: 'earn',
+    },
+  ],
+
+  wantedLevel: 0,
+  wantedCooldown: 0,
+  timeOfDay: 16.5,
+  weather: 'golden_hour',
+  radioStation: 'dhaka_folk',
+  musicVolume: 0.45,
+  sfxVolume: 0.7,
+  ambienceVolume: 0.4,
+
+  activeMissionId: 'm1_back_to_dhaka',
+  activeMissionStepIndex: 0,
+  missionTimer: null,
+  completedMissionIds: [],
+  storyHonor: 0,
+  storyEndingEn: null,
+  storyEndingBn: null,
+
+  nearbyPrompt: null,
+  activeDialogue: {
+    speakerEn: 'Arif Rahman',
+    speakerBn: 'আরিফ রহমান',
+    textEn:
+      'Back in Farmgate after three years... Traffic horns, roasting peanuts, and green CNGs everywhere. Let’s find Uncle Kamal at his Tong Cha Stall to find out what happened to Rafiq.',
+    textBn:
+      'তিন বছর পর আবার ফার্মগেটে ফিরলাম... চারদিকে বাসের হর্ন, রিকশার টুংটাং আর সবুজ সিএনজি। চলুন কামাল মামার টং দোকানে গিয়ে রফিকের খোঁজ নিই।',
+  },
+  activeChoicePrompt: null,
+  bannerAlert: null,
+  customWaypoint: null,
+  districtArrivalNotice: null,
+  discoveredLocations: ['farmgate', 'chawkbazar'],
+
+  spawnVehicleRequest: null,
+  spawnSketchfabRequest: null,
+  customGlbUrlRequest: null,
+  repairVehicleRequest: false,
+  teleportRequest: null,
+
+  startNewGame: () => {
+    dhakaAudio.init();
+    dhakaAudio.playSfx('ui');
+    set({
+      gamePhase: 'playing',
+      health: 100,
+      armor: 35,
+      stamina: 100,
+      taka: 1850,
+      wantedLevel: 0,
+      wantedCooldown: 0,
+      activeMissionId: 'm1_back_to_dhaka',
+      activeMissionStepIndex: 0,
+      missionTimer: null,
+      completedMissionIds: [],
+      discoveredLocations: ['farmgate', 'chawkbazar'],
+      storyEndingEn: null,
+      storyEndingBn: null,
+      teleportRequest: { x: 10, z: 18 },
+      activeDialogue: {
+        speakerEn: 'Arif Rahman (Chapter 1: Back to Dhaka)',
+        speakerBn: 'আরিফ রহমান (অধ্যায় ১: ঢাকায় প্রত্যাবর্তন)',
+        textEn:
+          'Welcome to Dhaka! Walk over to Kamal Mama’s Tong Cha Stall (Golden Pillar Marker) or press [F] near any green CNG Auto-Rickshaw to drive through the city!',
+        textBn:
+          'ঢাকা সিটিতে স্বাগতম! কামাল মামার টং দোকানে যান (হলুদ মার্কার) অথবা যেকোনো সবুজ সিএনজি অটোরিকশার কাছে গিয়ে [F] চেপে চালানো শুরু করুন!',
+      },
+    });
+  },
+
+  continueGame: () => {
+    dhakaAudio.init();
+    dhakaAudio.playSfx('ui');
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        set({
+          gamePhase: 'playing',
+          taka: data.taka ?? 1850,
+          health: data.health ?? 100,
+          armor: data.armor ?? 35,
+          completedMissionIds: data.completedMissionIds ?? [],
+          discoveredLocations: data.discoveredLocations ?? ['farmgate', 'chawkbazar'],
+          activeMissionId: data.activeMissionId ?? 'm1_back_to_dhaka',
+          activeMissionStepIndex: data.activeMissionStepIndex ?? 0,
+          equippedOutfitId: data.equippedOutfitId ?? 'dhaka_casual',
+          equippedToolId: data.equippedToolId ?? 'fists',
+          outfits: data.outfits ?? PLAYER_OUTFITS,
+          tools: data.tools ?? TOOL_WEAPONS,
+          teleportRequest: {
+            x: data.playerX ?? 10,
+            z: data.playerZ ?? 18,
+          },
+        });
+        get().showBanner({
+          titleEn: 'SAVED GAME LOADED',
+          titleBn: 'সেভ করা গেম লোড হয়েছে',
+          subtitleEn: 'Welcome back to the streets of Dhaka, Arif.',
+          subtitleBn: 'ঢাকার রাজপথে আবার স্বাগতম, আরিফ।',
+          tone: 'green',
+        });
+        return;
+      }
+    } catch {
+      // Fallback to new game
+    }
+    get().startNewGame();
+  },
+
+  setGamePhase: (phase, tab) => {
+    dhakaAudio.playSfx('ui');
+    set((s) => ({
+      gamePhase: phase,
+      pauseTab: tab ?? s.pauseTab,
+    }));
+  },
+
+  setPauseTab: (tab) => {
+    dhakaAudio.playSfx('ui');
+    set({ pauseTab: tab });
+  },
+
+  toggleLanguage: () => {
+    dhakaAudio.playSfx('ui');
+    set((s) => ({ language: s.language === 'en' ? 'bn' : 'en' }));
+  },
+
+  setGraphicsQuality: (q) => set({ graphicsQuality: q }),
+
+  cycleCameraMode: () => {
+    const modes: GameState['cameraMode'][] = [
+      'third_person',
+      'far_chase',
+      'hood_close',
+    ];
+    const current = get().cameraMode;
+    const next = modes[(modes.indexOf(current) + 1) % modes.length];
+    set({ cameraMode: next });
+  },
+
+  dismissDistrictArrival: () => set({ districtArrivalNotice: null }),
+
+  updateTelemetry: (data) => {
+    const prevDistrict = get().currentDistrict;
+    const isNewDistrict = prevDistrict && prevDistrict !== data.district;
+    if (isNewDistrict) {
+      dhakaAudio.playSfx('ui');
+    }
+    set((s) => ({
+      playerX: data.x,
+      playerZ: data.z,
+      playerRotation: data.rotation,
+      currentDistrict: data.district,
+      districtArrivalNotice: isNewDistrict
+        ? { districtId: data.district, key: Date.now() }
+        : s.districtArrivalNotice,
+      inVehicleId: data.inVehicleId,
+      currentVehicleType: data.vehicleType,
+      currentVehicleSpeedKmh: data.speedKmh,
+      currentVehicleHealth: data.vehicleHealth,
+      currentVehicleMaxHealth: data.vehicleMaxHealth,
+      stamina: data.stamina ?? s.stamina,
+      isAimingDownSights: data.isAimingDownSights ?? s.isAimingDownSights,
+      isNitroActive: data.isNitroActive ?? s.isNitroActive,
+    }));
+  },
+
+  setNearbyPrompt: (prompt) => set({ nearbyPrompt: prompt }),
+
+  setDialogue: (dialogue) => set({ activeDialogue: dialogue }),
+
+  addTaka: (amount, titleEn, titleBn) => {
+    dhakaAudio.playSfx('cash');
+    const nowStr = formatGameClock(get().timeOfDay);
+    set((s) => ({
+      taka: s.taka + amount,
+      transactions: [
+        {
+          id: 'tx_' + Date.now() + Math.random(),
+          timestamp: nowStr,
+          titleEn,
+          titleBn,
+          amount,
+          type: 'earn',
+        },
+        ...s.transactions.slice(0, 24),
+      ],
+    }));
+  },
+
+  spendTaka: (amount, titleEn, titleBn) => {
+    const state = get();
+    if (state.taka < amount) return false;
+    dhakaAudio.playSfx('cash');
+    const nowStr = formatGameClock(state.timeOfDay);
+    set((s) => ({
+      taka: s.taka - amount,
+      transactions: [
+        {
+          id: 'tx_' + Date.now() + Math.random(),
+          timestamp: nowStr,
+          titleEn,
+          titleBn,
+          amount,
+          type: 'spend',
+        },
+        ...s.transactions.slice(0, 24),
+      ],
+    }));
+    return true;
+  },
+
+  damagePlayer: (amount) => {
+    dhakaAudio.playSfx('hit');
+    set((s) => {
+      let remaining = amount;
+      let newArmor = s.armor;
+      if (newArmor > 0) {
+        const absorbed = Math.min(newArmor, remaining * 0.65);
+        newArmor = Math.max(0, newArmor - absorbed);
+        remaining -= absorbed;
+      }
+      const newHealth = Math.max(0, s.health - remaining);
+
+      if (newHealth <= 0) {
+        setTimeout(() => {
+          get().showBanner({
+            titleEn: 'DISCHARGED FROM DHAKA MEDICAL',
+            titleBn: 'ঢাকা মেডিকেল থেকে প্রাথমিক চিকিৎসা সম্পন্ন',
+            subtitleEn: 'Medical bill ৳200 deducted. Be careful on the streets!',
+            subtitleBn: 'চিকিৎসা খরচ বাবদ ৳২০০ কাটা হয়েছে। সাবধানে চলুন!',
+            tone: 'red',
+          });
+          set((st) => ({
+            health: 100,
+            wantedLevel: 0,
+            wantedCooldown: 0,
+            taka: Math.max(0, st.taka - 200),
+            teleportRequest: { x: -20, z: -15 },
+          }));
+        }, 400);
+      }
+
+      return { health: newHealth, armor: newArmor };
+    });
+  },
+
+  healPlayer: (healthGain, armorGain = 0) => {
+    dhakaAudio.playSfx('pickup');
+    set((s) => ({
+      health: Math.min(s.maxHealth, s.health + healthGain),
+      armor: Math.min(s.maxArmor, s.armor + armorGain),
+    }));
+  },
+
+  setWantedLevel: (level) => {
+    const clamped = Math.max(0, Math.min(5, level));
+    if (clamped > get().wantedLevel) {
+      dhakaAudio.playHorn('siren');
+    }
+    set({
+      wantedLevel: clamped,
+      wantedCooldown: clamped > 0 ? 22 + clamped * 8 : 0,
+    });
+  },
+
+  tickWorldClock: (dt) => {
+    const s = get();
+    if (s.gamePhase !== 'playing') return;
+
+    const nextHour = (s.timeOfDay + dt * 0.025) % 24;
+
+    let nextWanted = s.wantedLevel;
+    let nextCooldown = s.wantedCooldown;
+    if (nextWanted > 0) {
+      nextCooldown = Math.max(0, nextCooldown - dt);
+      if (nextCooldown <= 0) {
+        nextWanted = Math.max(0, nextWanted - 1);
+        nextCooldown = nextWanted > 0 ? 18 : 0;
+      }
+    }
+
+    let nextMissionTimer = s.missionTimer;
+    if (nextMissionTimer !== null && !s.activeChoicePrompt) {
+      nextMissionTimer = Math.max(0, nextMissionTimer - dt);
+      if (nextMissionTimer <= 0) {
+        get().showBanner({
+          titleEn: 'TIME EXPIRED — RETRYING STEP',
+          titleBn: 'সময় শেষ — আবার চেষ্টা করুন',
+          subtitleEn:
+            'Dhaka traffic slowed you down! Timer reset so you can keep going.',
+          subtitleBn: 'যানজটে দেরি হয়ে গেছে! সময় পুনরায় শুরু হয়েছে।',
+          tone: 'red',
+        });
+        nextMissionTimer = 85;
+      }
+    }
+
+    set({
+      timeOfDay: nextHour,
+      wantedLevel: nextWanted,
+      wantedCooldown: nextCooldown,
+      missionTimer: nextMissionTimer,
+    });
+  },
+
+  setWeather: (weather) => {
+    dhakaAudio.setRainActive(weather === 'monsoon_rain');
+    let nextTime = get().timeOfDay;
+    if (weather === 'night') nextTime = 21.5;
+    if (weather === 'golden_hour') nextTime = 17.2;
+    if (weather === 'clear') nextTime = 11.5;
+    set({ weather, timeOfDay: nextTime });
+  },
+
+  setTimeOfDay: (hour) => set({ timeOfDay: hour % 24 }),
+
+  setRadioStation: (station) => {
+    dhakaAudio.init();
+    dhakaAudio.setRadioStation(station);
+    set({ radioStation: station });
+  },
+
+  setVolumes: (music, sfx, ambience) => {
+    dhakaAudio.setVolumes(music, sfx, ambience);
+    set({ musicVolume: music, sfxVolume: sfx, ambienceVolume: ambience });
+  },
+
+  startMission: (missionId) => {
+    const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
+    const mission = allMissions.find((m) => m.id === missionId);
+    if (!mission) return;
+
+    const firstStep = mission.steps[0];
+    dhakaAudio.playSfx('pickup');
+
+    set({
+      activeMissionId: mission.id,
+      activeMissionStepIndex: 0,
+      missionTimer: firstStep.timeLimitSeconds ?? null,
+      gamePhase: 'playing',
+      activeDialogue: firstStep.dialogueTextEn
+        ? {
+            speakerEn: firstStep.dialogueSpeakerEn || mission.giverNameEn,
+            speakerBn: firstStep.dialogueSpeakerBn || mission.giverNameBn,
+            textEn: firstStep.dialogueTextEn,
+            textBn: firstStep.dialogueTextBn || firstStep.dialogueTextEn,
+          }
+        : null,
+    });
+
+    get().showBanner({
+      titleEn: `MISSION STARTED: ${mission.titleEn.toUpperCase()}`,
+      titleBn: `মিশন শুরু: ${mission.titleBn}`,
+      subtitleEn: mission.chapterTitleEn,
+      subtitleBn: mission.chapterTitleBn,
+      tone: 'blue',
+    });
+  },
+
+  advanceMissionStep: () => {
+    const s = get();
+    if (!s.activeMissionId) return;
+
+    const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
+    const mission = allMissions.find((m) => m.id === s.activeMissionId);
+    if (!mission) return;
+
+    const currentStep = mission.steps[s.activeMissionStepIndex];
+
+    if (currentStep.dialogueTextEn) {
+      set({
+        activeDialogue: {
+          speakerEn: currentStep.dialogueSpeakerEn || mission.giverNameEn,
+          speakerBn: currentStep.dialogueSpeakerBn || mission.giverNameBn,
+          textEn: currentStep.dialogueTextEn,
+          textBn: currentStep.dialogueTextBn || currentStep.dialogueTextEn,
+        },
+      });
+    }
+
+    if (currentStep.spawnWantedLevel) {
+      get().setWantedLevel(
+        Math.max(s.wantedLevel, currentStep.spawnWantedLevel)
+      );
+    }
+
+    if (currentStep.choicePrompt && !s.activeChoicePrompt) {
+      set({ activeChoicePrompt: currentStep.choicePrompt });
+      return;
+    }
+
+    const nextIndex = s.activeMissionStepIndex + 1;
+    if (nextIndex < mission.steps.length) {
+      const nextStep = mission.steps[nextIndex];
+      dhakaAudio.playSfx('pickup');
+      set({
+        activeMissionStepIndex: nextIndex,
+        missionTimer: nextStep.timeLimitSeconds ?? s.missionTimer,
+      });
+    } else {
+      dhakaAudio.playSfx('mission_complete');
+      get().addTaka(
+        mission.rewardTaka,
+        `Mission Reward: ${mission.titleEn}`,
+        `মিশন পুরস্কার: ${mission.titleBn}`
+      );
+
+      const updatedCompleted = Array.from(
+        new Set([...s.completedMissionIds, mission.id])
+      );
+
+      const nextStory = STORY_MISSIONS.find(
+        (m) => !updatedCompleted.includes(m.id)
+      );
+
+      set({
+        completedMissionIds: updatedCompleted,
+        activeMissionId: nextStory ? nextStory.id : null,
+        activeMissionStepIndex: 0,
+        missionTimer: null,
+        wantedLevel: 0,
+        wantedCooldown: 0,
+      });
+
+      get().showBanner({
+        titleEn: `MISSION PASSED: ${mission.titleEn.toUpperCase()}`,
+        titleBn: `মিশন সম্পন্ন: ${mission.titleBn}`,
+        subtitleEn: nextStory
+          ? `Next Up: ${nextStory.chapterTitleEn} — ${nextStory.titleEn}`
+          : 'All Story Chapters Completed! Explore Dhaka & Side Missions freely!',
+        subtitleBn: nextStory
+          ? `পরবর্তী অধ্যায়: ${nextStory.chapterTitleBn} — ${nextStory.titleBn}`
+          : 'সকল স্টোরি অধ্যায় সম্পন্ন! এবার পুরো ঢাকা শহর ঘুরে দেখুন!',
+        rewardTaka: mission.rewardTaka,
+        tone: 'gold',
+      });
+
+      get().saveGameToStorage();
+    }
+  },
+
+  resolveMissionChoice: (option) => {
+    const s = get();
+    const prompt = s.activeChoicePrompt;
+    if (!prompt) return;
+
+    const bonus = option === 'A' ? prompt.bonusA : prompt.bonusB;
+    const honorDelta = option === 'A' ? 10 : -5;
+
+    if (bonus > 0) {
+      get().addTaka(
+        bonus,
+        option === 'A' ? 'Decision Bonus (Honor Path)' : 'Syndicate Deal Bonus',
+        option === 'A' ? 'সৎ সিদ্ধান্তের পুরস্কার' : 'সিন্ডিকেট চুক্তির বোনাস'
+      );
+    }
+
+    if (s.activeMissionId === 'm5_final_deal') {
+      set({
+        storyEndingEn:
+          option === 'A'
+            ? 'ENDING UNLOCKED: HERO OF DHAKA — The Syndicate ledger shook Motijheel and freed Sadarghat!'
+            : 'ENDING UNLOCKED: KINGPIN OF BURIGANGA — Arif rescued Rafiq and took control of the river port!',
+        storyEndingBn:
+          option === 'A'
+            ? 'সমাপ্তি: ঢাকার নায়ক — সিন্ডিকেটের মুখোশ উন্মোচিত হয়েছে এবং রফিক উদ্ধার হয়েছে!'
+            : 'সমাপ্তি: বুড়িগঙ্গার সম্রাট — রফিককে উদ্ধার করে সদরঘাটের নিয়ন্ত্রণ নিয়েছেন আরিফ!',
+      });
+    }
+
+    set({
+      activeChoicePrompt: null,
+      storyHonor: s.storyHonor + honorDelta,
+    });
+
+    const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
+    const mission = allMissions.find((m) => m.id === s.activeMissionId);
+    if (!mission) return;
+
+    dhakaAudio.playSfx('mission_complete');
+    get().addTaka(
+      mission.rewardTaka,
+      `Mission Reward: ${mission.titleEn}`,
+      `মিশন পুরস্কার: ${mission.titleBn}`
+    );
+
+    const updatedCompleted = Array.from(
+      new Set([...s.completedMissionIds, mission.id])
+    );
+    const nextStory = STORY_MISSIONS.find(
+      (m) => !updatedCompleted.includes(m.id)
+    );
+
+    set({
+      completedMissionIds: updatedCompleted,
+      activeMissionId: nextStory ? nextStory.id : null,
+      activeMissionStepIndex: 0,
+      missionTimer: null,
+      wantedLevel: 0,
+    });
+
+    get().showBanner({
+      titleEn: `MISSION PASSED: ${mission.titleEn.toUpperCase()}`,
+      titleBn: `মিশন সম্পন্ন: ${mission.titleBn}`,
+      subtitleEn: nextStory
+        ? `Unlocked ${nextStory.chapterTitleEn}`
+        : 'Story Campaign Complete! Free Roam & Side Jobs Active.',
+      subtitleBn: nextStory
+        ? `আনলক হয়েছে: ${nextStory.chapterTitleBn}`
+        : 'মূল কাহিনী সম্পন্ন! এখন ফ্রি-রোম ও সাইড মিশন খেলুন।',
+      rewardTaka: mission.rewardTaka + bonus,
+      tone: 'gold',
+    });
+
+    get().saveGameToStorage();
+  },
+
+  abandonMission: () => {
+    set({
+      activeMissionId: null,
+      activeMissionStepIndex: 0,
+      missionTimer: null,
+      activeChoicePrompt: null,
+    });
+  },
+
+  equipOutfit: (outfitId) => {
+    const s = get();
+    const target = s.outfits.find((o) => o.id === outfitId);
+    if (!target) return;
+
+    if (!target.unlocked) {
+      const ok = get().spendTaka(
+        target.price,
+        `Bought Outfit: ${target.nameEn}`,
+        `পোশাক ক্রয়: ${target.nameBn}`
+      );
+      if (!ok) return;
+      set({
+        outfits: s.outfits.map((o) =>
+          o.id === outfitId ? { ...o, unlocked: true } : o
+        ),
+        equippedOutfitId: outfitId,
+      });
+    } else {
+      dhakaAudio.playSfx('ui');
+      set({ equippedOutfitId: outfitId });
+    }
+  },
+
+  equipTool: (toolId) => {
+    const s = get();
+    const target = s.tools.find((t) => t.id === toolId);
+    if (!target) return;
+
+    if (!target.unlocked) {
+      const ok = get().spendTaka(
+        target.price,
+        `Bought Gear: ${target.nameEn}`,
+        `সরঞ্জাম ক্রয়: ${target.nameBn}`
+      );
+      if (!ok) return;
+      set({
+        tools: s.tools.map((t) =>
+          t.id === toolId ? { ...t, unlocked: true } : t
+        ),
+        equippedToolId: toolId,
+      });
+    } else {
+      dhakaAudio.playSfx('ui');
+      set({ equippedToolId: toolId, isReloading: false });
+    }
+  },
+
+  cycleWeapon: (direction) => {
+    const s = get();
+    const available = s.tools.filter((t) => t.unlocked);
+    if (available.length <= 1) return;
+    const curIdx = available.findIndex((t) => t.id === s.equippedToolId);
+    let nextIdx = curIdx + direction;
+    if (nextIdx >= available.length) nextIdx = 0;
+    if (nextIdx < 0) nextIdx = available.length - 1;
+    const nextTool = available[nextIdx];
+    dhakaAudio.playSfx('ui');
+    set({ equippedToolId: nextTool.id, isReloading: false });
+  },
+
+  reloadActiveWeapon: () => {
+    const s = get();
+    if (s.isReloading) return false;
+    const active = s.tools.find((t) => t.id === s.equippedToolId);
+    if (!active || !active.isGun) return false;
+
+    const ammo = s.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
+    if (ammo.clip >= active.clipSize || ammo.reserve <= 0) return false;
+
+    set({ isReloading: true });
+    dhakaAudio.playSfx('reload');
+
+    window.setTimeout(() => {
+      const state = get();
+      const current = state.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
+      const needed = active.clipSize - current.clip;
+      const amountToLoad = Math.min(needed, current.reserve);
+      set({
+        isReloading: false,
+        weaponAmmo: {
+          ...state.weaponAmmo,
+          [active.id]: {
+            clip: current.clip + amountToLoad,
+            reserve: current.reserve - amountToLoad,
+          },
+        },
+      });
+    }, active.reloadTime * 1000);
+
+    return true;
+  },
+
+  fireActiveWeapon: () => {
+    const s = get();
+    if (s.isReloading) {
+      return { canFire: false, isGun: true, remainingClip: 0, needsReload: true };
+    }
+    const active = s.tools.find((t) => t.id === s.equippedToolId);
+    if (!active) {
+      return { canFire: false, isGun: false, remainingClip: 0, needsReload: false };
+    }
+
+    if (!active.isGun) {
+      return { canFire: true, isGun: false, remainingClip: 0, needsReload: false };
+    }
+
+    const curAmmo = s.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
+    if (curAmmo.clip <= 0) {
+      dhakaAudio.playSfx('dry_fire');
+      if (curAmmo.reserve > 0) {
+        get().reloadActiveWeapon();
+      }
+      return { canFire: false, isGun: true, remainingClip: 0, needsReload: true };
+    }
+
+    const newClip = curAmmo.clip - 1;
+    set({
+      weaponAmmo: {
+        ...s.weaponAmmo,
+        [active.id]: {
+          ...curAmmo,
+          clip: newClip,
+        },
+      },
+    });
+
+    if (newClip === 0 && curAmmo.reserve > 0) {
+      window.setTimeout(() => {
+        get().reloadActiveWeapon();
+      }, 350);
+    }
+
+    return { canFire: true, isGun: true, remainingClip: newClip, needsReload: newClip === 0 };
+  },
+
+  setCustomWaypoint: (wp) => {
+    dhakaAudio.playSfx('ui');
+    set({ customWaypoint: wp });
+  },
+
+  discoverLocation: (locationId) => {
+    const s = get();
+    if (s.discoveredLocations.includes(locationId)) return;
+    const loc = DHAKA_GAME_LOCATIONS.find((l) => l.id === locationId);
+    if (!loc) return;
+    const updated = [...s.discoveredLocations, locationId];
+    dhakaAudio.playSfx('pickup');
+    set({
+      discoveredLocations: updated,
+      taka: s.taka + 300,
+      transactions: [
+        {
+          id: `tx_disc_${Date.now()}`,
+          timestamp: formatGameClock(s.timeOfDay),
+          titleEn: `Discovered: ${loc.titleEn}`,
+          titleBn: `নতুন স্থান আবিষ্কার: ${loc.titleBn}`,
+          amount: 300,
+          type: 'earn',
+        },
+        ...s.transactions,
+      ],
+    });
+    get().showBanner({
+      titleEn: `NEW LOCATION: ${loc.titleEn.toUpperCase()}`,
+      titleBn: `নতুন স্থান আবিষ্কৃত: ${loc.titleBn}`,
+      subtitleEn: `${loc.taglineEn} (+৳300 Exploration Reward)`,
+      subtitleBn: `${loc.taglineBn} (+৩০০ টাকা অন্বেষণ বোনাস)`,
+      tone: 'gold',
+    });
+  },
+
+  requestSpawnVehicle: (type) => set({ spawnVehicleRequest: type }),
+  requestSpawnSketchfabAsset: (req) =>
+    set({ spawnSketchfabRequest: req, gamePhase: 'playing' }),
+  requestCustomGlbUrl: (url) =>
+    set({ customGlbUrlRequest: url, gamePhase: 'playing' }),
+  requestRepairVehicle: () => set({ repairVehicleRequest: true }),
+  clearEngineRequests: () =>
+    set({
+      spawnVehicleRequest: null,
+      spawnSketchfabRequest: null,
+      customGlbUrlRequest: null,
+      repairVehicleRequest: false,
+      teleportRequest: null,
+    }),
+  requestTeleport: (x, z) =>
+    set({ teleportRequest: { x, z }, gamePhase: 'playing' }),
+
+  showBanner: (banner) => {
+    set({ bannerAlert: banner });
+    if (banner) {
+      setTimeout(() => {
+        if (get().bannerAlert === banner) {
+          set({ bannerAlert: null });
+        }
+      }, 5500);
+    }
+  },
+
+  saveGameToStorage: () => {
+    const s = get();
+    const payload = {
+      taka: s.taka,
+      health: s.health,
+      armor: s.armor,
+      playerX: s.playerX,
+      playerZ: s.playerZ,
+      completedMissionIds: s.completedMissionIds,
+      discoveredLocations: s.discoveredLocations,
+      activeMissionId: s.activeMissionId,
+      activeMissionStepIndex: s.activeMissionStepIndex,
+      equippedOutfitId: s.equippedOutfitId,
+      equippedToolId: s.equippedToolId,
+      outfits: s.outfits,
+      tools: s.tools,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    } catch {
+      // Storage quota ignore
+    }
+  },
+
+  hasSavedGame: () => {
+    try {
+      return Boolean(localStorage.getItem(SAVE_KEY));
+    } catch {
+      return false;
+    }
+  },
+}));
+
+export function formatGameClock(hourFloat: number): string {
+  const h = Math.floor(hourFloat) % 24;
+  const m = Math.floor((hourFloat - Math.floor(hourFloat)) * 60);
+  const hh = String(h).padStart(2, '0');
+  const mm = String(m).padStart(2, '0');
+  return `${hh}:${mm}`;
+}

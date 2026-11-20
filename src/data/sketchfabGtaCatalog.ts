@@ -1,0 +1,319 @@
+import { DistrictId, POIType, VehicleType } from '../types/game';
+import { resolveAssetUrl } from '../utils/assets';
+
+export interface SketchfabGtaAsset {
+  uid: string;
+  name: string;
+  author: string;
+  likeCount: number;
+  viewCount: number;
+  faceCount: number;
+  vertexCount: number;
+  isDownloadable: boolean;
+  viewerUrl: string;
+  embedUrl: string;
+  thumbnail: string;
+  category: 'building' | 'vehicle' | 'character' | 'prop';
+  spawnActionLabelEn: string;
+  spawnActionLabelBn: string;
+  spawnType:
+    | 'city_block'
+    | 'street_props'
+    | 'hongkong_tower'
+    | 'asian_building'
+    | 'money_stacks'
+    | 'asian_shop'
+    | 'billboard'
+    | 'hilux_pickup'
+    | 'tactical_npc'
+    | 'crime_scene'
+    | 'briefcase';
+}
+
+export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
+  {
+    uid: '6a0e3b97a8a54f2a909d351322916293',
+    name: 'Neighbourhood City Modular lowpoly',
+    author: 'golukumar',
+    likeCount: 2699,
+    viewCount: 161782,
+    faceCount: 415317,
+    vertexCount: 304255,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-6a0e3b97a8a54f2a909d351322916293',
+    embedUrl: 'https://sketchfab.com/models/6a0e3b97a8a54f2a909d351322916293/embed',
+    thumbnail: '/sketchfab/gta_model_0.jpg',
+    category: 'building',
+    spawnActionLabelEn: 'Spawn Modular Complex',
+    spawnActionLabelBn: 'মডুলার ভবন স্থাপন করুন',
+    spawnType: 'city_block',
+  },
+  {
+    uid: '32b8b82bb1e9489c993799c91967a916',
+    name: 'City Props Collection volume 1',
+    author: 'TampaJoey',
+    likeCount: 2427,
+    viewCount: 80124,
+    faceCount: 70831,
+    vertexCount: 36860,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-32b8b82bb1e9489c993799c91967a916',
+    embedUrl: 'https://sketchfab.com/models/32b8b82bb1e9489c993799c91967a916/embed',
+    thumbnail: '/sketchfab/gta_model_1.jpg',
+    category: 'prop',
+    spawnActionLabelEn: 'Spawn Urban Street Props',
+    spawnActionLabelBn: 'রাস্তার প্রপস স্থাপন করুন',
+    spawnType: 'street_props',
+  },
+  {
+    uid: '31c1ede1fcbd49c7af85825905446ec5',
+    name: 'Full Gameready City Buildings IV [HongKong]',
+    author: 'abhayexe',
+    likeCount: 1938,
+    viewCount: 76106,
+    faceCount: 369465,
+    vertexCount: 211688,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-31c1ede1fcbd49c7af85825905446ec5',
+    embedUrl: 'https://sketchfab.com/models/31c1ede1fcbd49c7af85825905446ec5/embed',
+    thumbnail: '/sketchfab/gta_model_2.jpg',
+    category: 'building',
+    spawnActionLabelEn: 'Spawn High-Rise Tower',
+    spawnActionLabelBn: 'বহুতল ভবন স্থাপন করুন',
+    spawnType: 'hongkong_tower',
+  },
+  {
+    uid: 'd3d7c14c576547e8912df310eb1f0476',
+    name: 'Asian Buildings Set',
+    author: 'golukumar',
+    likeCount: 990,
+    viewCount: 30981,
+    faceCount: 299382,
+    vertexCount: 225803,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-d3d7c14c576547e8912df310eb1f0476',
+    embedUrl: 'https://sketchfab.com/models/d3d7c14c576547e8912df310eb1f0476/embed',
+    thumbnail: '/sketchfab/gta_model_4.jpg',
+    category: 'building',
+    spawnActionLabelEn: 'Spawn Asian Apartment Block',
+    spawnActionLabelBn: 'এশিয়ান অ্যাপার্টমেন্ট স্থাপন',
+    spawnType: 'asian_building',
+  },
+  {
+    uid: 'a9ce7f1cd9614376b39a96a1698d9109',
+    name: 'Money Stacks Low Poly',
+    author: 'Michael V',
+    likeCount: 976,
+    viewCount: 35427,
+    faceCount: 7654,
+    vertexCount: 4244,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-a9ce7f1cd9614376b39a96a1698d9109',
+    embedUrl: 'https://sketchfab.com/models/a9ce7f1cd9614376b39a96a1698d9109/embed',
+    thumbnail: '/sketchfab/gta_model_5.jpg',
+    category: 'prop',
+    spawnActionLabelEn: 'Drop Cash Pallet (+৳2,500)',
+    spawnActionLabelBn: 'টাকার বান্ডিল ড্রপ (+৳২,৫০০)',
+    spawnType: 'money_stacks',
+  },
+  {
+    uid: '2f603ad8d5c640f7b9794f6916f9fbdd',
+    name: 'Asian Shop Pack Free Gameready',
+    author: 'abhayexe',
+    likeCount: 777,
+    viewCount: 25954,
+    faceCount: 39203,
+    vertexCount: 21977,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-2f603ad8d5c640f7b9794f6916f9fbdd',
+    embedUrl: 'https://sketchfab.com/models/2f603ad8d5c640f7b9794f6916f9fbdd/embed',
+    thumbnail: '/sketchfab/gta_model_8.jpg',
+    category: 'building',
+    spawnActionLabelEn: 'Spawn Asian Street Shopfront',
+    spawnActionLabelBn: 'দোকান স্থাপন করুন',
+    spawnType: 'asian_shop',
+  },
+  {
+    uid: '20d1a51fbfa94373900e29de74a0f9ee',
+    name: 'Billboard (.psd layered texture maps included)',
+    author: 'TampaJoey',
+    likeCount: 674,
+    viewCount: 18410,
+    faceCount: 11316,
+    vertexCount: 6789,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-20d1a51fbfa94373900e29de74a0f9ee',
+    embedUrl: 'https://sketchfab.com/models/20d1a51fbfa94373900e29de74a0f9ee/embed',
+    thumbnail: '/sketchfab/gta_model_10.jpg',
+    category: 'prop',
+    spawnActionLabelEn: 'Spawn Highway Billboard',
+    spawnActionLabelBn: 'হাইওয়ে বিলবোর্ড স্থাপন',
+    spawnType: 'billboard',
+  },
+  {
+    uid: '82bd37c5065040098fb0b86e07fcb959',
+    name: '2022 Toyota Hilux',
+    author: 'BHP3D',
+    likeCount: 670,
+    viewCount: 69342,
+    faceCount: 982566,
+    vertexCount: 554041,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-82bd37c5065040098fb0b86e07fcb959',
+    embedUrl: 'https://sketchfab.com/models/82bd37c5065040098fb0b86e07fcb959/embed',
+    thumbnail: '/sketchfab/gta_model_11.jpg',
+    category: 'vehicle',
+    spawnActionLabelEn: 'Drive 2022 Toyota Hilux Pickup',
+    spawnActionLabelBn: 'টয়োটা হাইলাক্স পিকআপ চালান',
+    spawnType: 'hilux_pickup',
+  },
+  {
+    uid: '514ae7c16ba24d7db82bf05d0974c7e9',
+    name: 'Assistant - Tactical Bodysuit',
+    author: 'rexxgta1993',
+    likeCount: 659,
+    viewCount: 28040,
+    faceCount: 96673,
+    vertexCount: 50000,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-514ae7c16ba24d7db82bf05d0974c7e9',
+    embedUrl: 'https://sketchfab.com/models/514ae7c16ba24d7db82bf05d0974c7e9/embed',
+    thumbnail: '/sketchfab/gta_model_12.jpg',
+    category: 'character',
+    spawnActionLabelEn: 'Spawn Rigged 3D Partner Ally',
+    spawnActionLabelBn: 'থ্রিডি সহযোগী চরিত্র আনুন',
+    spawnType: 'tactical_npc',
+  },
+  {
+    uid: '83351a4cd72346ccad6792dfde46d22e',
+    name: 'Crime Scene Tape & Sign with Chalk Body Outline',
+    author: 'TampaJoey',
+    likeCount: 587,
+    viewCount: 16525,
+    faceCount: 2174,
+    vertexCount: 1160,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-83351a4cd72346ccad6792dfde46d22e',
+    embedUrl: 'https://sketchfab.com/models/83351a4cd72346ccad6792dfde46d22e/embed',
+    thumbnail: '/sketchfab/gta_model_13.jpg',
+    category: 'prop',
+    spawnActionLabelEn: 'Spawn DMP Crime Scene Zone',
+    spawnActionLabelBn: 'ক্রাইম সিন ব্যারিকেড স্থাপন',
+    spawnType: 'crime_scene',
+  },
+  {
+    uid: '9490e77925934d199235030b1a4d32c9',
+    name: 'Briefcase / suitcase (low poly, game ready)',
+    author: 'TampaJoey',
+    likeCount: 427,
+    viewCount: 19495,
+    faceCount: 7858,
+    vertexCount: 4814,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-9490e77925934d199235030b1a4d32c9',
+    embedUrl: 'https://sketchfab.com/models/9490e77925934d199235030b1a4d32c9/embed',
+    thumbnail: '/sketchfab/gta_model_16.jpg',
+    category: 'prop',
+    spawnActionLabelEn: 'Drop Syndicate Ledger Briefcase',
+    spawnActionLabelBn: 'সিন্ডিকেট ব্রিফকেস ড্রপ করুন',
+    spawnType: 'briefcase',
+  },
+  {
+    uid: '5ecf9daf4ab24784843daece45dcd58c',
+    name: 'Asian City Scene',
+    author: 'golukumar',
+    likeCount: 414,
+    viewCount: 17031,
+    faceCount: 225234,
+    vertexCount: 212017,
+    isDownloadable: true,
+    viewerUrl: 'https://sketchfab.com/3d-models/none-5ecf9daf4ab24784843daece45dcd58c',
+    embedUrl: 'https://sketchfab.com/models/5ecf9daf4ab24784843daece45dcd58c/embed',
+    thumbnail: '/sketchfab/gta_model_17.jpg',
+    category: 'building',
+    spawnActionLabelEn: 'Spawn Asian Commercial Plaza',
+    spawnActionLabelBn: 'বাণিজ্যিক প্লাজা স্থাপন করুন',
+    spawnType: 'city_block',
+  },
+];
+
+// Cinematic open-world Dhaka concept art environments from stitch_dhaka_city_game_ui
+export const DHAKA_DISTRICT_PHOTOS: Record<DistrictId, string> = {
+  farmgate: '/dhaka_locations/kawran_bazar.png',
+  old_dhaka: '/dhaka_locations/chawkbazar.png',
+  sadarghat: '/dhaka_locations/sadarghat.png',
+  dhanmondi: '/dhaka_locations/curzon_hall.png',
+  motijheel: '/dhaka_locations/motijheel.png',
+  hatirjheel: '/dhaka_locations/hatirjheel.png',
+  gulshan: '/dhaka_locations/gulshan_2.png',
+  banani: '/dhaka_locations/tejgaon.png',
+  uttara: '/dhaka_locations/gabtoli.png',
+  airport_road: '/dhaka_locations/dhaka_rooftop_twilight.png',
+};
+
+// Tactical vehicle inspect views and concept renders
+export const DHAKA_VEHICLE_PHOTOS: Record<VehicleType, string> = {
+  cng: '/dhaka_locations/tuned_cng_auto_rickshaw.png',
+  rickshaw: '/dhaka_locations/shakhari_bazar.png',
+  bus: '/dhaka_locations/gabtoli.png',
+  motorcycle: '/dhaka_locations/midnight_street_rally.png',
+  car: '/dhaka_locations/gulshan_2.png',
+  pickup: '/dhaka_locations/kawran_bazar.png',
+  police: '/dhaka_locations/dmp_riot_interceptor.png',
+};
+
+// High-fidelity environmental concept art for Points of Interest
+export const DHAKA_POI_PHOTOS: Partial<Record<POIType, string>> = {
+  fuchka_stall: '/dhaka_photos/fuchka_real.jpg',
+  tea_stall: '/dhaka_locations/kawran_bazar.png',
+  biriyani_shop: '/dhaka_locations/chawkbazar.png',
+  ferry_ghat: '/dhaka_locations/sadarghat.png',
+  garage: '/dhaka_locations/tuned_cng_auto_rickshaw.png',
+  clothing_shop: '/dhaka_locations/gulshan_2.png',
+  safe_house: '/dhaka_locations/dhaka_rooftop_twilight.png',
+  mosque: '/dhaka_locations/lalbagh_fort.png',
+  police_box: '/dhaka_locations/dmp_riot_interceptor.png',
+};
+
+export const CHARACTER_PORTRAITS: Record<string, string> = {
+  arif: '/textures/arif_portrait.jpg',
+  nadia: '/textures/nadia_portrait.jpg',
+  kamal: '/textures/kamal_portrait.jpg',
+  sikder: '/textures/sikder_portrait.jpg',
+  rickshaw_puller: '/dhaka_photos/rickshaw_puller_real.jpg',
+  police_officer: '/dhaka_photos/police_real.jpg',
+  tea_seller: '/dhaka_photos/tea_stall_real.jpg',
+  street_vendor: '/dhaka_photos/fuchka_real.jpg',
+  default_npc: '/sketchfab/gta_model_12.jpg',
+};
+
+SKETCHFAB_GTA_CATALOG.forEach((item) => {
+  item.thumbnail = resolveAssetUrl(item.thumbnail);
+});
+
+(Object.keys(DHAKA_DISTRICT_PHOTOS) as DistrictId[]).forEach((k) => {
+  DHAKA_DISTRICT_PHOTOS[k] = resolveAssetUrl(DHAKA_DISTRICT_PHOTOS[k]);
+});
+
+(Object.keys(DHAKA_VEHICLE_PHOTOS) as VehicleType[]).forEach((k) => {
+  DHAKA_VEHICLE_PHOTOS[k] = resolveAssetUrl(DHAKA_VEHICLE_PHOTOS[k]);
+});
+
+(Object.keys(DHAKA_POI_PHOTOS) as POIType[]).forEach((k) => {
+  if (DHAKA_POI_PHOTOS[k]) {
+    DHAKA_POI_PHOTOS[k] = resolveAssetUrl(DHAKA_POI_PHOTOS[k]!);
+  }
+});
+
+Object.keys(CHARACTER_PORTRAITS).forEach((k) => {
+  CHARACTER_PORTRAITS[k] = resolveAssetUrl(CHARACTER_PORTRAITS[k]);
+});
+
+export function getPortraitForSpeaker(speakerName: string): string {
+  const lower = speakerName.toLowerCase();
+  if (lower.includes('arif') || lower.includes('আরিফ')) return CHARACTER_PORTRAITS.arif;
+  if (lower.includes('nadia') || lower.includes('নাদিয়া')) return CHARACTER_PORTRAITS.nadia;
+  if (lower.includes('kamal') || lower.includes('কামাল')) return CHARACTER_PORTRAITS.kamal;
+  if (lower.includes('sikder') || lower.includes('সিকদার')) return CHARACTER_PORTRAITS.sikder;
+  return CHARACTER_PORTRAITS.default_npc;
+}
