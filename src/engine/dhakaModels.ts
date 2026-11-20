@@ -2004,9 +2004,9 @@ export function setCharacterAnimationState(
         rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
       }
     } else {
-      // Unarmed natural gait swing
+      // Unarmed natural gait swing - arms swing in opposing natural synchrony
       if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
+        _tmpQuat.setFromAxisAngle(_axisZ, s * 0.7);
         rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
       }
       if (rig.rightArm) {

@@ -79,7 +79,7 @@ export class DhakaCityEngine {
 
   // Player Character State
   private playerLimbs!: CharacterLimbs;
-  private playerPos = new THREE.Vector3(10, 0, 18);
+  private playerPos = new THREE.Vector3(6, 0, 8);
   private playerVelY = 0;
   private playerRotation = 0;
   private playerStamina = 100;
@@ -90,6 +90,9 @@ export class DhakaCityEngine {
   private lastStepTime = 0;
   private lastEquippedOutfit = '';
   private lastEquippedTool = '';
+  private virtualMoveForward = 0;
+  private virtualMoveRight = 0;
+  private virtualSprint = false;
 
   // Combat, Firearms & Particle FX
   private muzzleFlashLight!: THREE.PointLight;
@@ -460,8 +463,19 @@ export class DhakaCityEngine {
       this.scene.add(mesh);
     });
 
-    // Spawn 3D Photorealistic Dhaka Landmark Pavilions for ALL 16 authentic Dhaka locations
+    // Spawn 3D Photorealistic Dhaka Landmark Pavilions for authentic architectural locations
     DHAKA_GAME_LOCATIONS.forEach((loc) => {
+      // Exclude highway transit lines, water basins, and road race loops from having giant rectangular blocks
+      if (
+        loc.category === 'transit' ||
+        loc.id === 'hatirjheel' ||
+        loc.id === 'street_rally' ||
+        loc.id === 'sadarghat' ||
+        loc.id === 'farmgate'
+      ) {
+        return;
+      }
+
       const mesh = createSketchfabAssetPropMesh(
         'dhaka_landmark_building',
         loc.image
@@ -472,10 +486,10 @@ export class DhakaCityEngine {
       mesh.rotation.y = rot;
       this.scene.add(mesh);
       this.buildingColliders.push({
-        minX: loc.x - 14,
-        maxX: loc.x + 14,
-        minZ: loc.z - 11,
-        maxZ: loc.z + 11,
+        minX: loc.x - 11.5,
+        maxX: loc.x + 11.5,
+        minZ: loc.z - 8.5,
+        maxZ: loc.z + 8.5,
       });
     });
 
@@ -2234,6 +2248,7 @@ export class DhakaCityEngine {
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
     window.addEventListener('wheel', this.onWheel, { passive: true });
 
     const dom = this.renderer.domElement;
@@ -2250,11 +2265,19 @@ export class DhakaCityEngine {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
     window.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('mouseup', this.onMouseUp);
     this.renderer.dispose();
   }
+
+  private onBlur = () => {
+    this.keys.clear();
+    this.virtualMoveForward = 0;
+    this.virtualMoveRight = 0;
+    this.virtualSprint = false;
+  };
 
   private onResize = () => {
     if (!this.container) return;
@@ -2325,7 +2348,20 @@ export class DhakaCityEngine {
 
   private onKeyDown = (e: KeyboardEvent) => {
     const code = e.code;
-    this.keys.add(code);
+    if (code) this.keys.add(code);
+    if (e.key) {
+      const k = e.key.toLowerCase();
+      this.keys.add(k);
+      if (k === 'w') this.keys.add('KeyW');
+      if (k === 's') this.keys.add('KeyS');
+      if (k === 'a') this.keys.add('KeyA');
+      if (k === 'd') this.keys.add('KeyD');
+      if (e.key === 'ArrowUp') this.keys.add('ArrowUp');
+      if (e.key === 'ArrowDown') this.keys.add('ArrowDown');
+      if (e.key === 'ArrowLeft') this.keys.add('ArrowLeft');
+      if (e.key === 'ArrowRight') this.keys.add('ArrowRight');
+      if (e.key === 'Shift') this.keys.add('ShiftLeft');
+    }
 
     const store = useGameStore.getState();
 
@@ -2444,8 +2480,27 @@ export class DhakaCityEngine {
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
-    this.keys.delete(e.code);
+    if (e.code) this.keys.delete(e.code);
+    if (e.key) {
+      const k = e.key.toLowerCase();
+      this.keys.delete(k);
+      if (k === 'w') this.keys.delete('KeyW');
+      if (k === 's') this.keys.delete('KeyS');
+      if (k === 'a') this.keys.delete('KeyA');
+      if (k === 'd') this.keys.delete('KeyD');
+      if (e.key === 'ArrowUp') this.keys.delete('ArrowUp');
+      if (e.key === 'ArrowDown') this.keys.delete('ArrowDown');
+      if (e.key === 'ArrowLeft') this.keys.delete('ArrowLeft');
+      if (e.key === 'ArrowRight') this.keys.delete('ArrowRight');
+      if (e.key === 'Shift') this.keys.delete('ShiftLeft');
+    }
   };
+
+  public setVirtualMove(forward: number, right: number, sprint = false) {
+    this.virtualMoveForward = forward;
+    this.virtualMoveRight = right;
+    this.virtualSprint = sprint;
+  }
 
   public triggerTouchAction(
     action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'aim'
@@ -3537,17 +3592,44 @@ export class DhakaCityEngine {
   }
 
   private updateOnFootPlayer(dt: number) {
-    let moveForward = 0;
-    let moveRight = 0;
+    let moveForward = this.virtualMoveForward;
+    let moveRight = this.virtualMoveRight;
 
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) moveForward += 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) moveForward -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) moveRight += 1;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) moveRight -= 1;
+    if (
+      this.keys.has('KeyW') ||
+      this.keys.has('ArrowUp') ||
+      this.keys.has('w')
+    ) {
+      moveForward += 1;
+    }
+    if (
+      this.keys.has('KeyS') ||
+      this.keys.has('ArrowDown') ||
+      this.keys.has('s')
+    ) {
+      moveForward -= 1;
+    }
+    if (
+      this.keys.has('KeyD') ||
+      this.keys.has('ArrowRight') ||
+      this.keys.has('d')
+    ) {
+      moveRight += 1;
+    }
+    if (
+      this.keys.has('KeyA') ||
+      this.keys.has('ArrowLeft') ||
+      this.keys.has('a')
+    ) {
+      moveRight -= 1;
+    }
 
     const wantsSprint =
-      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
-      (moveForward !== 0 || moveRight !== 0);
+      this.virtualSprint ||
+      ((this.keys.has('ShiftLeft') ||
+        this.keys.has('ShiftRight') ||
+        this.keys.has('shift')) &&
+        (moveForward !== 0 || moveRight !== 0));
     const isSprinting = wantsSprint && this.playerStamina > 5;
 
     if (isSprinting) {
@@ -3580,6 +3662,8 @@ export class DhakaCityEngine {
         this.playerPos.z = clampWorldCoord(nextZ);
       }
 
+      this.resolveWorldCollision(this.playerPos, 0.55);
+
       this.walkAnimPhase += dt * (isSprinting ? 15 : 10);
       if (Date.now() - this.lastStepTime > (isSprinting ? 270 : 410)) {
         this.lastStepTime = Date.now();
@@ -3594,6 +3678,7 @@ export class DhakaCityEngine {
       }
     } else {
       this.walkAnimPhase = 0;
+      this.resolveWorldCollision(this.playerPos, 0.55);
     }
 
     if (!this.isGrounded) {
@@ -3651,13 +3736,37 @@ export class DhakaCityEngine {
     if (!veh) return;
 
     const stats = VEHICLE_STATS[veh.type];
-    let throttle = 0;
-    let steer = 0;
+    let throttle = this.virtualMoveForward;
+    let steer = -this.virtualMoveRight;
 
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) throttle += 1;
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) throttle -= 1;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer += 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer -= 1;
+    if (
+      this.keys.has('KeyW') ||
+      this.keys.has('ArrowUp') ||
+      this.keys.has('w')
+    ) {
+      throttle += 1;
+    }
+    if (
+      this.keys.has('KeyS') ||
+      this.keys.has('ArrowDown') ||
+      this.keys.has('s')
+    ) {
+      throttle -= 1;
+    }
+    if (
+      this.keys.has('KeyA') ||
+      this.keys.has('ArrowLeft') ||
+      this.keys.has('a')
+    ) {
+      steer += 1;
+    }
+    if (
+      this.keys.has('KeyD') ||
+      this.keys.has('ArrowRight') ||
+      this.keys.has('d')
+    ) {
+      steer -= 1;
+    }
 
     const isDrifting = this.keys.has('Space');
 
@@ -4411,6 +4520,36 @@ export class DhakaCityEngine {
     }
 
     return false;
+  }
+
+  // Active anti-stuck collision resolver that smoothly ejects entities out of any overlapping obstacle
+  private resolveWorldCollision(pos: THREE.Vector3, radius: number): boolean {
+    let resolved = false;
+    for (const b of this.buildingColliders) {
+      if (
+        pos.x + radius > b.minX &&
+        pos.x - radius < b.maxX &&
+        pos.z + radius > b.minZ &&
+        pos.z - radius < b.maxZ
+      ) {
+        resolved = true;
+        const pushLeft = pos.x + radius - b.minX;
+        const pushRight = b.maxX - (pos.x - radius);
+        const pushBack = pos.z + radius - b.minZ;
+        const pushFront = b.maxZ - (pos.z - radius);
+        const minPush = Math.min(pushLeft, pushRight, pushBack, pushFront);
+        if (minPush === pushLeft) {
+          pos.x = b.minX - radius - 0.05;
+        } else if (minPush === pushRight) {
+          pos.x = b.maxX + radius + 0.05;
+        } else if (minPush === pushBack) {
+          pos.z = b.minZ - radius - 0.05;
+        } else {
+          pos.z = b.maxZ + radius + 0.05;
+        }
+      }
+    }
+    return resolved;
   }
 }
 

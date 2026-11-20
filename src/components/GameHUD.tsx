@@ -16,8 +16,10 @@ import { MinimapHUD } from './MinimapHUD';
 import {
   Box,
   Car,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   CloudRain,
   Compass,
@@ -48,9 +50,13 @@ interface GameHUDProps {
   onTriggerAction: (
     action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'aim'
   ) => void;
+  onVirtualMove?: (forward: number, right: number, sprint: boolean) => void;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({
+  onTriggerAction,
+  onVirtualMove,
+}) => {
   const {
     language,
     toggleLanguage,
@@ -100,6 +106,37 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     isAimingDownSights,
     isNitroActive,
   } = useGameStore();
+
+  const [virtualInput, setVirtualInput] = React.useState({
+    forward: 0,
+    right: 0,
+    sprint: false,
+  });
+
+  const handlePadPress = (forward: number, right: number) => {
+    setVirtualInput((prev) => {
+      const next = { ...prev, forward, right };
+      onVirtualMove?.(next.forward, next.right, next.sprint);
+      return next;
+    });
+  };
+
+  const handlePadRelease = () => {
+    setVirtualInput((prev) => {
+      const next = { ...prev, forward: 0, right: 0 };
+      onVirtualMove?.(0, 0, next.sprint);
+      return next;
+    });
+  };
+
+  const toggleSprint = () => {
+    setVirtualInput((prev) => {
+      const nextSprint = !prev.sprint;
+      const next = { ...prev, sprint: nextSprint };
+      onVirtualMove?.(next.forward, next.right, nextSprint);
+      return next;
+    });
+  };
 
   const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
   const activeMission = allMissions.find((m) => m.id === activeMissionId);
@@ -715,33 +752,135 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
       {/* BOTTOM BAR */}
       <div className="flex items-end justify-between gap-3 w-full">
-        {/* BOTTOM-LEFT: Interactive Radar Minimap */}
-        <div className="pointer-events-auto flex flex-col gap-2">
-          <MinimapHUD />
-          <div className="hidden md:flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] text-slate-300">
-            <span>
-              <strong className="text-amber-400">WASD</strong> Move/Drive
-            </span>
-            <span>•</span>
-            <span>
-              <strong className="text-amber-400">F/E</strong> Enter Ride/Shop
-            </span>
-            <span>•</span>
-            <span>
-              <strong className="text-amber-400">H</strong> Horn/Bell
-            </span>
-            <span>•</span>
-            <span>
-              <strong className="text-amber-400">T</strong> Talk
-            </span>
-            <span>•</span>
-            <span>
-              <strong className="text-amber-400">J</strong> Attack
-            </span>
-            <span>•</span>
-            <span>
-              <strong className="text-amber-400">M</strong> Map
-            </span>
+        {/* BOTTOM-LEFT: Interactive Radar Minimap & Tactical Movement Controls */}
+        <div className="pointer-events-auto flex items-end gap-2.5">
+          <div className="flex flex-col gap-2">
+            <MinimapHUD />
+            <div className="hidden md:flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] text-slate-300">
+              <span>
+                <strong className="text-amber-400">WASD</strong> Move/Drive
+              </span>
+              <span>•</span>
+              <span>
+                <strong className="text-amber-400">Shift</strong> Run
+              </span>
+              <span>•</span>
+              <span>
+                <strong className="text-amber-400">Space</strong> Jump
+              </span>
+              <span>•</span>
+              <span>
+                <strong className="text-amber-400">F/E</strong> Enter/Use
+              </span>
+            </div>
+          </div>
+
+          {/* On-screen Tactical Virtual Movement D-Pad (works seamlessly on mobile touch and mouse click) */}
+          <div className="flex items-center gap-1.5 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-2xl">
+            <div className="relative w-28 h-28 bg-slate-900/90 rounded-xl border border-slate-750 flex items-center justify-center select-none shadow-inner">
+              {/* UP / FORWARD */}
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  handlePadPress(1, 0);
+                }}
+                onPointerUp={handlePadRelease}
+                onPointerLeave={handlePadRelease}
+                className={`absolute top-1 left-1/2 -translate-x-1/2 w-8 h-8 rounded-lg flex flex-col items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
+                  virtualInput.forward > 0
+                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
+                }`}
+                title="Move Forward [W / Up]"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+
+              {/* DOWN / BACKWARD */}
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  handlePadPress(-1, 0);
+                }}
+                onPointerUp={handlePadRelease}
+                onPointerLeave={handlePadRelease}
+                className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-8 rounded-lg flex flex-col items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
+                  virtualInput.forward < 0
+                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
+                }`}
+                title="Move Backward [S / Down]"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+
+              {/* LEFT / STEER LEFT */}
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  handlePadPress(0, -1);
+                }}
+                onPointerUp={handlePadRelease}
+                onPointerLeave={handlePadRelease}
+                className={`absolute left-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
+                  virtualInput.right < 0
+                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
+                }`}
+                title="Move Left / Steer Left [A / Left]"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* RIGHT / STEER RIGHT */}
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  handlePadPress(0, 1);
+                }}
+                onPointerUp={handlePadRelease}
+                onPointerLeave={handlePadRelease}
+                className={`absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
+                  virtualInput.right > 0
+                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
+                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
+                }`}
+                title="Move Right / Steer Right [D / Right]"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* SPRINT RUN TOGGLE */}
+              <button
+                type="button"
+                onClick={toggleSprint}
+                className={`w-7 h-7 rounded-full flex flex-col items-center justify-center border text-[7px] font-mono font-black transition-all active:scale-90 ${
+                  virtualInput.sprint
+                    ? 'bg-cyan-500 border-cyan-300 text-slate-950 shadow-[0_0_10px_#06b6d4] animate-pulse'
+                    : 'bg-slate-850 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Toggle Sprint Run [Shift]"
+              >
+                <Zap className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* JUMP BUTTON */}
+            <button
+              type="button"
+              onClick={() => onTriggerAction('jump')}
+              className="w-9 h-28 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 hover:text-amber-400 font-mono font-bold text-[9px] flex flex-col items-center justify-center gap-1 shadow transition-all active:scale-95"
+              title="Jump [Space]"
+            >
+              <span>▲</span>
+              <span className="[writing-mode:vertical-rl] tracking-wider text-[8px] text-amber-300">
+                {language === 'en' ? 'JUMP' : 'লাফ'}
+              </span>
+            </button>
           </div>
         </div>
 

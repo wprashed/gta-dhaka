@@ -27,6 +27,10 @@ export const App: React.FC = () => {
     engineRef.current?.triggerTouchAction(action);
   };
 
+  const handleVirtualMove = (forward: number, right: number, sprint = false) => {
+    engineRef.current?.setVirtualMove(forward, right, sprint);
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950">
       {/* Real-time 3D WebGL Dhaka City Canvas */}
@@ -38,7 +42,10 @@ export const App: React.FC = () => {
       {/* UI Overlays based on Game Phase */}
       {gamePhase === 'main_menu' && <MainMenuScreen />}
       {gamePhase === 'playing' && (
-        <GameHUD onTriggerAction={handleTriggerAction} />
+        <GameHUD
+          onTriggerAction={handleTriggerAction}
+          onVirtualMove={handleVirtualMove}
+        />
       )}
       {gamePhase === 'paused' && <PauseMenuModal />}
     </div>

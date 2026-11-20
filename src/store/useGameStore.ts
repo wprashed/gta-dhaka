@@ -221,8 +221,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   graphicsQuality: 'high',
   cameraMode: 'third_person',
 
-  playerX: 10,
-  playerZ: 18,
+  playerX: 6,
+  playerZ: 8,
   playerRotation: 0,
   health: 100,
   maxHealth: 100,
