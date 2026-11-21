@@ -63,6 +63,117 @@ class DhakaAudioEngine {
     this.engineOsc.start();
   }
 
+  // Realistic Tire Skid & Screech Synthesizer
+  public updateSkid(intensity: number) {
+    if (!this.ctx) return;
+    if (intensity <= 0.05) return;
+    const now = this.ctx.currentTime;
+    const dur = 0.09;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.sin((i / data.length) * Math.PI);
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1150 + Math.random() * 250, now);
+    filter.Q.setValueAtTime(4.2, now);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(Math.min(0.22, intensity * 0.18) * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start(now);
+  }
+
+  // Heavy Car Impact & Crash Sound
+  public playCarCrash(intensity = 1.0) {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bass heavy vehicle impact thud
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(115, now);
+    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.32);
+    subGain.gain.setValueAtTime(Math.min(0.65, 0.42 * intensity) * this.sfxVolume, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.45);
+
+    // Crunching metal & shattered glass noise blast
+    const dur = 0.35;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.28));
+    }
+    const nSrc = this.ctx.createBufferSource();
+    nSrc.buffer = buf;
+    const nFilter = this.ctx.createBiquadFilter();
+    nFilter.type = 'bandpass';
+    nFilter.frequency.setValueAtTime(750, now);
+    nFilter.Q.setValueAtTime(2.2, now);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(Math.min(0.55, 0.35 * intensity) * this.sfxVolume, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    nSrc.connect(nFilter);
+    nFilter.connect(nGain);
+    nGain.connect(this.ctx.destination);
+    nSrc.start(now);
+  }
+
+  // Turbo Nitro Spool Whoosh
+  public playNitro() {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(780, now + 0.28);
+    gain.gain.setValueAtTime(0.12 * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.32);
+  }
+
+  // Puddle Water Splash Sound
+  public playWaterSplash() {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const dur = 0.18;
+    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.35));
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1400, now);
+    filter.frequency.exponentialRampToValueAtTime(280, now + dur);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.12 * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start(now);
+  }
+
   private setupRainAmbience() {
     if (!this.ctx) return;
     const bufferSize = this.ctx.sampleRate * 2;
@@ -185,20 +296,24 @@ class DhakaAudioEngine {
     );
   }
 
-  public playFootstep() {
+  public playFootstep(isWet = false) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(105, now);
-    osc.frequency.exponentialRampToValueAtTime(32, now + 0.045);
-    gain.gain.setValueAtTime(0.075 * this.sfxVolume, now);
+    osc.type = isWet ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(isWet ? 140 : 105, now);
+    osc.frequency.exponentialRampToValueAtTime(isWet ? 55 : 32, now + 0.045);
+    gain.gain.setValueAtTime((isWet ? 0.09 : 0.075) * this.sfxVolume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.055);
+
+    if (isWet) {
+      this.playWaterSplash();
+    }
   }
 
   public playHorn(type: 'cng' | 'bell' | 'airhorn' | 'car' | 'siren' = 'cng') {

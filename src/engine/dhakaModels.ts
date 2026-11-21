@@ -1528,8 +1528,9 @@ export interface CharacterLimbs {
     idle?: THREE.AnimationAction;
     walk?: THREE.AnimationAction;
     run?: THREE.AnimationAction;
+    driving?: THREE.AnimationAction;
   };
-  currentActionName?: 'idle' | 'walk' | 'run';
+  currentActionName?: 'idle' | 'walk' | 'run' | 'driving';
   gltfRoot?: THREE.Object3D;
   rpmRig?: RpmBoneRig;
 }
@@ -1923,14 +1924,49 @@ const _tmpQuat = new THREE.Quaternion();
 
 export function setCharacterAnimationState(
   limbs: CharacterLimbs,
-  targetState: 'idle' | 'walk' | 'run',
+  targetState: 'idle' | 'walk' | 'run' | 'driving',
   dt: number,
   activeToolId?: ToolWeaponId,
-  isAimingOrFiring = false
+  isAimingOrFiring = false,
+  aimPitch = 0
 ) {
-  // 1. Drive ReadyPlayerMe 3D Human Skeleton Bones smoothly when walking, running, or idling
+  // 1. Drive ReadyPlayerMe 3D Human Skeleton Bones smoothly when walking, running, idling, or driving
   if (limbs.rpmRig) {
     const rig = limbs.rpmRig;
+
+    if (targetState === 'driving') {
+      // Natural seated driving posture inside vehicle
+      if (rig.leftUpLeg) {
+        _tmpQuat.setFromAxisAngle(_axisX, 1.48);
+        rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(_tmpQuat);
+      }
+      if (rig.rightUpLeg) {
+        _tmpQuat.setFromAxisAngle(_axisX, 1.48);
+        rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(_tmpQuat);
+      }
+      if (rig.leftLeg) {
+        _tmpQuat.setFromAxisAngle(_axisX, -1.52);
+        rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(_tmpQuat);
+      }
+      if (rig.rightLeg) {
+        _tmpQuat.setFromAxisAngle(_axisX, -1.52);
+        rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(_tmpQuat);
+      }
+      if (rig.leftArm) {
+        _tmpQuat.setFromAxisAngle(_axisX, -1.22);
+        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+      }
+      if (rig.rightArm) {
+        _tmpQuat.setFromAxisAngle(_axisX, -1.22);
+        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+      }
+      if (rig.spine) {
+        _tmpQuat.setFromAxisAngle(_axisX, 0.14);
+        rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
+      }
+      return;
+    }
+
     const speed =
       targetState === 'run' ? 14 : targetState === 'walk' ? 9 : 2.2;
     rig.phase += dt * speed;
@@ -1964,7 +2000,8 @@ export function setCharacterAnimationState(
 
     if (rig.spine) {
       const spineFlex = Math.sin(rig.phase * 0.9) * (targetState === 'idle' ? 0.025 : 0.06);
-      _tmpQuat.setFromAxisAngle(_axisX, spineFlex);
+      const pitchTilt = isAimingOrFiring ? -aimPitch * 0.5 : 0;
+      _tmpQuat.setFromAxisAngle(_axisX, spineFlex + pitchTilt);
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
     }
 
@@ -2030,6 +2067,11 @@ export function setCharacterAnimationState(
         prev.fadeOut(0.18);
       }
       limbs.currentActionName = targetState;
+    } else if (targetState === 'driving') {
+      if (prev) {
+        prev.fadeOut(0.2);
+      }
+      limbs.currentActionName = 'driving';
     }
   }
   limbs.mixer.update(dt);

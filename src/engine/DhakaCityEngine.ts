@@ -96,6 +96,7 @@ export class DhakaCityEngine {
 
   // Combat, Firearms & Particle FX
   private muzzleFlashLight!: THREE.PointLight;
+  private taillightPointLight!: THREE.PointLight;
   private muzzleFlashTimer = 0;
   private bulletTracers: Array<{ line: THREE.Line; life: number; maxLife: number }> = [];
   private impactSparks: Array<{ mesh: THREE.Mesh; vel: THREE.Vector3; life: number; maxLife: number }> = [];
@@ -103,6 +104,8 @@ export class DhakaCityEngine {
   private skidMarks: Array<{ mesh: THREE.Mesh; life: number }> = [];
   public isAimingDownSights = false;
   private nitroActive = false;
+  private lastNitroState = false;
+  private exhaustTimer = 0;
   private policeSirenTimer = 0;
   private ambientSoundTimer = 0;
 
@@ -212,6 +215,10 @@ export class DhakaCityEngine {
     // Dynamic Muzzle Flash Point Light
     this.muzzleFlashLight = new THREE.PointLight('#ffea75', 0, 16);
     this.scene.add(this.muzzleFlashLight);
+
+    // Dynamic Vehicle Taillight & Brake Point Light
+    this.taillightPointLight = new THREE.PointLight('#ef4444', 0, 8);
+    this.scene.add(this.taillightPointLight);
 
     // 360° Realistic Dhaka Sunset Sky Dome
     const skyTex = loadRealTexture('/textures/dhaka_sky_sunset.jpg', 1, 1, true);
@@ -3667,8 +3674,22 @@ export class DhakaCityEngine {
       this.walkAnimPhase += dt * (isSprinting ? 15 : 10);
       if (Date.now() - this.lastStepTime > (isSprinting ? 270 : 410)) {
         this.lastStepTime = Date.now();
-        dhakaAudio.playFootstep();
-        if (isSprinting) {
+        const store = useGameStore.getState();
+        const isRain = store.weather === 'monsoon_rain';
+        const isNearWater =
+          this.playerPos.z > 240 ||
+          (this.playerPos.x < -180 &&
+            this.playerPos.x > -265 &&
+            Math.abs(this.playerPos.z - 25) < 60);
+        const isWet = isRain || isNearWater;
+        dhakaAudio.playFootstep(isWet);
+        if (isWet) {
+          this.spawnImpactSparks(
+            new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
+            '#38bdf8',
+            3
+          );
+        } else if (isSprinting) {
           this.spawnImpactSparks(
             new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
             '#e2e8f0',
@@ -3688,23 +3709,27 @@ export class DhakaCityEngine {
         this.playerPos.y = 0;
         this.playerVelY = 0;
         this.isGrounded = true;
-        dhakaAudio.playFootstep();
+        const store = useGameStore.getState();
+        const isRain = store.weather === 'monsoon_rain';
+        dhakaAudio.playFootstep(isRain);
         this.spawnImpactSparks(
           new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
-          '#94a3b8',
-          4
+          isRain ? '#38bdf8' : '#94a3b8',
+          5
         );
       }
     }
 
     // Update Real Skeletal GLTF AnimationMixer with firearm aiming and weapon stance
     const store = useGameStore.getState();
+    const aimPitch = this.isAimingDownSights ? this.cameraPitch - 0.32 : 0;
     setCharacterAnimationState(
       this.playerLimbs,
       targetAnimState,
       dt,
       store.equippedToolId,
-      this.attackAnimTimer > 0 || this.isAimingDownSights
+      this.attackAnimTimer > 0 || this.isAimingDownSights,
+      aimPitch
     );
 
     // Also update fallback capsule limbs if visible
@@ -3812,9 +3837,20 @@ export class DhakaCityEngine {
       veh.x = clampWorldCoord(nextX);
       veh.z = clampWorldCoord(nextZ);
     } else {
-      if (Math.abs(veh.speed) > 12) {
-        dhakaAudio.playSfx('hit');
-        veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.45);
+      if (Math.abs(veh.speed) > 5) {
+        const impact = Math.min(2.5, Math.abs(veh.speed) / 12);
+        dhakaAudio.playCarCrash(impact);
+        veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.55);
+        this.cameraPitch += (Math.random() - 0.5) * 0.1 * impact;
+        this.spawnImpactSparks(
+          new THREE.Vector3(
+            veh.x + Math.sin(veh.rotation) * (stats.length * 0.45),
+            0.6,
+            veh.z + Math.cos(veh.rotation) * (stats.length * 0.45)
+          ),
+          '#ffea75',
+          Math.min(14, Math.floor(impact * 7))
+        );
       }
       veh.speed = -veh.speed * 0.35;
 
@@ -3834,8 +3870,10 @@ export class DhakaCityEngine {
       }
     }
 
-    // Drifting tire smoke & sparks
-    if (isDrifting && Math.abs(veh.speed) > 4.2) {
+    // Drifting tire smoke, screech audio & sparks
+    const isHardBraking = throttle < 0 && veh.speed > 5;
+    if ((isDrifting && Math.abs(veh.speed) > 3.6) || isHardBraking) {
+      dhakaAudio.updateSkid(Math.min(1, Math.abs(veh.speed) / 12));
       this.spawnImpactSparks(
         new THREE.Vector3(
           veh.x - Math.sin(veh.rotation) * 1.5,
@@ -3847,7 +3885,7 @@ export class DhakaCityEngine {
       );
     }
 
-    // Nitro Boost on Shift key
+    // Nitro Boost on Shift key with turbine audio & backfire sparks
     const wantsNitro =
       (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
       this.playerStamina > 5 &&
@@ -3855,6 +3893,10 @@ export class DhakaCityEngine {
     this.nitroActive = wantsNitro;
 
     if (wantsNitro) {
+      if (!this.lastNitroState) {
+        dhakaAudio.playNitro();
+      }
+      this.lastNitroState = true;
       this.playerStamina = Math.max(0, this.playerStamina - dt * 26);
       veh.speed = Math.min(
         stats.maxSpeed * 1.48,
@@ -3870,7 +3912,33 @@ export class DhakaCityEngine {
         3
       );
     } else {
+      if (this.lastNitroState) {
+        // Backfire pop sparks on nitro release
+        const flameDirZ = -Math.cos(veh.rotation) * (stats.length * 0.5);
+        const flameDirX = -Math.sin(veh.rotation) * (stats.length * 0.5);
+        this.spawnImpactSparks(
+          new THREE.Vector3(veh.x + flameDirX, 0.35, veh.z + flameDirZ),
+          '#f59e0b',
+          4
+        );
+      }
+      this.lastNitroState = false;
       this.playerStamina = Math.min(100, this.playerStamina + dt * 10);
+    }
+
+    // Exhaust smoke puffs upon initial acceleration
+    if (throttle > 0 && Math.abs(veh.speed) < 6) {
+      this.exhaustTimer += dt;
+      if (this.exhaustTimer > 0.12) {
+        this.exhaustTimer = 0;
+        const rearZ = -Math.cos(veh.rotation) * (stats.length * 0.48);
+        const rearX = -Math.sin(veh.rotation) * (stats.length * 0.48);
+        this.spawnImpactSparks(
+          new THREE.Vector3(veh.x + rearX, 0.22, veh.z + rearZ),
+          '#64748b',
+          1
+        );
+      }
     }
 
     // Asphalt Skid Marks when drifting or hard braking
@@ -3937,24 +4005,64 @@ export class DhakaCityEngine {
     this.playerPos.set(veh.x, 0, veh.z);
     this.playerRotation = veh.rotation;
 
-    // Show character seated on motorcycle with realistic riding stance & dynamic cornering lean
-    if (veh.type === 'motorcycle') {
-      this.playerLimbs.group.visible = true;
-      const seatOffset = 0.22;
-      this.playerLimbs.group.position.set(
-        veh.x - Math.sin(veh.rotation) * seatOffset,
-        0.35,
-        veh.z - Math.cos(veh.rotation) * seatOffset
-      );
-      this.playerLimbs.group.rotation.y = veh.rotation;
-      this.playerLimbs.group.scale.y = 0.85;
-      const vMesh = this.vehicleMeshes.get(veh.id);
-      if (vMesh) {
-        this.playerLimbs.group.rotation.z = vMesh.rotation.z;
-      }
+    // Show character seated inside ANY driven vehicle with authentic driving posture
+    this.playerLimbs.group.visible = true;
+
+    let seatX = 0;
+    let seatY = 0.38;
+    let seatZ = 0;
+    let scaleY = 0.82;
+
+    if (veh.type === 'cng') {
+      seatX = 0;
+      seatY = 0.44;
+      seatZ = 0.28;
+      scaleY = 0.78;
+    } else if (veh.type === 'rickshaw') {
+      seatX = 0;
+      seatY = 0.62;
+      seatZ = -0.32;
+      scaleY = 0.82;
+    } else if (veh.type === 'motorcycle') {
+      seatX = 0;
+      seatY = 0.36;
+      seatZ = -0.22;
+      scaleY = 0.85;
+    } else if (veh.type === 'bus') {
+      seatX = 0.62;
+      seatY = 1.18;
+      seatZ = 2.95;
+      scaleY = 0.85;
     } else {
-      this.playerLimbs.group.visible = false;
+      // Sedan / Police cruiser / Pickup (Bangladeshi right-hand drive)
+      seatX = 0.36;
+      seatY = 0.44;
+      seatZ = -0.12;
+      scaleY = 0.76;
     }
+
+    const cosR = Math.cos(veh.rotation);
+    const sinR = Math.sin(veh.rotation);
+    const worldSeatX = veh.x + cosR * seatX + sinR * seatZ;
+    const worldSeatZ = veh.z - sinR * seatX + cosR * seatZ;
+
+    this.playerLimbs.group.position.set(worldSeatX, seatY, worldSeatZ);
+    this.playerLimbs.group.rotation.y = veh.rotation;
+    this.playerLimbs.group.scale.y = scaleY;
+
+    const vMesh = this.vehicleMeshes.get(veh.id);
+    if (vMesh) {
+      this.playerLimbs.group.rotation.x = vMesh.rotation.x;
+      this.playerLimbs.group.rotation.z = vMesh.rotation.z;
+    }
+
+    setCharacterAnimationState(this.playerLimbs, 'driving', dt);
+
+    // Also update fallback limbs driving pose
+    this.playerLimbs.leftLeg.rotation.x = -1.45;
+    this.playerLimbs.rightLeg.rotation.x = -1.45;
+    this.playerLimbs.leftArm.rotation.x = -1.15;
+    this.playerLimbs.rightArm.rotation.x = -1.15;
 
     // Position dynamic vehicle headlight cone ahead of car
     this.headlightSpot.intensity = 3.2;
@@ -3968,6 +4076,24 @@ export class DhakaCityEngine {
       0.1,
       veh.z + Math.cos(veh.rotation) * 24
     );
+
+    // Dynamic Red Taillight Point Light for Braking & Night Driving
+    const store = useGameStore.getState();
+    const isNightOrTwilight = store.timeOfDay > 18 || store.timeOfDay < 6;
+    const isBraking = (throttle < 0 && veh.speed > 0.4) || isDrifting;
+
+    if (this.taillightPointLight) {
+      const tailZ = -Math.cos(veh.rotation) * (stats.length * 0.52);
+      const tailX = -Math.sin(veh.rotation) * (stats.length * 0.52);
+      this.taillightPointLight.position.set(veh.x + tailX, 0.75, veh.z + tailZ);
+      if (isBraking) {
+        this.taillightPointLight.intensity = 3.8;
+      } else if (isNightOrTwilight) {
+        this.taillightPointLight.intensity = 0.85;
+      } else {
+        this.taillightPointLight.intensity = 0;
+      }
+    }
 
     if (!this.isPointerDragging && Math.abs(veh.speed) > 2.5) {
       const desiredYaw = veh.rotation + Math.PI;
@@ -4133,10 +4259,16 @@ export class DhakaCityEngine {
       if (
         Math.abs(nx) > 340 ||
         nz > 282 ||
-        nz < -335 ||
-        this.checkWorldObstacle(nx, nz, 1.5)
+        nz < -335
       ) {
         veh.rotation = normalizeAngle(veh.rotation + Math.PI);
+        if (Math.abs(veh.x) < 22) {
+          veh.x = -veh.x;
+        }
+      } else if (this.checkWorldObstacle(nx, nz, 1.5)) {
+        veh.rotation = normalizeAngle(
+          veh.rotation + (Math.random() > 0.5 ? 0.785 : -0.785)
+        );
       } else {
         veh.x = nx;
         veh.z = nz;
@@ -4163,8 +4295,15 @@ export class DhakaCityEngine {
 
       if (this.activeVehicleId) {
         const pv = this.vehicles.find((v) => v.id === this.activeVehicleId);
-        if (pv && Math.abs(pv.speed) > 8) {
+        if (pv && Math.abs(pv.speed) > 4) {
           const d = Math.hypot(npc.x - pv.x, npc.z - pv.z);
+          // Evasion: dodge away from approaching vehicle towards sidewalk
+          if (d < 7.2 && !npc.isStoryNPC) {
+            npc.aiState = 'flee';
+            const dodgeDir = npc.x - pv.x >= 0 ? 1 : -1;
+            npc.walkTargetX = npc.x + dodgeDir * 4.8;
+            npc.walkTargetZ = npc.z + (pv.speed > 0 ? -1.5 : 1.5);
+          }
           if (d < 2.1 && !npc.isStoryNPC) {
             dhakaAudio.playSfx('hit');
             npc.aiState = 'flee';
