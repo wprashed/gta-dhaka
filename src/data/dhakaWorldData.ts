@@ -926,6 +926,10 @@ export const TOOL_WEAPONS: ToolWeapon[] = [
     isFirearm: true,
     fireRate: 0.75,
     pellets: 5,
+    clipSize: 1,
+    currentClip: 1,
+    reserveAmmo: 25,
+    maxReserve: 50,
   },
   {
     id: 'pistol_9mm',
@@ -939,6 +943,10 @@ export const TOOL_WEAPONS: ToolWeapon[] = [
     isFirearm: true,
     fireRate: 0.22,
     pellets: 1,
+    clipSize: 12,
+    currentClip: 12,
+    reserveAmmo: 60,
+    maxReserve: 120,
   },
   {
     id: 'bd08_rifle',
@@ -952,6 +960,10 @@ export const TOOL_WEAPONS: ToolWeapon[] = [
     isFirearm: true,
     fireRate: 0.12,
     pellets: 1,
+    clipSize: 30,
+    currentClip: 30,
+    reserveAmmo: 150,
+    maxReserve: 300,
   },
   {
     id: 'police_shotgun',
@@ -965,6 +977,10 @@ export const TOOL_WEAPONS: ToolWeapon[] = [
     isFirearm: true,
     fireRate: 0.55,
     pellets: 6,
+    clipSize: 6,
+    currentClip: 6,
+    reserveAmmo: 36,
+    maxReserve: 72,
   },
   {
     id: 'smg_uzi',
@@ -978,6 +994,10 @@ export const TOOL_WEAPONS: ToolWeapon[] = [
     isFirearm: true,
     fireRate: 0.09,
     pellets: 1,
+    clipSize: 28,
+    currentClip: 28,
+    reserveAmmo: 140,
+    maxReserve: 280,
   },
 ];
 

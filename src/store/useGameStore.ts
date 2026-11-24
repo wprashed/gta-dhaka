@@ -105,6 +105,10 @@ interface GameState {
   } | null;
   customWaypoint: { x: number; z: number; name: string } | null;
 
+  // Gameplay status flags
+  isWasted: boolean;
+  isBusted: boolean;
+
   // Engine command bridge callbacks
   spawnVehicleRequest: VehicleType | null;
   spawnSketchfabRequest: {
@@ -180,6 +184,12 @@ interface GameState {
   clearEngineRequests: () => void;
   requestTeleport: (x: number, z: number) => void;
 
+  triggerWasted: () => void;
+  triggerBusted: () => void;
+  consumeAmmo: (toolId: ToolWeaponId) => boolean;
+  reloadCurrentWeapon: () => boolean;
+  addAmmo: (toolId: ToolWeaponId, count: number) => void;
+
   showBanner: (banner: GameState['bannerAlert']) => void;
   saveGameToStorage: () => void;
   hasSavedGame: () => boolean;
@@ -209,6 +219,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   currentVehicleHealth: 120,
   currentVehicleMaxHealth: 120,
   currentDistrict: 'farmgate',
+  isWasted: false,
+  isBusted: false,
 
   outfits: PLAYER_OUTFITS,
   equippedOutfitId: 'dhaka_casual',
@@ -432,26 +444,150 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       const newHealth = Math.max(0, s.health - remaining);
 
-      if (newHealth <= 0) {
+      if (newHealth <= 0 && !s.isWasted) {
         setTimeout(() => {
-          get().showBanner({
-            titleEn: 'DISCHARGED FROM DHAKA MEDICAL',
-            titleBn: 'ঢাকা মেডিকেল থেকে প্রাথমিক চিকিৎসা সম্পন্ন',
-            subtitleEn: 'Medical bill ৳200 deducted. Be careful on the streets!',
-            subtitleBn: 'চিকিৎসা খরচ বাবদ ৳২০০ কাটা হয়েছে। সাবধানে চলুন!',
-            tone: 'red',
-          });
-          set((st) => ({
-            health: 100,
-            wantedLevel: 0,
-            wantedCooldown: 0,
-            taka: Math.max(0, st.taka - 200),
-            teleportRequest: { x: -20, z: -15 },
-          }));
-        }, 400);
+          get().triggerWasted();
+        }, 10);
       }
 
       return { health: newHealth, armor: newArmor };
+    });
+  },
+
+  triggerWasted: () => {
+    const s = get();
+    if (s.isWasted) return;
+    dhakaAudio.playSfx('wasted');
+    set({
+      isWasted: true,
+      inVehicleId: null,
+      currentVehicleType: null,
+      bannerAlert: {
+        titleEn: 'WASTED',
+        titleBn: 'আহত / নিহত',
+        subtitleEn: 'Admitted to Dhaka Medical College Hospital emergency ward (-৳200).',
+        subtitleBn: 'ঢাকা মেডিকেল কলেজ হাসপাতালের জরুরি বিভাগে ভর্তি করা হয়েছে (-৳২০০)।',
+        tone: 'red',
+      },
+    });
+
+    setTimeout(() => {
+      set((st) => ({
+        isWasted: false,
+        health: 100,
+        armor: 0,
+        stamina: 100,
+        wantedLevel: 0,
+        wantedCooldown: 0,
+        taka: Math.max(0, st.taka - 200),
+        teleportRequest: { x: -30, z: 125 }, // DMCH emergency ward courtyard
+        bannerAlert: {
+          titleEn: 'DISCHARGED FROM DHAKA MEDICAL',
+          titleBn: 'ঢাকা মেডিকেল থেকে ছাড়পত্র প্রাপ্ত',
+          subtitleEn: 'Emergency care bill ৳200 settled. Stay vigilant in Dhaka!',
+          subtitleBn: 'চিকিৎসা খরচ বাবদ ৳২০০ পরিশোধিত। সাবধানে চলুন!',
+          tone: 'blue',
+        },
+      }));
+    }, 2800);
+  },
+
+  triggerBusted: () => {
+    const s = get();
+    if (s.isBusted || s.isWasted) return;
+    dhakaAudio.playSfx('busted');
+    set({
+      isBusted: true,
+      inVehicleId: null,
+      currentVehicleType: null,
+      bannerAlert: {
+        titleEn: 'BUSTED!',
+        titleBn: 'গ্রেফতার!',
+        subtitleEn: 'Detained by DMP Traffic Police patrol.',
+        subtitleBn: 'ডিএমপি ট্রাফিক পুলিশ আপনাকে আটক করেছে।',
+        tone: 'gold',
+      },
+    });
+
+    setTimeout(() => {
+      set((st) => ({
+        isBusted: false,
+        health: 100,
+        wantedLevel: 0,
+        wantedCooldown: 0,
+        taka: Math.max(0, st.taka - 500),
+        teleportRequest: { x: 10, z: -10 }, // Farmgate Police Box
+        bannerAlert: {
+          titleEn: 'RELEASED FROM DMP POLICE BOX',
+          titleBn: 'ফার্মগেট পুলিশ বক্স থেকে মুক্তি',
+          subtitleEn: 'Traffic violation & bail fine ৳500 settled.',
+          subtitleBn: 'ট্রাফিক লঙ্ঘন ও জামিন জরিমানা বাবদ ৳৫০০ পরিশোধিত।',
+          tone: 'green',
+        },
+      }));
+    }, 2800);
+  },
+
+  consumeAmmo: (toolId) => {
+    let fired = false;
+    set((s) => {
+      const updatedTools = s.tools.map((t) => {
+        if (t.id === toolId && t.isFirearm) {
+          const current = t.currentClip ?? 1;
+          if (current > 0) {
+            fired = true;
+            return { ...t, currentClip: current - 1 };
+          }
+        }
+        return t;
+      });
+      return { tools: updatedTools };
+    });
+    return fired;
+  },
+
+  reloadCurrentWeapon: () => {
+    let reloaded = false;
+    set((s) => {
+      const activeTool = s.tools.find((t) => t.id === s.equippedToolId);
+      if (!activeTool || !activeTool.isFirearm) return {};
+      const clipSize = activeTool.clipSize ?? 12;
+      const currentClip = activeTool.currentClip ?? 0;
+      const reserve = activeTool.reserveAmmo ?? 0;
+      const needed = clipSize - currentClip;
+
+      if (needed <= 0 || reserve <= 0) return {};
+
+      const transfer = Math.min(needed, reserve);
+      dhakaAudio.playSfx('reload');
+      reloaded = true;
+
+      const updatedTools = s.tools.map((t) => {
+        if (t.id === activeTool.id) {
+          return {
+            ...t,
+            currentClip: currentClip + transfer,
+            reserveAmmo: reserve - transfer,
+          };
+        }
+        return t;
+      });
+      return { tools: updatedTools };
+    });
+    return reloaded;
+  },
+
+  addAmmo: (toolId, count) => {
+    set((s) => {
+      const updatedTools = s.tools.map((t) => {
+        if (t.id === toolId && t.isFirearm) {
+          const maxRes = t.maxReserve ?? 200;
+          const newRes = Math.min(maxRes, (t.reserveAmmo ?? 0) + count);
+          return { ...t, reserveAmmo: newRes };
+        }
+        return t;
+      });
+      return { tools: updatedTools };
     });
   },
 

@@ -237,4 +237,8 @@ export interface ToolWeapon {
   isFirearm?: boolean;
   fireRate?: number;
   pellets?: number;
+  clipSize?: number;
+  currentClip?: number;
+  reserveAmmo?: number;
+  maxReserve?: number;
 }

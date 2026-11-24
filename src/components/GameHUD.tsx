@@ -79,6 +79,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     equippedToolId,
     equipTool,
     tools,
+    isWasted,
+    isBusted,
     requestSpawnVehicle,
     setGamePhase,
     storyEndingEn,
@@ -154,6 +156,42 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
   return (
     <div className="fixed inset-0 pointer-events-none flex flex-col justify-between p-3 sm:p-4 z-20 overflow-hidden font-sans select-none">
+      {/* Cinematic WASTED / BUSTED Fullscreen Overlay */}
+      {(isWasted || isBusted) && (
+        <div className="fixed inset-0 z-50 pointer-events-none flex flex-col items-center justify-center animate-in fade-in duration-300">
+          <div
+            className={`absolute inset-0 ${
+              isWasted
+                ? 'bg-red-950/80 backdrop-grayscale'
+                : 'bg-amber-950/80'
+            }`}
+          />
+          <h1
+            className={`relative text-5xl sm:text-7xl font-black uppercase tracking-widest drop-shadow-[0_10px_25px_rgba(0,0,0,0.95)] animate-pulse ${
+              isWasted ? 'text-red-500' : 'text-amber-400'
+            }`}
+            style={{ fontFamily: 'Impact, sans-serif' }}
+          >
+            {isWasted
+              ? language === 'en'
+                ? 'WASTED'
+                : 'আহত / নিহত'
+              : language === 'en'
+              ? 'BUSTED'
+              : 'গ্রেফতার'}
+          </h1>
+          <p className="relative text-xs sm:text-sm font-semibold text-slate-200 mt-3 drop-shadow bg-black/75 px-4 py-1.5 rounded-full border border-white/10 text-center max-w-sm">
+            {isWasted
+              ? language === 'en'
+                ? 'Admitted to Dhaka Medical College emergency ward (-৳200)'
+                : 'ঢাকা মেডিকেল কলেজ হাসপাতালের জরুরি বিভাগে প্রাথমিক চিকিৎসা (-৳২০০)'
+              : language === 'en'
+              ? 'Detained by DMP Traffic Police. Bail fine ৳500 paid at Farmgate Police Box'
+              : 'ডিএমপি ট্রাফিক পুলিশ আটক করেছে। জরিমানা বাবদ ৫০০ টাকা কর্তন'}
+          </p>
+        </div>
+      )}
+
       {/* ==================== TOP BAR ==================== */}
       <div className="flex items-start justify-between gap-3 w-full">
         {/* TOP-LEFT: Ultra-Minimalist Floating Objective Badge */}
@@ -369,8 +407,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             <div className="relative">
               <button
                 onClick={() => setShowWeaponDrawer(!showWeaponDrawer)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-slate-200 hover:text-amber-300 transition-colors"
-                title="Switch weapons [Q / 1-0]"
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-200 hover:text-amber-300 transition-colors"
+                title="Switch weapons [Q / 1-0] • Reload [R]"
               >
                 <span className="text-xs">
                   {activeTool.isFirearm ? '🔫' : '🗡️'}
@@ -378,6 +416,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                 <span className="truncate max-w-[65px] hidden sm:inline">
                   {language === 'en' ? activeTool.nameEn : activeTool.nameBn}
                 </span>
+                {activeTool.isFirearm ? (
+                  <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/70 px-1 py-0.5 rounded border border-amber-600/40">
+                    {activeTool.currentClip ?? 0}
+                    <span className="text-slate-400 text-[8px]">/{activeTool.reserveAmmo ?? 0}</span>
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-mono text-slate-400">∞</span>
+                )}
                 <span className="text-[8px] font-mono text-slate-500">[Q]</span>
               </button>
 

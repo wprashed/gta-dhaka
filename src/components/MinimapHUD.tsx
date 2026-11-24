@@ -182,6 +182,27 @@ export const MinimapHUD: React.FC = () => {
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // Directional GPS Chevron Needle at Radar Edge
+      const targetDist = Math.hypot(tp.rx, tp.rz);
+      if (targetDist > half - 20) {
+        const angle = Math.atan2(tp.rz, tp.rx);
+        const edgeX = Math.cos(angle) * (half - 10);
+        const edgeZ = Math.sin(angle) * (half - 10);
+
+        ctx.save();
+        ctx.translate(edgeX, edgeZ);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = target.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -6.5);
+        ctx.lineTo(5, 4.5);
+        ctx.lineTo(0, 1.5);
+        ctx.lineTo(-5, 4.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     // Draw Player Directional Arrow at Center
