@@ -448,10 +448,56 @@ class DhakaAudioEngine {
       | 'reload'
       | 'wasted'
       | 'busted'
+      | 'crash'
   ) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+
+    if (effect === 'crash') {
+      // Violent metal crunch + shattering tempered safety glass
+      const dur = 0.46;
+      const bufSize = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] =
+          (Math.random() * 2 - 1) *
+          Math.exp(-i / (this.ctx.sampleRate * 0.12));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+
+      // Heavy metal low-frequency impact crunch
+      const lowOsc = this.ctx.createOscillator();
+      const lowGain = this.ctx.createGain();
+      lowOsc.type = 'sawtooth';
+      lowOsc.frequency.setValueAtTime(145, now);
+      lowOsc.frequency.exponentialRampToValueAtTime(30, now + 0.38);
+      lowGain.gain.setValueAtTime(0.38 * this.sfxVolume, now);
+      lowGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+      lowOsc.connect(lowGain);
+      lowGain.connect(this.ctx.destination);
+      lowOsc.start(now);
+      lowOsc.stop(now + 0.44);
+
+      // Glass shatter high-frequency fizz
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(3400, now);
+      filter.Q.value = 2.2;
+
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.32 * this.sfxVolume, now);
+      nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      noise.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(this.ctx.destination);
+      noise.start(now);
+      noise.stop(now + 0.46);
+      return;
+    }
 
     if (effect === 'reload') {
       // Crisp mechanical metal slide & magazine latch

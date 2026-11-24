@@ -414,12 +414,61 @@ function fitCarAccents(
   void seed;
 }
 
+let sharedVehicleShadowTex: THREE.CanvasTexture | null = null;
+function getVehicleShadowTexture(): THREE.CanvasTexture {
+  if (sharedVehicleShadowTex) return sharedVehicleShadowTex;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(64, 64, 12, 64, 64, 60);
+  grad.addColorStop(0, 'rgba(0, 0, 0, 0.72)');
+  grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.35)');
+  grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+  sharedVehicleShadowTex = new THREE.CanvasTexture(canvas);
+  return sharedVehicleShadowTex;
+}
+
 export function createVehicleMesh(
   type: VehicleType,
   customColor?: string,
   seed = 1
 ): THREE.Group {
   const group = new THREE.Group();
+
+  // Soft radial ambient occlusion contact shadow plane beneath vehicle chassis
+  const sWidth =
+    type === 'bus'
+      ? 3.2
+      : type === 'car' || type === 'police'
+      ? 2.2
+      : type === 'cng'
+      ? 1.9
+      : 1.3;
+  const sLength =
+    type === 'bus'
+      ? 10.4
+      : type === 'car' || type === 'police'
+      ? 4.8
+      : type === 'cng'
+      ? 3.1
+      : 2.4;
+  const shadowMat = new THREE.MeshBasicMaterial({
+    map: getVehicleShadowTexture(),
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
+  const shadowPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(sWidth, sLength),
+    shadowMat
+  );
+  shadowPlane.rotation.x = -Math.PI / 2;
+  shadowPlane.position.y = 0.084;
+  shadowPlane.name = 'contact_shadow';
+  group.add(shadowPlane);
 
   const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.26, 20);
   wheelGeo.rotateZ(Math.PI / 2);

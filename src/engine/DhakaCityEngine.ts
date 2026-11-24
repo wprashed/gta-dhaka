@@ -82,6 +82,22 @@ export class DhakaCityEngine {
   private cashDrops: CashPickupDrop[] = [];
   private metroTrainGroup: THREE.Group | null = null;
   private skidDecals: Array<{ mesh: THREE.Mesh; life: number }> = [];
+  private bloodDecals: Array<{ mesh: THREE.Mesh; life: number }> = [];
+  private glassShards: Array<{
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    life: number;
+  }> = [];
+  private radiatorSteam: Array<{
+    mesh: THREE.Mesh;
+    vy: number;
+    life: number;
+    maxLife: number;
+  }> = [];
+  private cameraTrauma = 0;
+  private horizonRing: THREE.Mesh | null = null;
 
   // Player Character State
   private playerLimbs!: CharacterLimbs;
@@ -345,72 +361,322 @@ export class DhakaCityEngine {
     dhanmondiWater.position.set(-225, 0.05, 25);
     this.scene.add(dhanmondiWater);
 
-    // 3. Realistic Asphalt Road Strips with Anisotropic Texture Mapping
-    const roadTex = loadRealTexture('/textures/dhaka_asphalt.jpg', 4, 40, true);
-    const roadMat = new THREE.MeshStandardMaterial({
-      map: roadTex,
-      color: '#334155',
-      roughness: 0.72,
-      metalness: 0.12,
+    // 3. Realistic Dhaka Asphalt Road Network with Unobstructed Intersections & Proportional UVs
+    const nsAsphaltTex = loadRealTexture(
+      '/textures/dhaka_asphalt.jpg',
+      3,
+      26,
+      true
+    );
+    const nsRoadMat = new THREE.MeshStandardMaterial({
+      map: nsAsphaltTex,
+      color: '#475569',
+      roughness: 0.82,
+      metalness: 0.08,
     });
+
+    const ewAsphaltTex = loadRealTexture(
+      '/textures/dhaka_asphalt.jpg',
+      26,
+      3,
+      true
+    );
+    const ewRoadMat = new THREE.MeshStandardMaterial({
+      map: ewAsphaltTex,
+      color: '#475569',
+      roughness: 0.82,
+      metalness: 0.08,
+    });
+
+    const juncAsphaltTex = loadRealTexture(
+      '/textures/dhaka_asphalt.jpg',
+      3,
+      3,
+      true
+    );
+    const junctionMat = new THREE.MeshStandardMaterial({
+      map: juncAsphaltTex,
+      color: '#475569',
+      roughness: 0.82,
+      metalness: 0.08,
+    });
+
     const yellowLineMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
     const curbMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
+      color: '#cbd5e1',
       roughness: 0.65,
     });
+    const zebraStripeMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.55,
+    });
 
-    const createRoadStrip = (
-      x: number,
-      z: number,
-      width: number,
-      length: number,
-      isNorthSouth: boolean
+    const nsRoads = [
+      { x: 0, width: 18, zMin: -340, zMax: 295 },
+      { x: -170, width: 16, zMin: -340, zMax: 295 },
+      { x: 220, width: 18, zMin: -340, zMax: 295 },
+      { x: -70, width: 11, zMin: 80, zMax: 290 },
+    ];
+
+    const ewRoads = [
+      { z: -315, width: 18, xMin: -340, xMax: 340 },
+      { z: -175, width: 16, xMin: -340, xMax: 340 },
+      { z: 0, width: 18, xMin: -340, xMax: 340 },
+      { z: 175, width: 16, xMin: -340, xMax: 340 },
+      { z: 285, width: 15, xMin: -340, xMax: 340 },
+    ];
+
+    // Build seamless junction patches at every intersection point
+    nsRoads.forEach((ns) => {
+      ewRoads.forEach((ew) => {
+        if (
+          ns.x >= ew.xMin &&
+          ns.x <= ew.xMax &&
+          ew.z >= ns.zMin &&
+          ew.z <= ns.zMax
+        ) {
+          const jMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(ns.width, ew.width),
+            junctionMat
+          );
+          jMesh.rotation.x = -Math.PI / 2;
+          jMesh.position.set(ns.x, 0.08, ew.z);
+          jMesh.receiveShadow = true;
+          this.scene.add(jMesh);
+        }
+      });
+    });
+
+    // Helper to spawn white Dhaka zebra crosswalk stripes
+    const addZebraCrossing = (
+      cx: number,
+      cz: number,
+      isNorthSouth: boolean,
+      roadWidth: number
     ) => {
-      const rMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(width, length),
-        roadMat
-      );
-      rMesh.rotation.x = -Math.PI / 2;
-      rMesh.position.set(x, 0.08, z);
-      rMesh.receiveShadow = true;
-      this.scene.add(rMesh);
-
-      const divider = new THREE.Mesh(
-        new THREE.PlaneGeometry(
-          isNorthSouth ? 0.35 : width,
-          isNorthSouth ? length : 0.35
-        ),
-        yellowLineMat
-      );
-      divider.rotation.x = -Math.PI / 2;
-      divider.position.set(x, 0.095, z);
-      this.scene.add(divider);
-
-      if (isNorthSouth) {
-        [-width / 2 - 0.6, width / 2 + 0.6].forEach((offsetX) => {
-          this.scene.add(
-            this.sharedBox(1.2, 0.22, length, curbMat, x + offsetX, 0.11, z)
-          );
-        });
-      } else {
-        [-length / 2 - 0.6, length / 2 + 0.6].forEach((offsetZ) => {
-          this.scene.add(
-            this.sharedBox(width, 0.22, 1.2, curbMat, x, 0.11, z + offsetZ)
-          );
-        });
+      const stripeCount = Math.floor(roadWidth / 1.5);
+      const startOffset = -((stripeCount - 1) * 1.4) / 2;
+      for (let i = 0; i < stripeCount; i++) {
+        const offset = startOffset + i * 1.4;
+        const stripe = new THREE.Mesh(
+          new THREE.PlaneGeometry(
+            isNorthSouth ? 0.6 : 2.8,
+            isNorthSouth ? 2.8 : 0.6
+          ),
+          zebraStripeMat
+        );
+        stripe.rotation.x = -Math.PI / 2;
+        stripe.position.set(
+          isNorthSouth ? cx + offset : cx,
+          0.088,
+          isNorthSouth ? cz : cz + offset
+        );
+        stripe.receiveShadow = true;
+        this.scene.add(stripe);
       }
     };
 
-    createRoadStrip(0, -10, 18, 610, true);
-    createRoadStrip(-170, -10, 16, 610, true);
-    createRoadStrip(220, -10, 18, 610, true);
-    createRoadStrip(-70, 185, 11, 210, true);
+    // Build North-South road segments with clean intersection cutoffs
+    nsRoads.forEach((ns) => {
+      const cutoffs = ewRoads
+        .filter(
+          (ew) =>
+            ns.x >= ew.xMin &&
+            ns.x <= ew.xMax &&
+            ew.z >= ns.zMin &&
+            ew.z <= ns.zMax
+        )
+        .map((ew) => ({
+          zMin: ew.z - ew.width / 2 - 0.2,
+          zMax: ew.z + ew.width / 2 + 0.2,
+          cz: ew.z,
+          w: ew.width,
+        }))
+        .sort((a, b) => a.zMin - b.zMin);
 
-    createRoadStrip(0, -315, 680, 18, false);
-    createRoadStrip(0, -175, 680, 16, false);
-    createRoadStrip(0, 0, 680, 18, false);
-    createRoadStrip(0, 175, 680, 16, false);
-    createRoadStrip(0, 285, 680, 15, false);
+      let curZ = ns.zMin;
+      cutoffs.forEach((c) => {
+        if (c.zMin > curZ + 3) {
+          const segLen = c.zMin - curZ;
+          const centerZ = (curZ + c.zMin) / 2;
+          const rMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(ns.width, segLen),
+            nsRoadMat
+          );
+          rMesh.rotation.x = -Math.PI / 2;
+          rMesh.position.set(ns.x, 0.08, centerZ);
+          rMesh.receiveShadow = true;
+          this.scene.add(rMesh);
+
+          // Divider stops before intersection
+          const divLen = Math.max(1, segLen - 6);
+          const divider = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.35, divLen),
+            yellowLineMat
+          );
+          divider.rotation.x = -Math.PI / 2;
+          divider.position.set(ns.x, 0.095, centerZ);
+          this.scene.add(divider);
+
+          // Curbs strictly along segment length (never entering cross street)
+          [-ns.width / 2 - 0.55, ns.width / 2 + 0.55].forEach((ox) => {
+            this.scene.add(
+              this.sharedBox(
+                1.1,
+                0.22,
+                segLen,
+                curbMat,
+                ns.x + ox,
+                0.11,
+                centerZ
+              )
+            );
+          });
+
+          // Zebra crosswalk entering cross street
+          addZebraCrossing(ns.x, c.zMin - 1.8, true, ns.width);
+        }
+        curZ = c.zMax;
+        // Zebra crosswalk leaving cross street
+        addZebraCrossing(ns.x, curZ + 1.8, true, ns.width);
+      });
+
+      if (ns.zMax > curZ + 3) {
+        const segLen = ns.zMax - curZ;
+        const centerZ = (curZ + ns.zMax) / 2;
+        const rMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(ns.width, segLen),
+          nsRoadMat
+        );
+        rMesh.rotation.x = -Math.PI / 2;
+        rMesh.position.set(ns.x, 0.08, centerZ);
+        rMesh.receiveShadow = true;
+        this.scene.add(rMesh);
+
+        const divLen = Math.max(1, segLen - 4);
+        const divider = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.35, divLen),
+          yellowLineMat
+        );
+        divider.rotation.x = -Math.PI / 2;
+        divider.position.set(ns.x, 0.095, centerZ);
+        this.scene.add(divider);
+
+        [-ns.width / 2 - 0.55, ns.width / 2 + 0.55].forEach((ox) => {
+          this.scene.add(
+            this.sharedBox(
+              1.1,
+              0.22,
+              segLen,
+              curbMat,
+              ns.x + ox,
+              0.11,
+              centerZ
+            )
+          );
+        });
+      }
+    });
+
+    // Build East-West road segments with clean intersection cutoffs
+    ewRoads.forEach((ew) => {
+      const cutoffs = nsRoads
+        .filter(
+          (ns) =>
+            ns.x >= ew.xMin &&
+            ns.x <= ew.xMax &&
+            ew.z >= ns.zMin &&
+            ew.z <= ns.zMax
+        )
+        .map((ns) => ({
+          xMin: ns.x - ns.width / 2 - 0.2,
+          xMax: ns.x + ns.width / 2 + 0.2,
+          cx: ns.x,
+          w: ns.width,
+        }))
+        .sort((a, b) => a.xMin - b.xMin);
+
+      let curX = ew.xMin;
+      cutoffs.forEach((c) => {
+        if (c.xMin > curX + 3) {
+          const segLen = c.xMin - curX;
+          const centerX = (curX + c.xMin) / 2;
+          const rMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(segLen, ew.width),
+            ewRoadMat
+          );
+          rMesh.rotation.x = -Math.PI / 2;
+          rMesh.position.set(centerX, 0.08, ew.z);
+          rMesh.receiveShadow = true;
+          this.scene.add(rMesh);
+
+          const divLen = Math.max(1, segLen - 6);
+          const divider = new THREE.Mesh(
+            new THREE.PlaneGeometry(divLen, 0.35),
+            yellowLineMat
+          );
+          divider.rotation.x = -Math.PI / 2;
+          divider.position.set(centerX, 0.095, ew.z);
+          this.scene.add(divider);
+
+          [-ew.width / 2 - 0.55, ew.width / 2 + 0.55].forEach((oz) => {
+            this.scene.add(
+              this.sharedBox(
+                segLen,
+                0.22,
+                1.1,
+                curbMat,
+                centerX,
+                0.11,
+                ew.z + oz
+              )
+            );
+          });
+
+          // Zebra crosswalk entering cross street
+          addZebraCrossing(c.xMin - 1.8, ew.z, false, ew.width);
+        }
+        curX = c.xMax;
+        // Zebra crosswalk leaving cross street
+        addZebraCrossing(curX + 1.8, ew.z, false, ew.width);
+      });
+
+      if (ew.xMax > curX + 3) {
+        const segLen = ew.xMax - curX;
+        const centerX = (curX + ew.xMax) / 2;
+        const rMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(segLen, ew.width),
+          ewRoadMat
+        );
+        rMesh.rotation.x = -Math.PI / 2;
+        rMesh.position.set(centerX, 0.08, ew.z);
+        rMesh.receiveShadow = true;
+        this.scene.add(rMesh);
+
+        const divLen = Math.max(1, segLen - 4);
+        const divider = new THREE.Mesh(
+          new THREE.PlaneGeometry(divLen, 0.35),
+          yellowLineMat
+        );
+        divider.rotation.x = -Math.PI / 2;
+        divider.position.set(centerX, 0.095, ew.z);
+        this.scene.add(divider);
+
+        [-ew.width / 2 - 0.55, ew.width / 2 + 0.55].forEach((oz) => {
+          this.scene.add(
+            this.sharedBox(
+              segLen,
+              0.22,
+              1.1,
+              curbMat,
+              centerX,
+              0.11,
+              ew.z + oz
+            )
+          );
+        });
+      }
+    });
 
     // 4. Landmarks, Sketchfab Billboards & Buildings
     this.buildHatirjheelBridge();
@@ -632,6 +898,77 @@ export class DhakaCityEngine {
     mesh.rotation.y = rotation;
     this.scene.add(mesh);
     this.skidDecals.push({ mesh, life: 8.5 });
+  }
+
+  private spawnBloodDecal(x: number, z: number) {
+    if (this.bloodDecals.length > 40) {
+      const old = this.bloodDecals.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
+    const radius = 1.0 + Math.random() * 0.7;
+    const geo = new THREE.CircleGeometry(radius, 14);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color: '#4a0808',
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, 0.088, z);
+    this.scene.add(mesh);
+    this.bloodDecals.push({ mesh, life: 60.0 });
+  }
+
+  private spawnGlassShatter(x: number, y: number, z: number, count = 22) {
+    const shardGeo = new THREE.TetrahedronGeometry(0.09, 0);
+    const shardMat = new THREE.MeshStandardMaterial({
+      color: '#e0f2fe',
+      roughness: 0.15,
+      metalness: 0.85,
+      transparent: true,
+      opacity: 0.88,
+    });
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(shardGeo, shardMat);
+      mesh.position.set(
+        x + (Math.random() - 0.5) * 0.8,
+        y + (Math.random() - 0.5) * 0.5,
+        z + (Math.random() - 0.5) * 0.8
+      );
+      this.scene.add(mesh);
+      this.glassShards.push({
+        mesh,
+        vx: (Math.random() - 0.5) * 9,
+        vy: 2.5 + Math.random() * 4.5,
+        vz: (Math.random() - 0.5) * 9,
+        life: 2.2 + Math.random() * 0.8,
+      });
+    }
+  }
+
+  private spawnRadiatorDamage(x: number, y: number, z: number) {
+    const steamGeo = new THREE.DodecahedronGeometry(0.24, 0);
+    const steamMat = new THREE.MeshBasicMaterial({
+      color: '#cbd5e1',
+      transparent: true,
+      opacity: 0.65,
+    });
+    for (let i = 0; i < 4; i++) {
+      const mesh = new THREE.Mesh(steamGeo, steamMat);
+      mesh.position.set(
+        x + (Math.random() - 0.5) * 0.6,
+        y + (Math.random() - 0.5) * 0.3,
+        z + (Math.random() - 0.5) * 0.6
+      );
+      this.scene.add(mesh);
+      this.radiatorSteam.push({
+        mesh,
+        vy: 1.6 + Math.random() * 1.4,
+        life: 1.4,
+        maxLife: 1.4,
+      });
+    }
   }
 
   private policeArrestTimer = 0;
@@ -1635,46 +1972,19 @@ export class DhakaCityEngine {
       roughness: 0.45,
     });
 
-    // 360-Degree Panoramic Actual Dhaka City Skyline Horizon Ring
-    const horizonGeo = new THREE.CylinderGeometry(468, 468, 125, 48, 1, true);
+    // 360-Degree Panoramic Actual Dhaka City Skyline Horizon Ring with Atmospheric Top Fade & Fog
+    const horizonGeo = new THREE.CylinderGeometry(475, 475, 200, 64, 1, true);
     horizonGeo.scale(-1, 1, 1);
     const horizonMat = new THREE.MeshBasicMaterial({
       map: dhakaPanoramaTex,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.88,
       depthWrite: false,
-      fog: false,
+      fog: true, // Seamlessly blends with distance sky & atmospheric fog
     });
-    const horizonRing = new THREE.Mesh(horizonGeo, horizonMat);
-    horizonRing.position.set(0, 52, 0);
-    this.scene.add(horizonRing);
-
-    // White Dhaka Zebra Crossings (জেব্রা ক্রসিং) at Major Intersections
-    const zebraIntersections = [
-      { x: 0, z: 18 },
-      { x: 0, z: -28 },
-      { x: 0, z: 75 },
-      { x: 0, z: 155 },
-      { x: 80, z: 0 },
-      { x: -80, z: 0 },
-      { x: 200, z: 155 },
-      { x: 200, z: -155 },
-    ];
-    const zebraStripeMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.7,
-    });
-    const zebraPositions: Array<{ x: number; y: number; z: number }> = [];
-    zebraIntersections.forEach((zi) => {
-      for (let st = -6; st <= 6; st += 2.2) {
-        zebraPositions.push({ x: zi.x + st, y: 0.09, z: zi.z });
-      }
-    });
-    this.addInstances(
-      this.boxCache(1.1, 0.05, 4.2),
-      zebraStripeMat,
-      zebraPositions
-    );
+    this.horizonRing = new THREE.Mesh(horizonGeo, horizonMat);
+    this.horizonRing.position.set(0, 35, 0);
+    this.scene.add(this.horizonRing);
 
     const balconyPositions = new Map<
       string,
@@ -1866,57 +2176,183 @@ export class DhakaCityEngine {
     this.buildAuthenticDhakaStreetInfrastructure();
     this.buildDhakaDistrictScenes();
 
-    // Multi-layered Tropical Krishnachura & Banyan Trees
+    // Realistic Multi-Tiered Tropical Dhaka Trees: Krishnachura (কৃষ্ণচূড়া) & Banyan (বটগাছ)
     const trunkMat = new THREE.MeshStandardMaterial({
-      map: loadRealTexture('/textures/hardwood2_diffuse.jpg'),
-      roughness: 0.85,
+      map: loadRealTexture('/textures/hardwood2_diffuse.jpg', 1, 3),
+      color: '#38281d',
+      roughness: 0.92,
     });
-    const greenLeafMat = new THREE.MeshStandardMaterial({
+    const banyanBaseMat = new THREE.MeshStandardMaterial({
+      color: '#14532d',
+      roughness: 0.72,
+    });
+    const banyanMidMat = new THREE.MeshStandardMaterial({
       color: '#15803d',
+      roughness: 0.68,
+    });
+    const banyanSunMat = new THREE.MeshStandardMaterial({
+      color: '#16a34a',
       roughness: 0.65,
     });
-    const krishnachuraMat = new THREE.MeshStandardMaterial({
+    const krishnachuraGreenMat = new THREE.MeshStandardMaterial({
+      color: '#19391e',
+      roughness: 0.75,
+    });
+    const krishnachuraScarletMat = new THREE.MeshStandardMaterial({
+      color: '#dc2626',
+      roughness: 0.55,
+    });
+    const krishnachuraOrangeMat = new THREE.MeshStandardMaterial({
       color: '#ea580c',
-      roughness: 0.6,
+      roughness: 0.55,
     });
 
     const treeSpots = [
+      // Dhanmondi Lake & Park
       [-190, 10], [-190, 35], [-190, -15], [-152, 25], [-152, -10],
+      [-215, 60], [-200, -30], [-235, 15],
+      // Hatirjheel Promenade & Gulshan Greenery
       [195, -25], [195, 15], [245, -25], [245, 15],
+      [205, 55], [235, -55], [185, -45],
+      // Central Farmgate, Airport Road & Manik Mia Avenue
       [-15, -145], [15, -145], [-15, -205], [15, -205],
-      [18, 22], [-22, 22], [22, -22],
+      [-15, -95], [15, -95], [-15, 95], [15, 95],
+      [18, 22], [-22, 22], [22, -22], [-22, -22],
+      // Shahbagh, TSC & Curzon Hall Campus Greeneries
+      [-35, 160], [35, 160], [-40, 210], [40, 210],
     ];
 
     treeSpots.forEach(([tx, tz], idx) => {
       this.circleColliders.push({
         x: tx,
         z: tz,
-        radius: 0.55,
+        radius: 0.65,
         tag: 'tree',
       });
       const tree = new THREE.Group();
       tree.position.set(tx, 0, tz);
+
+      // Flared natural tree trunk with organic taper
       const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.45, 3.8, 10),
+        new THREE.CylinderGeometry(0.32, 0.58, 3.4, 10),
         trunkMat
       );
-      trunk.position.y = 1.9;
+      trunk.position.y = 1.7;
+      trunk.castShadow = true;
+      trunk.receiveShadow = true;
       tree.add(trunk);
 
-      const leafMat = idx % 3 === 0 ? krishnachuraMat : greenLeafMat;
+      // 3 spreading structural boughs branching outward
       [
-        [0, 4.6, 0, 2.3],
-        [-1.1, 4.1, 0.6, 1.6],
-        [1.1, 4.2, -0.5, 1.65],
-      ].forEach(([lx, ly, lz, rad]) => {
-        const crown = new THREE.Mesh(
-          new THREE.IcosahedronGeometry(rad, 2),
-          leafMat
+        { rotZ: 0.45, rotY: 0, y: 2.8, len: 1.8 },
+        { rotZ: -0.42, rotY: 2.1, y: 2.9, len: 1.7 },
+        { rotZ: 0.38, rotY: 4.2, y: 3.0, len: 1.9 },
+      ].forEach((b) => {
+        const bough = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.16, 0.28, b.len, 8),
+          trunkMat
         );
-        crown.position.set(lx, ly, lz);
-        crown.castShadow = true;
-        tree.add(crown);
+        bough.position.y = b.y;
+        bough.rotation.y = b.rotY;
+        bough.rotation.z = b.rotZ;
+        bough.castShadow = true;
+        tree.add(bough);
       });
+
+      const isKrishnachura = idx % 2 === 0;
+
+      if (isKrishnachura) {
+        // TROPICAL KRISHNACHURA (Royal Poinciana): Spreading flat umbrella canopy with scarlet floral blossoms
+        const umbrella = new THREE.Mesh(
+          new THREE.SphereGeometry(2.8, 14, 10),
+          krishnachuraGreenMat
+        );
+        umbrella.scale.set(1.45, 0.48, 1.45);
+        umbrella.position.set(0, 4.3, 0);
+        umbrella.castShadow = true;
+        umbrella.receiveShadow = true;
+        tree.add(umbrella);
+
+        // Side foliage lobes
+        [
+          [-1.5, 4.1, 0.6, 1.5],
+          [1.4, 4.2, -0.7, 1.55],
+          [0.2, 4.2, 1.4, 1.4],
+        ].forEach(([lx, ly, lz, rad]) => {
+          const lobe = new THREE.Mesh(
+            new THREE.SphereGeometry(rad, 12, 8),
+            krishnachuraGreenMat
+          );
+          lobe.scale.set(1.2, 0.5, 1.2);
+          lobe.position.set(lx, ly, lz);
+          lobe.castShadow = true;
+          tree.add(lobe);
+        });
+
+        // Layer of vibrant scarlet & orange floral blossom clusters across the top canopy surface
+        [
+          [0.3, 4.65, 0.4, 1.3, krishnachuraScarletMat],
+          [-1.2, 4.5, 0.5, 1.15, krishnachuraOrangeMat],
+          [1.1, 4.55, -0.6, 1.2, krishnachuraScarletMat],
+          [-0.3, 4.6, -1.1, 1.1, krishnachuraOrangeMat],
+        ].forEach(([fx, fy, fz, frad, fmat]) => {
+          const blossom = new THREE.Mesh(
+            new THREE.SphereGeometry(frad as number, 10, 8),
+            fmat as THREE.Material
+          );
+          blossom.scale.set(1.3, 0.36, 1.3);
+          blossom.position.set(fx as number, fy as number, fz as number);
+          blossom.castShadow = true;
+          tree.add(blossom);
+        });
+      } else {
+        // MAJESTIC DHAKA BANYAN TREE (বটগাছ): Multi-tiered dense dome with aerial prop roots
+        // Tier 1 (Low dense canopy)
+        const tier1 = new THREE.Mesh(
+          new THREE.SphereGeometry(2.9, 14, 10),
+          banyanBaseMat
+        );
+        tier1.scale.set(1.4, 0.52, 1.4);
+        tier1.position.set(0, 4.1, 0);
+        tier1.castShadow = true;
+        tier1.receiveShadow = true;
+        tree.add(tier1);
+
+        // Tier 2 (Mid canopy)
+        const tier2 = new THREE.Mesh(
+          new THREE.SphereGeometry(2.3, 12, 8),
+          banyanMidMat
+        );
+        tier2.scale.set(1.2, 0.55, 1.2);
+        tier2.position.set(0.2, 5.1, -0.2);
+        tier2.castShadow = true;
+        tree.add(tier2);
+
+        // Tier 3 (Sun-kissed crown)
+        const tier3 = new THREE.Mesh(
+          new THREE.SphereGeometry(1.6, 10, 8),
+          banyanSunMat
+        );
+        tier3.scale.set(1.0, 0.6, 1.0);
+        tier3.position.set(-0.1, 6.0, 0.1);
+        tier3.castShadow = true;
+        tree.add(tier3);
+
+        // Hanging aerial prop roots
+        [
+          [-1.2, 0.8],
+          [1.3, -0.6],
+          [-0.4, -1.3],
+        ].forEach(([rx, rz]) => {
+          const propRoot = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.04, 0.04, 3.0, 6),
+            trunkMat
+          );
+          propRoot.position.set(rx, 2.2, rz);
+          tree.add(propRoot);
+        });
+      }
+
       this.scene.add(tree);
     });
   }
@@ -3789,6 +4225,9 @@ export class DhakaCityEngine {
       this.updateBulletTracersAndFX(dt);
       this.updateCashPickups(dt);
       this.updateSkidDecals(dt);
+      this.updateBloodDecals(dt);
+      this.updateGlassShards(dt);
+      this.updateRadiatorSteam(dt);
       this.updateMissionAndInteractionChecks(dt);
     } else if (!this.activeVehicleId) {
       setCharacterAnimationState(this.playerLimbs, 'idle', dt);
@@ -3951,6 +4390,75 @@ export class DhakaCityEngine {
     }
   }
 
+  private updateBloodDecals(dt: number) {
+    for (let i = this.bloodDecals.length - 1; i >= 0; i--) {
+      const bd = this.bloodDecals[i];
+      bd.life -= dt;
+      if (bd.life < 10) {
+        (bd.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+          0,
+          (bd.life / 10) * 0.85
+        );
+      }
+      if (bd.life <= 0) {
+        this.scene.remove(bd.mesh);
+        this.bloodDecals.splice(i, 1);
+      }
+    }
+  }
+
+  private updateGlassShards(dt: number) {
+    for (let i = this.glassShards.length - 1; i >= 0; i--) {
+      const gs = this.glassShards[i];
+      gs.life -= dt;
+      gs.vy -= 18.0 * dt; // Gravity
+      gs.mesh.position.x += gs.vx * dt;
+      gs.mesh.position.y += gs.vy * dt;
+      gs.mesh.position.z += gs.vz * dt;
+      gs.mesh.rotation.x += dt * 8;
+      gs.mesh.rotation.y += dt * 6;
+
+      if (gs.mesh.position.y <= 0.08) {
+        gs.mesh.position.y = 0.085;
+        gs.vy = -gs.vy * 0.3;
+        gs.vx *= 0.55;
+        gs.vz *= 0.55;
+      }
+
+      if (gs.life < 0.6) {
+        (gs.mesh.material as THREE.MeshStandardMaterial).opacity = Math.max(
+          0,
+          (gs.life / 0.6) * 0.88
+        );
+      }
+
+      if (gs.life <= 0) {
+        this.scene.remove(gs.mesh);
+        this.glassShards.splice(i, 1);
+      }
+    }
+  }
+
+  private updateRadiatorSteam(dt: number) {
+    for (let i = this.radiatorSteam.length - 1; i >= 0; i--) {
+      const rs = this.radiatorSteam[i];
+      rs.life -= dt;
+      rs.mesh.position.y += rs.vy * dt;
+      rs.mesh.position.x += (Math.random() - 0.5) * dt * 0.8;
+      rs.mesh.position.z += (Math.random() - 0.5) * dt * 0.8;
+      const progress = 1 - rs.life / rs.maxLife;
+      rs.mesh.scale.setScalar(1 + progress * 2.5);
+      (rs.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        (rs.life / rs.maxLife) * 0.6
+      );
+      if (rs.life <= 0) {
+        this.scene.remove(rs.mesh);
+        this.radiatorSteam.splice(i, 1);
+      }
+    }
+  }
+
   private updateEnvironmentLighting(
     hour: number,
     weather: string,
@@ -3986,7 +4494,7 @@ export class DhakaCityEngine {
       this.scene.fog.density = isRain ? 0.0046 : 0.0019;
     }
 
-    // Center Sky Dome on player and modulate brightness
+    // Center Sky Dome and Skyline Horizon Ring on player and modulate brightness
     if (this.skyDomeMesh) {
       this.skyDomeMesh.position.set(this.playerPos.x, 0, this.playerPos.z);
       (this.skyDomeMesh.material as THREE.MeshBasicMaterial).color.lerp(
@@ -3997,6 +4505,9 @@ export class DhakaCityEngine {
           : new THREE.Color('#e0f2fe'),
         dt * 2
       );
+    }
+    if (this.horizonRing) {
+      this.horizonRing.position.set(this.playerPos.x, 35, this.playerPos.z);
     }
 
     // Animate water normal ripples
@@ -4309,14 +4820,32 @@ export class DhakaCityEngine {
           hitVeh.speed = Math.max(hitVeh.speed, 6);
         }
 
-        dhakaAudio.playSfx('hit');
-        if (Math.abs(veh.speed) > 6) {
+        if (Math.abs(veh.speed) > 4.5) {
+          dhakaAudio.playSfx('crash');
+          this.cameraTrauma = Math.min(
+            1.0,
+            this.cameraTrauma + Math.abs(veh.speed) / 12
+          );
+          const crashX = (veh.x + hitVeh.x) / 2;
+          const crashZ = (veh.z + hitVeh.z) / 2;
+          this.spawnGlassShatter(crashX, 0.75, crashZ, 20);
+          this.spawnRadiatorDamage(crashX, 0.65, crashZ);
+          this.spawnImpactSparks(crashX, 0.65, crashZ, '#facc15', 2.2);
+
+          // Subtle physical crumple tilt on high-speed crash
+          const vMesh = this.vehicleMeshes.get(veh.id);
+          if (vMesh) vMesh.rotation.z += (Math.random() - 0.5) * 0.12;
+          const hMesh = this.vehicleMeshes.get(hitVeh.id);
+          if (hMesh) hMesh.rotation.z += (Math.random() - 0.5) * 0.12;
+
           dhakaAudio.playHorn(oStats.hornType);
           veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.5);
           if (veh.health <= 0) {
             this.explodeVehicle(veh);
             return;
           }
+        } else {
+          dhakaAudio.playSfx('hit');
         }
         veh.speed = -veh.speed * 0.35;
 
@@ -4338,13 +4867,24 @@ export class DhakaCityEngine {
           veh.speed *= Math.pow(0.68, dt);
         } else {
           // Direct head-on impact into railing, wall or concrete post
-          if (Math.abs(veh.speed) > 6) {
-            dhakaAudio.playSfx('hit');
-            veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.45);
+          if (Math.abs(veh.speed) > 4.5) {
+            dhakaAudio.playSfx('crash');
+            this.cameraTrauma = Math.min(
+              1.0,
+              this.cameraTrauma + Math.abs(veh.speed) / 11
+            );
+            const frontX = veh.x + Math.sin(veh.rotation) * 1.8;
+            const frontZ = veh.z + Math.cos(veh.rotation) * 1.8;
+            this.spawnGlassShatter(frontX, 0.75, frontZ, 18);
+            this.spawnRadiatorDamage(frontX, 0.7, frontZ);
+            this.spawnImpactSparks(frontX, 0.7, frontZ, '#e2e8f0', 2.5);
+            veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.55);
             if (veh.health <= 0) {
               this.explodeVehicle(veh);
               return;
             }
+          } else {
+            dhakaAudio.playSfx('hit');
           }
           // Stop forward momentum cleanly instead of vibrating back and forth
           veh.speed = 0;
@@ -4499,14 +5039,24 @@ export class DhakaCityEngine {
         if (playerVeh) {
           const dist = Math.hypot(veh.x - playerVeh.x, veh.z - playerVeh.z);
           if (dist < 2.85 && Math.abs(playerVeh.speed) > 4) {
-            dhakaAudio.playSfx('hit');
+            dhakaAudio.playSfx('crash');
+            this.cameraTrauma = Math.min(
+              1.0,
+              this.cameraTrauma + Math.abs(playerVeh.speed) / 12
+            );
+            const crashX = (veh.x + playerVeh.x) / 2;
+            const crashZ = (veh.z + playerVeh.z) / 2;
+            this.spawnGlassShatter(crashX, 0.75, crashZ, 16);
+            this.spawnRadiatorDamage(crashX, 0.65, crashZ);
+            this.spawnImpactSparks(crashX, 0.65, crashZ, '#facc15', 2.0);
+
             const pushAngle = Math.atan2(
               veh.x - playerVeh.x,
               veh.z - playerVeh.z
             );
-            veh.x += Math.sin(pushAngle) * 1.4;
-            veh.z += Math.cos(pushAngle) * 1.4;
-            playerVeh.speed *= 0.65;
+            veh.x += Math.sin(pushAngle) * 1.6;
+            veh.z += Math.cos(pushAngle) * 1.6;
+            playerVeh.speed *= 0.6;
 
             if (veh.isPolice && wantedLevel < 2) {
               store.setWantedLevel(wantedLevel + 1);
@@ -4700,21 +5250,42 @@ export class DhakaCityEngine {
         if (pv && Math.abs(pv.speed) > 4.5) {
           const d = Math.hypot(npc.x - pv.x, npc.z - pv.z);
           if (d < 2.3 && !npc.isDead) {
-            dhakaAudio.playSfx('hit');
             const impactSpeed = Math.abs(pv.speed);
 
-            if (impactSpeed > 6.0 && !npc.isStoryNPC) {
-              // FATAL HIT - Pedestrian killed in accident!
+            if (impactSpeed > 5.5 && !npc.isStoryNPC) {
+              // FATAL HIT - Pedestrian killed in realistic road accident!
               npc.isDead = true;
               npc.aiState = 'dead';
               npc.health = 0;
-              npc.respawnTimer = 35;
+              npc.respawnTimer = 40;
+
+              // Launch pedestrian forward along vehicle trajectory with physics momentum
+              const launchDist = Math.min(12, impactSpeed * 0.85);
+              const launchAngle = pv.rotation + (Math.random() - 0.5) * 0.35;
+              npc.x += Math.sin(launchAngle) * launchDist;
+              npc.z += Math.cos(launchAngle) * launchDist;
+
               limbs.group.position.set(npc.x, 0.08, npc.z);
               limbs.group.rotation.x = -Math.PI / 2;
+              limbs.group.rotation.z = Math.random() * Math.PI * 2;
 
-              // Blood & impact debris
-              this.spawnImpactSparks(npc.x, 0.25, npc.z, '#b91c1c', 2.5);
-              this.spawnImpactSparks(npc.x, 0.45, npc.z, '#7f1d1d', 1.6);
+              // Authentic crash audio & visceral camera trauma
+              dhakaAudio.playSfx('crash');
+              dhakaAudio.playSfx('hit');
+              this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.45);
+
+              // Expanding dark crimson blood decal pool on the asphalt
+              this.spawnBloodDecal(npc.x, npc.z);
+
+              // Blood splatter & cracked glass debris
+              this.spawnImpactSparks(npc.x, 0.25, npc.z, '#7f1d1d', 3.0);
+              this.spawnImpactSparks(npc.x, 0.45, npc.z, '#b91c1c', 2.2);
+              this.spawnGlassShatter(
+                pv.x + Math.sin(pv.rotation) * 1.8,
+                0.75,
+                pv.z + Math.cos(pv.rotation) * 1.8,
+                12
+              );
 
               // Spawn collectible cash drop from pedestrian
               this.spawnCashDrop(
@@ -4738,6 +5309,7 @@ export class DhakaCityEngine {
               // Alert nearby pedestrians to flee in terror
               this.alertNearbyPedestrians(npc.x, npc.z, 28);
             } else {
+              dhakaAudio.playSfx('hit');
               // Non-fatal knockback
               npc.aiState = 'flee';
               const away = Math.atan2(npc.x - pv.x, npc.z - pv.z);
@@ -5026,6 +5598,15 @@ export class DhakaCityEngine {
     // Reuse persistent vector to eliminate GC churn and stutter
     this.cameraTargetPos.set(camX, camY, camZ);
     this.camera.position.lerp(this.cameraTargetPos, Math.min(1, dt * 14));
+
+    // Realistic camera trauma / screen shake on violent collision impacts
+    if (this.cameraTrauma > 0.001) {
+      const shake = this.cameraTrauma * this.cameraTrauma;
+      this.camera.position.x += (Math.random() - 0.5) * 1.8 * shake;
+      this.camera.position.y += (Math.random() - 0.5) * 1.2 * shake;
+      this.camera.position.z += (Math.random() - 0.5) * 1.8 * shake;
+      this.cameraTrauma = Math.max(0, this.cameraTrauma - dt * 2.8);
+    }
 
     // Smooth camera look target in unison with position to eliminate angular jitter
     this.cameraLookTarget.x +=
