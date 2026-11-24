@@ -14,13 +14,17 @@ import {
   SKETCHFAB_GTA_CATALOG,
 } from '../data/sketchfabGtaCatalog';
 import {
+  Award,
   Box,
   Briefcase,
   Car,
   CheckCircle2,
+  ChevronRight,
+  Clock,
   Compass,
   Crosshair,
   ExternalLink,
+  Flag,
   Gamepad2,
   Heart,
   Home,
@@ -28,9 +32,12 @@ import {
   Navigation,
   Play,
   Save,
+  Search,
   Settings,
   Shield,
   ShoppingBag,
+  Sparkles,
+  Target,
   Upload,
   User,
   ZoomIn,
@@ -55,6 +62,7 @@ export const PauseMenuModal: React.FC = () => {
     addAmmo,
     transactions,
     activeMissionId,
+    activeMissionStepIndex,
     completedMissionIds,
     startMission,
     outfits,
@@ -86,6 +94,12 @@ export const PauseMenuModal: React.FC = () => {
   const [sketchfabFilter, setSketchfabFilter] = useState<
     'all' | 'building' | 'vehicle' | 'character' | 'prop'
   >('all');
+  const [missionFilter, setMissionFilter] = useState<
+    'all' | 'story' | 'side' | 'completed'
+  >('all');
+  const [missionDistrictFilter, setMissionDistrictFilter] =
+    useState<string>('all');
+  const [missionSearch, setMissionSearch] = useState<string>('');
 
   const tabs: Array<{
     id: PauseTab;
@@ -523,83 +537,252 @@ export const PauseMenuModal: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: MISSIONS */}
-        {pauseTab === 'missions' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-              <div>
-                <h3 className="text-base font-black text-amber-400 uppercase tracking-wide">
-                  {language === 'en'
-                    ? 'Main Story Campaign — 5 Chapters'
-                    : 'মূল কাহিনী — ৫টি অধ্যায়'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {language === 'en'
-                    ? 'Follow Arif Rahman’s investigation across Dhaka’s criminal underworld.'
-                    : 'ভাই রফিকের সন্ধানে ঢাকার আন্ডারওয়ার্ল্ডে আরিফ রহমানের অভিযান।'}
-                </p>
+        {/* TAB 2: MISSIONS (18 TOTAL: 10 STORY CHAPTERS + 8 SIDE ACTIVITIES) */}
+        {pauseTab === 'missions' && (() => {
+          const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
+          const activeMission = allMissions.find((m) => m.id === activeMissionId);
+          const activeStep = activeMission ? activeMission.steps[activeMissionStepIndex] : null;
+
+          const filteredMissions = allMissions.filter((m) => {
+            const isDone = completedMissionIds.includes(m.id);
+            const isStory = 'chapter' in m;
+
+            if (missionFilter === 'story' && !isStory) return false;
+            if (missionFilter === 'side' && isStory) return false;
+            if (missionFilter === 'completed' && !isDone) return false;
+
+            if (missionDistrictFilter !== 'all' && m.district !== missionDistrictFilter) {
+              return false;
+            }
+
+            if (missionSearch.trim()) {
+              const query = missionSearch.toLowerCase();
+              const matchEn = m.titleEn.toLowerCase().includes(query) || m.descriptionEn.toLowerCase().includes(query) || m.giverNameEn.toLowerCase().includes(query);
+              const matchBn = m.titleBn.toLowerCase().includes(query) || m.descriptionBn.toLowerCase().includes(query) || m.giverNameBn.toLowerCase().includes(query);
+              if (!matchEn && !matchBn) return false;
+            }
+
+            return true;
+          });
+
+          return (
+            <div className="flex flex-col gap-5">
+              {/* Active Mission Spotlight Card */}
+              {activeMission && (
+                <div className="bg-gradient-to-r from-amber-950/60 via-slate-900/90 to-emerald-950/50 border-2 border-amber-400/80 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-mono">
+                        {language === 'en' ? 'ACTIVE MISSION / চলমান মিশন' : 'চলমান মিশন'}
+                      </span>
+                      <span className="text-[10px] font-extrabold uppercase bg-slate-800 text-amber-300 px-2 py-0.5 rounded">
+                        {language === 'en' ? activeMission.chapterTitleEn : activeMission.chapterTitleBn}
+                      </span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+                      {language === 'en' ? activeMission.titleEn : activeMission.titleBn}
+                      <span className="text-xs font-mono font-extrabold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/40">
+                        ৳ {activeMission.rewardTaka.toLocaleString()}
+                      </span>
+                    </h3>
+                    {activeStep && (
+                      <p className="text-xs sm:text-sm text-slate-200 mt-1.5 flex items-center gap-1.5">
+                        <Target className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          <strong className="text-amber-300 font-mono">
+                            Step {activeMissionStepIndex + 1}/{activeMission.steps.length}:
+                          </strong>{' '}
+                          {language === 'en' ? activeStep.instructionEn : activeStep.instructionBn}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setGamePhase('playing')}
+                      className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-xl flex items-center gap-2 transition-transform active:scale-95"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>{language === 'en' ? 'Resume Playing' : 'খেলায় ফিরুন'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Filters & Navigation Strip */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { id: 'all', en: `All Missions (${allMissions.length})`, bn: `সকল মিশন (${allMissions.length})` },
+                    { id: 'story', en: `Story Campaign (${STORY_MISSIONS.length})`, bn: `মূল কাহিনী (${STORY_MISSIONS.length})` },
+                    { id: 'side', en: `Side Activities (${SIDE_MISSIONS.length})`, bn: `সাইড কাজ (${SIDE_MISSIONS.length})` },
+                    { id: 'completed', en: `Completed (${completedMissionIds.length})`, bn: `সম্পন্ন (${completedMissionIds.length})` },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setMissionFilter(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        missionFilter === tab.id
+                          ? 'bg-amber-400 text-slate-950 shadow-md'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      }`}
+                    >
+                      {language === 'en' ? tab.en : tab.bn}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 md:w-56">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder={language === 'en' ? 'Search missions...' : 'মিশন খুঁজুন...'}
+                      value={missionSearch}
+                      onChange={(e) => setMissionSearch(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <select
+                    value={missionDistrictFilter}
+                    onChange={(e) => setMissionDistrictFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="all">{language === 'en' ? 'All Districts' : 'সকল এলাকা'}</option>
+                    <option value="farmgate">Farmgate</option>
+                    <option value="dhanmondi">Dhanmondi</option>
+                    <option value="gulshan">Gulshan</option>
+                    <option value="mirpur">Mirpur</option>
+                    <option value="uttara">Uttara</option>
+                    <option value="old_dhaka">Old Dhaka</option>
+                    <option value="purbachal">Purbachal 300ft</option>
+                    <option value="bashundhara">Bashundhara</option>
+                    <option value="keraniganj">Keraniganj</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {STORY_MISSIONS.map((m) => {
+              {/* Mission Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredMissions.map((m) => {
                   const isDone = completedMissionIds.includes(m.id);
                   const isActive = activeMissionId === m.id;
+                  const isStory = 'chapter' in m;
+
                   return (
                     <div
                       key={m.id}
-                      className={`p-3.5 rounded-xl border transition-all ${
+                      className={`rounded-2xl border p-4 flex flex-col justify-between transition-all ${
                         isActive
-                          ? 'bg-amber-950/30 border-amber-400'
+                          ? 'bg-amber-950/30 border-amber-400 shadow-xl shadow-amber-950/20 ring-1 ring-amber-400'
                           : isDone
-                          ? 'bg-emerald-950/20 border-emerald-500/40'
-                          : 'bg-slate-950/80 border-slate-800'
+                          ? 'bg-slate-950/80 border-emerald-500/30 hover:border-emerald-500/60'
+                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-slate-800 text-amber-300">
-                          {language === 'en'
-                            ? m.chapterTitleEn
-                            : m.chapterTitleBn}
-                        </span>
-                        <span className="text-xs font-mono font-extrabold text-emerald-400">
-                          Reward: ৳ {m.rewardTaka.toLocaleString()}
-                        </span>
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded font-mono ${
+                                isStory
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {language === 'en' ? m.chapterTitleEn : m.chapterTitleBn}
+                            </span>
+                            <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                              📍 {m.district.toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono font-black text-emerald-400">
+                            ৳ {m.rewardTaka.toLocaleString()}
+                          </span>
+                        </div>
+
+                        <h4 className="text-base font-black text-white flex items-center gap-2">
+                          {language === 'en' ? m.titleEn : m.titleBn}
+                          {isDone && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                        </h4>
+
+                        <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                          {language === 'en' ? m.descriptionEn : m.descriptionBn}
+                        </p>
+
+                        {/* Objectives Step Checklist Preview */}
+                        <div className="mt-3 bg-slate-900/60 rounded-xl p-2.5 border border-slate-800/80 space-y-1.5">
+                          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide">
+                            {language === 'en' ? 'Mission Objectives:' : 'মিশনের ধাপসমূহ:'}
+                          </p>
+                          {m.steps.map((st, idx) => {
+                            const isStepPassed = isActive && idx < activeMissionStepIndex;
+                            const isCurrent = isActive && idx === activeMissionStepIndex;
+                            return (
+                              <div key={st.id} className="flex items-start gap-1.5 text-[11px]">
+                                <span className="font-mono text-[10px] shrink-0 mt-0.5">
+                                  {isStepPassed ? (
+                                    <span className="text-emerald-400">✓</span>
+                                  ) : isCurrent ? (
+                                    <span className="text-amber-400 animate-pulse">▶</span>
+                                  ) : (
+                                    <span className="text-slate-600">{idx + 1}.</span>
+                                  )}
+                                </span>
+                                <span
+                                  className={`${
+                                    isStepPassed
+                                      ? 'text-slate-400 line-through'
+                                      : isCurrent
+                                      ? 'text-amber-300 font-bold'
+                                      : 'text-slate-300'
+                                  }`}
+                                >
+                                  {language === 'en' ? st.instructionEn : st.instructionBn}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <h4 className="text-sm font-black text-white flex items-center gap-2">
-                        {language === 'en' ? m.titleEn : m.titleBn}
-                        {isDone && (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        )}
-                      </h4>
-                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                        {language === 'en' ? m.descriptionEn : m.descriptionBn}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-[11px] text-slate-400">
-                          Contact:{' '}
+
+                      <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-400 truncate">
+                          {language === 'en' ? 'Client: ' : 'যোগাযোগ: '}
                           <strong className="text-slate-200">
                             {language === 'en' ? m.giverNameEn : m.giverNameBn}
                           </strong>
                         </span>
+
                         <button
-                          onClick={() => startMission(m.id)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
+                          onClick={() => {
+                            startMission(m.id);
+                            setGamePhase('playing');
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-black shadow-lg transition-transform active:scale-95 flex items-center gap-1.5 ${
                             isActive
-                              ? 'bg-amber-400 text-slate-950'
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 ring-2 ring-amber-300'
+                              : isDone
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black'
                           }`}
                         >
-                          {isActive
-                            ? language === 'en'
-                              ? 'Restart / Active'
-                              : 'চলমান মিশন'
-                            : isDone
-                            ? language === 'en'
-                              ? 'Replay Chapter'
-                              : 'আবার খেলুন'
-                            : language === 'en'
-                            ? 'Start Chapter'
-                            : 'মিশন শুরু করুন'}
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>
+                            {isActive
+                              ? language === 'en'
+                                ? 'Track / Resume'
+                                : 'চালিয়ে যান'
+                              : isDone
+                              ? language === 'en'
+                                ? 'Replay Mission'
+                                : 'আবার খেলুন'
+                              : language === 'en'
+                              ? 'Start Mission'
+                              : 'মিশন শুরু করুন'}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -607,64 +790,8 @@ export const PauseMenuModal: React.FC = () => {
                 })}
               </div>
             </div>
-
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-              <div>
-                <h3 className="text-base font-black text-emerald-400 uppercase tracking-wide">
-                  {language === 'en'
-                    ? 'Dhaka Side Activities & Hustles'
-                    : 'সাইড মিশন ও বাড়তি আয়ের কাজ'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {language === 'en'
-                    ? 'Earn extra Taka (৳) through CNG passenger fares, Fuchka deliveries, and Hatirjheel night races!'
-                    : 'সিএনজি ভাড়া, ফুচকা ডেলিভারি এবং হাতিরঝিল নাইট রেস খেলে বাড়তি টাকা (৳) আয় করুন!'}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {SIDE_MISSIONS.map((m) => {
-                  const isActive = activeMissionId === m.id;
-                  return (
-                    <div
-                      key={m.id}
-                      className={`p-3.5 rounded-xl border ${
-                        isActive
-                          ? 'bg-emerald-950/30 border-emerald-400'
-                          : 'bg-slate-950/80 border-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                          {language === 'en'
-                            ? m.chapterTitleEn
-                            : m.chapterTitleBn}
-                        </span>
-                        <span className="text-xs font-mono font-extrabold text-amber-400">
-                          + ৳ {m.rewardTaka.toLocaleString()}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-black text-white">
-                        {language === 'en' ? m.titleEn : m.titleBn}
-                      </h4>
-                      <p className="text-xs text-slate-300 mt-1">
-                        {language === 'en' ? m.descriptionEn : m.descriptionBn}
-                      </p>
-                      <div className="mt-3 flex justify-end">
-                        <button
-                          onClick={() => startMission(m.id)}
-                          className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black"
-                        >
-                          {language === 'en' ? 'Launch Activity' : 'শুরু করুন'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB 3: SKETCHFAB GTA 3D ASSET CATALOG & CUSTOM .GLB IMPORTER */}
         {pauseTab === 'sketchfab' && (

@@ -10,7 +10,11 @@ export type DistrictId =
   | 'gulshan'
   | 'banani'
   | 'uttara'
-  | 'airport_road';
+  | 'airport_road'
+  | 'mirpur'
+  | 'purbachal'
+  | 'bashundhara'
+  | 'keraniganj';
 
 export interface DistrictInfo {
   id: DistrictId;

@@ -249,6 +249,10 @@ export const DHAKA_DISTRICT_PHOTOS: Record<DistrictId, string> = {
   banani: resolveAssetUrl('/dhaka_photos/banani_real.jpg'),
   uttara: resolveAssetUrl('/dhaka_photos/uttara_real.jpg'),
   airport_road: resolveAssetUrl('/dhaka_photos/airport_real.jpg'),
+  mirpur: resolveAssetUrl('/dhaka_photos/farmgate_real.jpg'),
+  purbachal: resolveAssetUrl('/dhaka_photos/hatirjheel_real.jpg'),
+  bashundhara: resolveAssetUrl('/dhaka_photos/gulshan_real.jpg'),
+  keraniganj: resolveAssetUrl('/dhaka_photos/sadarghat_real.jpg'),
 };
 
 // Actual real-world photographs of Dhaka vehicles & 3D assets

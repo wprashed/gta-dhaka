@@ -263,6 +263,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                       />
                     ))}
                   </div>
+
+                  <button
+                    onClick={() => setGamePhase('paused', 'missions')}
+                    className="w-full mt-2.5 py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-black flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <span>📜</span>
+                    <span>{language === 'en' ? 'Open Mission Menu [M]' : 'মিশন খাতা খুলুন [M]'}</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -335,6 +343,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
               </div>
             )}
           </div>
+
+          {/* Quick Dedicated Mission Menu Pill Button */}
+          <button
+            onClick={() => setGamePhase('paused', 'missions')}
+            className="bg-slate-950/85 hover:bg-amber-400 text-amber-300 hover:text-slate-950 font-black text-[11px] rounded-full px-2.5 py-1 shadow-lg border border-amber-400/50 hover:border-amber-400 flex items-center gap-1.5 transition-all active:scale-95 pointer-events-auto cursor-pointer"
+            title="Open Dhaka Mission Menu [M / J]"
+          >
+            <span>📜</span>
+            <span className="hidden sm:inline font-bold">{language === 'en' ? 'Missions' : 'মিশন'}</span>
+            <span className="text-[9px] bg-slate-900 group-hover:bg-black text-amber-300 px-1 py-0.2 rounded font-mono font-bold">[M]</span>
+          </button>
         </div>
 
         {/* TOP-CENTER: Milestone Banner Alert */}

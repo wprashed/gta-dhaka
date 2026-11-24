@@ -52,17 +52,23 @@ export const MinimapHUD: React.FC = () => {
       rz: (wz - playerZ) * scale,
     });
 
-    // Draw Water Bodies (Buriganga, Hatirjheel, Dhanmondi Lake)
+    // Draw Water Bodies (Buriganga, Hatirjheel, Dhanmondi Lake, Gulshan Lake, Uttara Lake)
     ctx.fillStyle = '#0e7490';
-    // Buriganga River
-    const buri = worldToRadar(-450, 300);
-    ctx.fillRect(buri.rx, buri.rz, 900 * scale, 140 * scale);
+    // Buriganga River (Full width spanning 1800m)
+    const buri = worldToRadar(-900, 310);
+    ctx.fillRect(buri.rx, buri.rz, 1800 * scale, 150 * scale);
     // Hatirjheel
     const hatir = worldToRadar(165, -80);
     ctx.fillRect(hatir.rx, hatir.rz, 110 * scale, 155 * scale);
     // Dhanmondi Lake
     const dhan = worldToRadar(-265, -35);
     ctx.fillRect(dhan.rx, dhan.rz, 85 * scale, 125 * scale);
+    // Gulshan / Baridhara Lake
+    const gulshan = worldToRadar(320, -380);
+    ctx.fillRect(gulshan.rx, gulshan.rz, 70 * scale, 160 * scale);
+    // Uttara Sector Lake
+    const uttaraLake = worldToRadar(-340, -560);
+    ctx.fillRect(uttaraLake.rx, uttaraLake.rz, 65 * scale, 130 * scale);
 
     // Draw Dhaka Green Parks (Ramna Park, Suhrawardy Udyan, Chandrima Udyan)
     ctx.fillStyle = '#065f46';
@@ -75,25 +81,25 @@ export const MinimapHUD: React.FC = () => {
       ctx.fillRect(p.rx, p.rz, pk.w * scale, pk.d * scale);
     });
 
-    // Draw Main Dhaka Road Grid
+    // Draw Expanded Dhaka Metropolitan Road Grid
     ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 6;
 
-    const nsRoads = [-170, 0, 220];
+    const nsRoads = [-620, -420, -170, 0, 220, 420, 620];
     nsRoads.forEach((rx) => {
-      const p1 = worldToRadar(rx, -350);
-      const p2 = worldToRadar(rx, 295);
+      const p1 = worldToRadar(rx, -750);
+      const p2 = worldToRadar(rx, 750);
       ctx.beginPath();
       ctx.moveTo(p1.rx, p1.rz);
       ctx.lineTo(p2.rx, p2.rz);
       ctx.stroke();
     });
 
-    // Draw MRT Line-6 Dhaka Metro Rail Viaduct Line (Agargaon - Farmgate - Motijheel)
+    // Draw MRT Line-6 Dhaka Metro Rail Viaduct Line (Uttara North - Mirpur - Farmgate - Motijheel)
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.5;
     ctx.setLineDash([4, 3]);
-    const m1 = worldToRadar(-12, -260);
+    const m1 = worldToRadar(-12, -580);
     const m2 = worldToRadar(-12, 240);
     ctx.beginPath();
     ctx.moveTo(m1.rx, m1.rz);
@@ -112,7 +118,7 @@ export const MinimapHUD: React.FC = () => {
       }
     });
 
-    // Old Dhaka Alley
+    // Old Dhaka Alleyways & Purbachal Expressway
     ctx.lineWidth = 4.5;
     const od1 = worldToRadar(-70, 85);
     const od2 = worldToRadar(-70, 290);
@@ -121,11 +127,11 @@ export const MinimapHUD: React.FC = () => {
     ctx.lineTo(od2.rx, od2.rz);
     ctx.stroke();
 
-    ctx.lineWidth = 7;
-    const ewRoads = [-315, -175, 0, 175, 285];
+    ctx.lineWidth = 6;
+    const ewRoads = [-540, -420, -250, -175, 0, 175, 285, 440];
     ewRoads.forEach((rz) => {
-      const p1 = worldToRadar(-350, rz);
-      const p2 = worldToRadar(350, rz);
+      const p1 = worldToRadar(-750, rz);
+      const p2 = worldToRadar(750, rz);
       ctx.beginPath();
       ctx.moveTo(p1.rx, p1.rz);
       ctx.lineTo(p2.rx, p2.rz);
@@ -257,9 +263,22 @@ export const MinimapHUD: React.FC = () => {
           <Compass className="w-3 h-3" /> N
         </div>
 
-        {/* Full Map Shortcut Badge */}
-        <div className="absolute top-2 right-2 bg-slate-950/85 group-hover:bg-amber-500 group-hover:text-slate-950 text-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded border border-slate-700 flex items-center gap-1 transition-colors">
-          <MapIcon className="w-3 h-3" /> [M]
+        {/* Shortcuts: [M] Missions & [Tab] Map */}
+        <div className="absolute top-2 right-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setGamePhase('paused', 'missions');
+            }}
+            title="Open Mission Menu [M]"
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded shadow flex items-center gap-0.5 transition-colors"
+          >
+            📜 [M]
+          </button>
+          <div className="bg-slate-950/85 group-hover:bg-emerald-600 group-hover:text-white text-slate-200 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-slate-700 flex items-center gap-0.5 transition-colors">
+            <MapIcon className="w-2.5 h-2.5" /> [Tab]
+          </div>
         </div>
 
         {/* District Footer Strip */}

@@ -173,13 +173,13 @@ export class DhakaCityEngine {
     this.container = container;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#38bdf8');
-    this.scene.fog = new THREE.FogExp2('#38bdf8', 0.0018);
+    this.scene.fog = new THREE.FogExp2('#38bdf8', 0.0011);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.4,
-      620
+      1350
     );
 
     this.renderer = new THREE.WebGLRenderer({
@@ -253,7 +253,7 @@ export class DhakaCityEngine {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.18;
 
-    const skyGeo = new THREE.SphereGeometry(490, 32, 20);
+    const skyGeo = new THREE.SphereGeometry(1100, 32, 20);
     const skyMat = new THREE.MeshBasicMaterial({
       map: skyTex,
       side: THREE.BackSide,
@@ -267,11 +267,11 @@ export class DhakaCityEngine {
     // 1. Authentic Dhaka Interlocking Terracotta & Concrete Footpath Plaza Ground Skin
     const dhakaSidewalkBaseTex = loadRealTexture(
       '/textures/dhaka_ground_sidewalk.jpg',
-      110,
-      110,
+      200,
+      200,
       true
     );
-    const groundGeo = new THREE.PlaneGeometry(920, 920);
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800);
     groundGeo.rotateX(-Math.PI / 2);
     const groundMat = new THREE.MeshStandardMaterial({
       map: dhakaSidewalkBaseTex,
@@ -318,7 +318,7 @@ export class DhakaCityEngine {
     });
 
     const buriganga = new THREE.Mesh(
-      new THREE.PlaneGeometry(920, 150),
+      new THREE.PlaneGeometry(1800, 150),
       waterMat
     );
     buriganga.rotation.x = -Math.PI / 2;
@@ -326,9 +326,9 @@ export class DhakaCityEngine {
     this.scene.add(buriganga);
 
     const embankment = new THREE.Mesh(
-      new THREE.BoxGeometry(760, 1.2, 14),
+      new THREE.BoxGeometry(1800, 1.2, 14),
       new THREE.MeshStandardMaterial({
-        map: loadRealTexture('/textures/brick_diffuse.jpg', 35, 1),
+        map: loadRealTexture('/textures/brick_diffuse.jpg', 60, 1),
         color: '#94a3b8',
         roughness: 0.85,
       })
@@ -337,7 +337,7 @@ export class DhakaCityEngine {
     embankment.receiveShadow = true;
     this.scene.add(embankment);
 
-    [-65, 12, 95].forEach((lx) => {
+    [-180, -65, 12, 95, 220].forEach((lx) => {
       const launch = createBurigangaLaunchMesh();
       launch.position.set(lx, 0.2, 318);
       launch.rotation.y = Math.PI / 2 + (lx === 12 ? -0.12 : 0.05);
@@ -346,7 +346,7 @@ export class DhakaCityEngine {
     });
 
     const hatirjheelWater = new THREE.Mesh(
-      new THREE.PlaneGeometry(115, 155),
+      new THREE.PlaneGeometry(130, 160),
       waterMat
     );
     hatirjheelWater.rotation.x = -Math.PI / 2;
@@ -354,12 +354,30 @@ export class DhakaCityEngine {
     this.scene.add(hatirjheelWater);
 
     const dhanmondiWater = new THREE.Mesh(
-      new THREE.PlaneGeometry(85, 125),
+      new THREE.PlaneGeometry(90, 130),
       waterMat
     );
     dhanmondiWater.rotation.x = -Math.PI / 2;
     dhanmondiWater.position.set(-225, 0.05, 25);
     this.scene.add(dhanmondiWater);
+
+    // Gulshan-Baridhara Diplomatic Lake
+    const gulshanWater = new THREE.Mesh(
+      new THREE.PlaneGeometry(110, 240),
+      waterMat
+    );
+    gulshanWater.rotation.x = -Math.PI / 2;
+    gulshanWater.position.set(330, 0.05, -210);
+    this.scene.add(gulshanWater);
+
+    // Uttara Sector 7 Lake
+    const uttaraWater = new THREE.Mesh(
+      new THREE.PlaneGeometry(85, 160),
+      waterMat
+    );
+    uttaraWater.rotation.x = -Math.PI / 2;
+    uttaraWater.position.set(-180, 0.05, -540);
+    this.scene.add(uttaraWater);
 
     // 3. Realistic Dhaka Asphalt Road Network with Unobstructed Intersections & Proportional UVs
     const nsAsphaltTex = loadRealTexture(
@@ -412,18 +430,41 @@ export class DhakaCityEngine {
     });
 
     const nsRoads = [
-      { x: 0, width: 18, zMin: -340, zMax: 295 },
-      { x: -170, width: 16, zMin: -340, zMax: 295 },
-      { x: 220, width: 18, zMin: -340, zMax: 295 },
-      { x: -70, width: 11, zMin: 80, zMax: 290 },
+      // Central National Spine: Airport Highway -> Farmgate -> Sadarghat & Buriganga
+      { x: 0, width: 20, zMin: -700, zMax: 440 },
+      // Dhanmondi / Asad Gate / Agargaon Avenue
+      { x: -170, width: 16, zMin: -680, zMax: 440 },
+      // Mirpur 10 Circle & Sher-e-Bangla Stadium Avenue
+      { x: -380, width: 18, zMin: -680, zMax: 440 },
+      // Gabtoli & Kalyanpur Bus Expressway
+      { x: -580, width: 18, zMin: -680, zMax: 440 },
+      // Gulshan Avenue & Motijheel Financial Spine
+      { x: 220, width: 18, zMin: -680, zMax: 440 },
+      // Badda / Rampura / Bashundhara Link Avenue
+      { x: 440, width: 18, zMin: -680, zMax: 440 },
+      // Purbachal 300 Feet Grand Expressway
+      { x: 640, width: 22, zMin: -560, zMax: 220 },
+      // Old Dhaka Chawkbazar Historical Street
+      { x: -70, width: 12, zMin: 80, zMax: 330 },
     ];
 
     const ewRoads = [
-      { z: -315, width: 18, xMin: -340, xMax: 340 },
-      { z: -175, width: 16, xMin: -340, xMax: 340 },
-      { z: 0, width: 18, xMin: -340, xMax: 340 },
-      { z: 175, width: 16, xMin: -340, xMax: 340 },
-      { z: 285, width: 15, xMin: -340, xMax: 340 },
+      // Uttara North & Airport Runway Road
+      { z: -620, width: 18, xMin: -680, xMax: 680 },
+      // Uttara South & Airport Terminal Boulevard
+      { z: -460, width: 18, xMin: -680, xMax: 680 },
+      // Banani / Airport Flyover & 300ft Entry
+      { z: -315, width: 18, xMin: -680, xMax: 680 },
+      // Mirpur 10 / Mohakhali Flyover / Gulshan-2
+      { z: -175, width: 16, xMin: -680, xMax: 680 },
+      // Manik Mia Avenue / Farmgate / Karwan Bazar
+      { z: 0, width: 20, xMin: -680, xMax: 680 },
+      // Shahbagh / TSC / Motijheel Commercial District
+      { z: 175, width: 16, xMin: -680, xMax: 680 },
+      // Lalbagh Fort / Chawkbazar / Sadarghat Riverfront
+      { z: 285, width: 16, xMin: -680, xMax: 680 },
+      // Buriganga 2nd Bridge / Postogola / Keraniganj Highway
+      { z: 440, width: 18, xMin: -680, xMax: 680 },
     ];
 
     // Build seamless junction patches at every intersection point
@@ -974,18 +1015,34 @@ export class DhakaCityEngine {
   private policeArrestTimer = 0;
 
   public isPositionInWater(x: number, z: number): boolean {
-    if (z > 294) {
-      // Walkable Sadarghat launch terminal pontoon, gangway & jetty deck
-      const onSadarghatJetty = x >= -40 && x <= 40 && z <= 320;
-      if (!onSadarghatJetty) return true;
+    // Buriganga River channel (between Sadarghat embankment z=305 and Keraniganj z=435)
+    if (z > 305 && z < 435) {
+      // Bridges spanning Buriganga:
+      // 1. Central Buriganga Bridge (x: 0, width 20)
+      if (x >= -12 && x <= 12) return false;
+      // 2. Babubazar / Dhanmondi South Bridge (x: -170, width 16)
+      if (x >= -180 && x <= -160) return false;
+      // 3. Postogola Bridge (x: 220, width 18)
+      if (x >= 210 && x <= 230) return false;
+      // 4. Mirpur / Gabtoli River Bridge (x: -580, width 18)
+      if (x >= -592 && x <= -568) return false;
+      // Walkable Sadarghat launch terminal pontoon & gangways
+      const onSadarghatJetty = x >= -40 && x <= 40 && z <= 325;
+      if (onSadarghatJetty) return false;
+      return true;
     }
-    if (x > -265 && x < -183 && z > -35 && z < 85) return true; // Dhanmondi Lake
+    // Dhanmondi Lake
+    if (x > -265 && x < -183 && z > -35 && z < 85) return true;
+    // Hatirjheel Lake (except bridge deck & central causeway)
     if (x > 165 && x < 275 && z > -80 && z < 70) {
-      // Hatirjheel Lake (except bridge deck & central causeway)
       const onBridge = x >= 208 && x <= 232;
       const onCauseway = z >= -10 && z <= 10;
       if (!onBridge && !onCauseway) return true;
     }
+    // Gulshan-Baridhara Lake
+    if (x > 280 && x < 380 && z > -290 && z < -130) return true;
+    // Uttara Sector 7 Lake
+    if (x > -220 && x < -140 && z > -600 && z < -480) return true;
     return false;
   }
 
@@ -1415,8 +1472,14 @@ export class DhakaCityEngine {
       roughness: 0.85,
     });
 
-    for (let z = -290; z <= 140; z += 45) {
-      if (Math.abs(z) < 18 || Math.abs(z + 175) < 18) continue;
+    for (let z = -580; z <= 220; z += 45) {
+      if (
+        Math.abs(z) < 18 ||
+        Math.abs(z + 175) < 18 ||
+        Math.abs(z + 315) < 18 ||
+        Math.abs(z + 460) < 18
+      )
+        continue;
       this.circleColliders.push({
         x: -10.5,
         z,
@@ -1440,27 +1503,29 @@ export class DhakaCityEngine {
     }
 
     const girder = new THREE.Mesh(
-      new THREE.BoxGeometry(5.2, 1.2, 450),
+      new THREE.BoxGeometry(5.2, 1.2, 840),
       concreteMat
     );
-    girder.position.set(-10.5, 12.6, -75);
+    girder.position.set(-10.5, 12.6, -180);
     girder.castShadow = true;
     this.scene.add(girder);
 
-    // Farmgate Elevated Metro Station Canopy (ফার্মগেট মেট্রো স্টেশন) right near spawn
-    const stationCanopy = new THREE.Mesh(
-      new THREE.CylinderGeometry(6.8, 6.8, 38, 12, 1, false, 0, Math.PI).rotateX(
-        Math.PI / 2
-      ),
-      new THREE.MeshStandardMaterial({
-        color: '#0f766e',
-        metalness: 0.4,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      })
-    );
-    stationCanopy.position.set(-10.5, 15.2, -32);
-    this.scene.add(stationCanopy);
+    // Farmgate & Uttara North Elevated Metro Station Canopies
+    [-32, -540].forEach((sz) => {
+      const stationCanopy = new THREE.Mesh(
+        new THREE.CylinderGeometry(6.8, 6.8, 38, 12, 1, false, 0, Math.PI).rotateX(
+          Math.PI / 2
+        ),
+        new THREE.MeshStandardMaterial({
+          color: '#0f766e',
+          metalness: 0.4,
+          roughness: 0.3,
+          side: THREE.DoubleSide,
+        })
+      );
+      stationCanopy.position.set(-10.5, 15.2, sz);
+      this.scene.add(stationCanopy);
+    });
 
     // Build Animated 4-Coach MRT Line-6 Dhaka Metro Rail Train (ঢাকা মেট্রোরেল)
     const trainGroup = new THREE.Group();
@@ -1904,6 +1969,45 @@ export class DhakaCityEngine {
       // Airport Road Terminal & Flyover Surroundings
       { x: 85, z: -355, w: 36, d: 22, h: 24, style: 'modern_glass', color: '#38bdf8', signIndex: 7 },
       { x: 165, z: -355, w: 32, d: 22, h: 28, style: 'modern_glass', color: '#1d4ed8', signIndex: 3 },
+
+      // Mirpur-10 & Sher-e-Bangla National Cricket Stadium Blocks
+      { x: -440, z: -175, w: 34, d: 26, h: 32, style: 'commercial', color: '#3b82f6', signIndex: 6 },
+      { x: -500, z: -175, w: 30, d: 24, h: 26, style: 'residential', color: '#fef08a', signIndex: 2 },
+      { x: -440, z: -250, w: 36, d: 28, h: 36, style: 'commercial', color: '#10b981', signIndex: 1 },
+      { x: -500, z: -250, w: 32, d: 26, h: 28, style: 'residential', color: '#fed7aa', signIndex: 5 },
+      { x: -380, z: -250, w: 28, d: 24, h: 30, style: 'residential', color: '#e2e8f0', signIndex: 0 },
+
+      // Purbachal 300ft Expressway & Food Hub
+      { x: 620, z: -250, w: 38, d: 26, h: 28, style: 'modern_glass', color: '#06b6d4', signIndex: 7 },
+      { x: 560, z: -250, w: 32, d: 24, h: 24, style: 'commercial', color: '#f59e0b', signIndex: 4 },
+      { x: 620, z: -175, w: 34, d: 26, h: 26, style: 'commercial', color: '#ec4899', signIndex: 3 },
+      { x: 560, z: -175, w: 30, d: 22, h: 22, style: 'residential', color: '#a7f3d0', signIndex: 1 },
+      { x: 500, z: -250, w: 28, d: 24, h: 26, style: 'commercial', color: '#6366f1', signIndex: 6 },
+
+      // Bashundhara R/A & Jamuna Future Park Mega Complex
+      { x: 440, z: -320, w: 46, d: 36, h: 42, style: 'modern_glass', color: '#0284c7', signIndex: 7 },
+      { x: 380, z: -320, w: 32, d: 28, h: 34, style: 'commercial', color: '#e0e7ff', signIndex: 2 },
+      { x: 440, z: -400, w: 36, d: 30, h: 38, style: 'modern_glass', color: '#38bdf8', signIndex: 3 },
+      { x: 380, z: -400, w: 30, d: 26, h: 30, style: 'residential', color: '#fde68a', signIndex: 5 },
+
+      // Uttara North & Metro Depot (Sector 18)
+      { x: -160, z: -540, w: 36, d: 28, h: 32, style: 'modern_glass', color: '#0ea5e9', signIndex: 4 },
+      { x: -220, z: -540, w: 32, d: 26, h: 28, style: 'residential', color: '#e2e8f0', signIndex: 0 },
+      { x: -280, z: -540, w: 30, d: 24, h: 26, style: 'residential', color: '#bbf7d0', signIndex: 2 },
+      { x: -160, z: -460, w: 32, d: 24, h: 30, style: 'commercial', color: '#f43f5e', signIndex: 6 },
+
+      // Lalbagh Heritage & Chawkbazar Old Dhaka
+      { x: -170, z: 285, w: 26, d: 22, h: 22, style: 'old_dhaka', color: '#fb923c', signIndex: 5 },
+      { x: -230, z: 285, w: 24, d: 20, h: 20, style: 'old_dhaka', color: '#fde047', signIndex: 1 },
+      { x: -170, z: 350, w: 26, d: 22, h: 24, style: 'old_dhaka', color: '#f87171', signIndex: 4 },
+      { x: -230, z: 350, w: 24, d: 20, h: 22, style: 'old_dhaka', color: '#fed7aa', signIndex: 2 },
+
+      // Keraniganj & Buriganga South Bank Industrial & Garments
+      { x: -60, z: 450, w: 34, d: 28, h: 24, style: 'commercial', color: '#64748b', signIndex: 0 },
+      { x: 60, z: 450, w: 36, d: 28, h: 26, style: 'commercial', color: '#475569', signIndex: 3 },
+      { x: -140, z: 450, w: 32, d: 26, h: 22, style: 'residential', color: '#cbd5e1', signIndex: 7 },
+      { x: 140, z: 450, w: 32, d: 26, h: 22, style: 'residential', color: '#94a3b8', signIndex: 5 },
+      { x: 0, z: 520, w: 40, d: 30, h: 24, style: 'commercial', color: '#334155', signIndex: 1 },
     ];
 
     const balconyMat = new THREE.MeshStandardMaterial({
@@ -1973,7 +2077,7 @@ export class DhakaCityEngine {
     });
 
     // 360-Degree Panoramic Actual Dhaka City Skyline Horizon Ring with Atmospheric Top Fade & Fog
-    const horizonGeo = new THREE.CylinderGeometry(475, 475, 200, 64, 1, true);
+    const horizonGeo = new THREE.CylinderGeometry(1050, 1050, 320, 64, 1, true);
     horizonGeo.scale(-1, 1, 1);
     const horizonMat = new THREE.MeshBasicMaterial({
       map: dhakaPanoramaTex,
@@ -1983,7 +2087,7 @@ export class DhakaCityEngine {
       fog: true, // Seamlessly blends with distance sky & atmospheric fog
     });
     this.horizonRing = new THREE.Mesh(horizonGeo, horizonMat);
-    this.horizonRing.position.set(0, 35, 0);
+    this.horizonRing.position.set(0, 65, 0);
     this.scene.add(this.horizonRing);
 
     const balconyPositions = new Map<
@@ -2993,6 +3097,39 @@ export class DhakaCityEngine {
       { type: 'police', x: 62, z: -10, rot: -Math.PI / 2, isTraffic: true, color: '#1e3a8a' },
       { type: 'police', x: 215, z: -95, rot: 0, isTraffic: true, color: '#1e3a8a' },
       { type: 'police', x: -165, z: 110, rot: 0, isTraffic: true, color: '#1e3a8a' },
+
+      // Mirpur-10 & Cricket Stadium Sector Spawns
+      { type: 'rickshaw', x: -420, z: -170, rot: 0, isTraffic: true, color: '#f59e0b' },
+      { type: 'cng', x: -424, z: -210, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'bus', x: -420, z: -120, rot: 0, isTraffic: true, color: '#b91c1c' },
+      { type: 'motorcycle', x: -450, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#ef4444' },
+      { type: 'police', x: -424, z: -260, rot: Math.PI, isTraffic: true, color: '#1e3a8a' },
+
+      // Purbachal 300ft High-Speed Expressway Spawns
+      { type: 'car', x: 480, z: -254, rot: -Math.PI / 2, isTraffic: true, color: '#ef4444' },
+      { type: 'motorcycle', x: 540, z: -246, rot: Math.PI / 2, isTraffic: true, color: '#f97316' },
+      { type: 'car', x: 620, z: -250, rot: 0, isTraffic: false, color: '#38bdf8' },
+      { type: 'pickup', x: 420, z: -246, rot: Math.PI / 2, isTraffic: true, color: '#0284c7' },
+
+      // Bashundhara R/A & Jamuna Future Park Spawns
+      { type: 'car', x: 420, z: -320, rot: 0, isTraffic: false, color: '#f8fafc' },
+      { type: 'cng', x: 424, z: -350, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'motorcycle', x: 416, z: -290, rot: 0, isTraffic: true, color: '#10b981' },
+
+      // Uttara North Metro Terminal Spawns
+      { type: 'bus', x: -210, z: -520, rot: 0, isTraffic: true, color: '#047857' },
+      { type: 'cng', x: -214, z: -460, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'police', x: -210, z: -580, rot: 0, isTraffic: true, color: '#1e3a8a' },
+
+      // Lalbagh Fort & Chawkbazar Spawns
+      { type: 'rickshaw', x: -170, z: 270, rot: 0, isTraffic: true, color: '#ec4899' },
+      { type: 'rickshaw', x: -174, z: 320, rot: Math.PI, isTraffic: true, color: '#f59e0b' },
+      { type: 'pickup', x: -170, z: 360, rot: 0, isTraffic: false, color: '#d97706' },
+
+      // Keraniganj & Buriganga South Bank Spawns
+      { type: 'pickup', x: 4, z: 430, rot: 0, isTraffic: true, color: '#475569' },
+      { type: 'cng', x: -4, z: 460, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'motorcycle', x: 12, z: 440, rot: 0, isTraffic: false, color: '#06b6d4' },
     ];
 
     presets.forEach((p, idx) => {
@@ -3423,10 +3560,22 @@ export class DhakaCityEngine {
       return;
     }
 
-    if (code === 'KeyM') {
+    if (code === 'KeyM' || code === 'KeyJ') {
+      if (store.gamePhase === 'playing') {
+        store.setGamePhase('paused', 'missions');
+      } else if (store.gamePhase === 'paused' && store.pauseTab === 'missions') {
+        store.setGamePhase('playing');
+      } else if (store.gamePhase === 'paused') {
+        store.setPauseTab('missions');
+      }
+      return;
+    }
+
+    if (code === 'Tab') {
+      e.preventDefault();
       if (store.gamePhase === 'playing') {
         store.setGamePhase('paused', 'map');
-      } else if (store.gamePhase === 'paused') {
+      } else if (store.gamePhase === 'paused' && store.pauseTab === 'map') {
         store.setGamePhase('playing');
       }
       return;
@@ -4585,8 +4734,8 @@ export class DhakaCityEngine {
 
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara, Farmgate & Motijheel
     if (this.metroTrainGroup) {
-      const trainSpeed = Math.cos(t * 0.32);
-      this.metroTrainGroup.position.z = -75 + Math.sin(t * 0.32) * 165;
+      const trainSpeed = Math.cos(t * 0.15);
+      this.metroTrainGroup.position.z = -180 + Math.sin(t * 0.15) * 360;
       this.metroTrainGroup.rotation.y = trainSpeed >= 0 ? 0 : Math.PI;
     }
   }
@@ -5201,9 +5350,9 @@ export class DhakaCityEngine {
       const nz = veh.z + Math.cos(veh.rotation) * cruiseSpeed * dt;
 
       if (
-        Math.abs(nx) > 340 ||
-        nz > 282 ||
-        nz < -335 ||
+        Math.abs(nx) > 740 ||
+        nz > 450 ||
+        nz < -690 ||
         this.checkWorldObstacle(nx, nz, 1.5)
       ) {
         // Smooth steering arc when reaching boundary
@@ -5695,5 +5844,5 @@ function normalizeAngle(a: number): number {
 }
 
 function clampWorldCoord(v: number): number {
-  return Math.max(-365, Math.min(365, v));
+  return Math.max(-780, Math.min(780, v));
 }
