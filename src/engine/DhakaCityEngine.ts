@@ -97,7 +97,7 @@ export class DhakaCityEngine {
     maxLife: number;
   }> = [];
   private cameraTrauma = 0;
-  private horizonRing: THREE.Mesh | null = null;
+  private aviationBeacons: THREE.Mesh[] = [];
 
   // Player Character State
   private playerLimbs!: CharacterLimbs;
@@ -297,7 +297,7 @@ export class DhakaCityEngine {
       200,
       true
     );
-    const groundGeo = new THREE.PlaneGeometry(1800, 1800);
+    const groundGeo = new THREE.PlaneGeometry(2800, 2800);
     groundGeo.rotateX(-Math.PI / 2);
     const groundMat = new THREE.MeshStandardMaterial({
       map: dhakaSidewalkBaseTex,
@@ -2189,12 +2189,6 @@ export class DhakaCityEngine {
       6,
       true
     );
-    const dhakaPanoramaTex = loadRealTexture(
-      '/textures/dhaka_skyline_panorama.jpg',
-      4,
-      1,
-      true
-    );
 
     // Shared per-style materials (one instance, reused by every building).
     const shopArcadeMat = new THREE.MeshStandardMaterial({
@@ -2223,20 +2217,6 @@ export class DhakaCityEngine {
       color: '#0369a1',
       roughness: 0.45,
     });
-
-    // 360-Degree Panoramic Actual Dhaka City Skyline Horizon Ring with Atmospheric Top Fade & Fog
-    const horizonGeo = new THREE.CylinderGeometry(1050, 1050, 320, 64, 1, true);
-    horizonGeo.scale(-1, 1, 1);
-    const horizonMat = new THREE.MeshBasicMaterial({
-      map: dhakaPanoramaTex,
-      transparent: true,
-      opacity: 0.88,
-      depthWrite: false,
-      fog: true, // Seamlessly blends with distance sky & atmospheric fog
-    });
-    this.horizonRing = new THREE.Mesh(horizonGeo, horizonMat);
-    this.horizonRing.position.set(0, 65, 0);
-    this.scene.add(this.horizonRing);
 
     const balconyPositions = new Map<
       string,
@@ -2427,6 +2407,7 @@ export class DhakaCityEngine {
     // Overhead Tangled Black Electric/Internet Cables with Pole Transformers, DMP Police Boxes & Biriyani Cauldrons
     this.buildAuthenticDhakaStreetInfrastructure();
     this.buildDhakaDistrictScenes();
+    this.buildDistant3DSkyline();
 
     // Realistic Multi-Tiered Tropical Dhaka Trees: Krishnachura (কৃষ্ণচূড়া) & Banyan (বটগাছ)
     const trunkMat = new THREE.MeshStandardMaterial({
@@ -2435,28 +2416,34 @@ export class DhakaCityEngine {
       roughness: 0.92,
     });
     const banyanBaseMat = new THREE.MeshStandardMaterial({
-      color: '#14532d',
-      roughness: 0.72,
+      color: '#1b4332',
+      roughness: 0.88,
+      flatShading: true,
     });
     const banyanMidMat = new THREE.MeshStandardMaterial({
-      color: '#15803d',
-      roughness: 0.68,
+      color: '#2d6a4f',
+      roughness: 0.85,
+      flatShading: true,
     });
     const banyanSunMat = new THREE.MeshStandardMaterial({
-      color: '#16a34a',
-      roughness: 0.65,
+      color: '#40916c',
+      roughness: 0.82,
+      flatShading: true,
     });
     const krishnachuraGreenMat = new THREE.MeshStandardMaterial({
-      color: '#19391e',
-      roughness: 0.75,
+      color: '#1b4332',
+      roughness: 0.88,
+      flatShading: true,
     });
     const krishnachuraScarletMat = new THREE.MeshStandardMaterial({
-      color: '#dc2626',
-      roughness: 0.55,
+      color: '#b91c1c',
+      roughness: 0.85,
+      flatShading: true,
     });
     const krishnachuraOrangeMat = new THREE.MeshStandardMaterial({
-      color: '#ea580c',
-      roughness: 0.55,
+      color: '#c2410c',
+      roughness: 0.85,
+      flatShading: true,
     });
 
     const treeSpots = [
@@ -2516,7 +2503,7 @@ export class DhakaCityEngine {
       if (isKrishnachura) {
         // TROPICAL KRISHNACHURA (Royal Poinciana): Spreading flat umbrella canopy with scarlet floral blossoms
         const umbrella = new THREE.Mesh(
-          new THREE.SphereGeometry(2.8, 14, 10),
+          new THREE.DodecahedronGeometry(2.8, 1),
           krishnachuraGreenMat
         );
         umbrella.scale.set(1.45, 0.48, 1.45);
@@ -2532,7 +2519,7 @@ export class DhakaCityEngine {
           [0.2, 4.2, 1.4, 1.4],
         ].forEach(([lx, ly, lz, rad]) => {
           const lobe = new THREE.Mesh(
-            new THREE.SphereGeometry(rad, 12, 8),
+            new THREE.DodecahedronGeometry(rad, 1),
             krishnachuraGreenMat
           );
           lobe.scale.set(1.2, 0.5, 1.2);
@@ -2541,18 +2528,18 @@ export class DhakaCityEngine {
           tree.add(lobe);
         });
 
-        // Layer of vibrant scarlet & orange floral blossom clusters across the top canopy surface
+        // Layer of delicate scarlet & orange floral blossom clusters across the top canopy surface
         [
-          [0.3, 4.65, 0.4, 1.3, krishnachuraScarletMat],
-          [-1.2, 4.5, 0.5, 1.15, krishnachuraOrangeMat],
-          [1.1, 4.55, -0.6, 1.2, krishnachuraScarletMat],
-          [-0.3, 4.6, -1.1, 1.1, krishnachuraOrangeMat],
+          [0.3, 4.65, 0.4, 0.9, krishnachuraScarletMat],
+          [-1.2, 4.5, 0.5, 0.85, krishnachuraOrangeMat],
+          [1.1, 4.55, -0.6, 0.85, krishnachuraScarletMat],
+          [-0.3, 4.6, -1.1, 0.8, krishnachuraOrangeMat],
         ].forEach(([fx, fy, fz, frad, fmat]) => {
           const blossom = new THREE.Mesh(
-            new THREE.SphereGeometry(frad as number, 10, 8),
+            new THREE.DodecahedronGeometry(frad as number, 1),
             fmat as THREE.Material
           );
-          blossom.scale.set(1.3, 0.36, 1.3);
+          blossom.scale.set(1.15, 0.32, 1.15);
           blossom.position.set(fx as number, fy as number, fz as number);
           blossom.castShadow = true;
           tree.add(blossom);
@@ -2561,7 +2548,7 @@ export class DhakaCityEngine {
         // MAJESTIC DHAKA BANYAN TREE (বটগাছ): Multi-tiered dense dome with aerial prop roots
         // Tier 1 (Low dense canopy)
         const tier1 = new THREE.Mesh(
-          new THREE.SphereGeometry(2.9, 14, 10),
+          new THREE.DodecahedronGeometry(2.9, 1),
           banyanBaseMat
         );
         tier1.scale.set(1.4, 0.52, 1.4);
@@ -2572,7 +2559,7 @@ export class DhakaCityEngine {
 
         // Tier 2 (Mid canopy)
         const tier2 = new THREE.Mesh(
-          new THREE.SphereGeometry(2.3, 12, 8),
+          new THREE.DodecahedronGeometry(2.3, 1),
           banyanMidMat
         );
         tier2.scale.set(1.2, 0.55, 1.2);
@@ -2582,7 +2569,7 @@ export class DhakaCityEngine {
 
         // Tier 3 (Sun-kissed crown)
         const tier3 = new THREE.Mesh(
-          new THREE.SphereGeometry(1.6, 10, 8),
+          new THREE.DodecahedronGeometry(1.6, 1),
           banyanSunMat
         );
         tier3.scale.set(1.0, 0.6, 1.0);
@@ -2786,6 +2773,182 @@ export class DhakaCityEngine {
         this.scene.add(pot);
       }
     }
+  }
+
+  /**
+   * 270+ Genuine 3D Distant Skyline Towers, Corporate High-Rises, Mechanical Crowns,
+   * Rooftop Water Tanks & Blinking Red Aviation Obstruction Beacons.
+   * Distributed geographically across Dhaka's real landmark districts:
+   * Motijheel (Financial), Gulshan-1/2 & Banani (Diplomatic/Corporate), Tejgaon (Media/Ind),
+   * Uttara (High-rise), Mirpur (Superblocks) & Keraniganj/Old Dhaka.
+   */
+  private buildDistant3DSkyline() {
+    const glassTowerMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      metalness: 0.88,
+      roughness: 0.15,
+    });
+    const darkGlassMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      metalness: 0.92,
+      roughness: 0.12,
+    });
+    const tealGlassMat = new THREE.MeshStandardMaterial({
+      color: '#0f766e',
+      metalness: 0.82,
+      roughness: 0.18,
+    });
+    const modernSteelMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      metalness: 0.75,
+      roughness: 0.32,
+    });
+    const concreteTowerMat = new THREE.MeshStandardMaterial({
+      color: '#64748b',
+      roughness: 0.78,
+    });
+    const warmStuccoMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      roughness: 0.82,
+    });
+    const dhakaBrickMat = new THREE.MeshStandardMaterial({
+      color: '#b45309',
+      roughness: 0.85,
+    });
+    const mechCrownMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      metalness: 0.5,
+      roughness: 0.5,
+    });
+    const spireMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      metalness: 0.92,
+      roughness: 0.2,
+    });
+    const gaziWaterTankMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      roughness: 0.42,
+    });
+    const nationalTankMat = new THREE.MeshStandardMaterial({
+      color: '#0369a1',
+      roughness: 0.42,
+    });
+    const beaconMat = new THREE.MeshBasicMaterial({
+      color: '#ff1744',
+    });
+
+    const beaconGeo = new THREE.SphereGeometry(0.85, 8, 6);
+
+    let seedVal = 1971;
+    const rnd = () => {
+      seedVal = (seedVal * 9301 + 49297) % 233280;
+      return seedVal / 233280;
+    };
+
+    const towerRings = [
+      { minR: 430, maxR: 560, count: 92, baseH: 42, maxH: 120 },
+      { minR: 560, maxR: 700, count: 96, baseH: 52, maxH: 148 },
+      { minR: 700, maxR: 880, count: 88, baseH: 68, maxH: 180 },
+    ];
+
+    towerRings.forEach((ring) => {
+      for (let i = 0; i < ring.count; i++) {
+        const angle = (i / ring.count) * Math.PI * 2 + (rnd() - 0.5) * 0.05;
+        const radius = ring.minR + rnd() * (ring.maxR - ring.minR);
+        const bx = Math.cos(angle) * radius;
+        const bz = Math.sin(angle) * radius;
+
+        let deg = ((angle * 180) / Math.PI) % 360;
+        if (deg < 0) deg += 360;
+
+        let style: 'motijheel' | 'gulshan' | 'tejgaon' | 'uttara' | 'mirpur' | 'old_dhaka';
+        if (deg >= 115 && deg < 155) {
+          style = 'motijheel';
+        } else if (deg >= 25 && deg < 80) {
+          style = 'gulshan';
+        } else if (deg >= 80 && deg < 115) {
+          style = 'tejgaon';
+        } else if (deg >= 315 || deg < 25) {
+          style = 'uttara';
+        } else if (deg >= 225 && deg < 315) {
+          style = 'mirpur';
+        } else {
+          style = 'old_dhaka';
+        }
+
+        const width = 22 + rnd() * 26;
+        const depth = 22 + rnd() * 26;
+        let height = ring.baseH + rnd() * (ring.maxH - ring.baseH);
+
+        if (style === 'motijheel' || style === 'gulshan') {
+          height *= 1.25;
+        }
+
+        let facadeMat: THREE.Material;
+        if (style === 'gulshan') {
+          facadeMat = rnd() > 0.4 ? glassTowerMat : rnd() > 0.5 ? tealGlassMat : modernSteelMat;
+        } else if (style === 'motijheel') {
+          facadeMat = rnd() > 0.45 ? darkGlassMat : rnd() > 0.5 ? concreteTowerMat : modernSteelMat;
+        } else if (style === 'mirpur' || style === 'old_dhaka') {
+          facadeMat = rnd() > 0.5 ? dhakaBrickMat : warmStuccoMat;
+        } else {
+          facadeMat = rnd() > 0.5 ? warmStuccoMat : concreteTowerMat;
+        }
+
+        const towerMesh = this.sharedBox(width, height, depth, facadeMat, bx, height / 2, bz);
+        towerMesh.rotation.y = angle + (rnd() - 0.5) * 0.4;
+        this.scene.add(towerMesh);
+
+        if (height > 55) {
+          const tierW = width * 0.72;
+          const tierD = depth * 0.72;
+          const tierH = height * 0.28;
+          const tierMat = style === 'gulshan' || style === 'motijheel' ? glassTowerMat : mechCrownMat;
+          const tierMesh = this.sharedBox(tierW, tierH, tierD, tierMat, bx, height + tierH / 2, bz);
+          tierMesh.rotation.y = towerMesh.rotation.y;
+          this.scene.add(tierMesh);
+
+          const crownH = 5.5 + rnd() * 4;
+          const crownMesh = this.sharedBox(tierW * 0.6, crownH, tierD * 0.6, mechCrownMat, bx, height + tierH + crownH / 2, bz);
+          crownMesh.rotation.y = towerMesh.rotation.y;
+          this.scene.add(crownMesh);
+
+          const totalRoofY = height + tierH + crownH;
+
+          if (height > 75) {
+            const spireH = 14 + rnd() * 22;
+            const spire = new THREE.Mesh(this.cylCache(0.18, 0.45, spireH, 8), spireMat);
+            spire.position.set(bx, totalRoofY + spireH / 2, bz);
+            this.scene.add(spire);
+
+            const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+            beacon.position.set(bx, totalRoofY + spireH, bz);
+            this.scene.add(beacon);
+            this.aviationBeacons.push(beacon);
+          } else {
+            const tankMat = rnd() > 0.5 ? gaziWaterTankMat : nationalTankMat;
+            const tank = new THREE.Mesh(this.cylCache(1.8, 1.8, 2.6, 12), tankMat);
+            tank.position.set(bx + (rnd() - 0.5) * (tierW * 0.3), totalRoofY + 1.3, bz + (rnd() - 0.5) * (tierD * 0.3));
+            this.scene.add(tank);
+          }
+        } else {
+          const tankMat = rnd() > 0.5 ? gaziWaterTankMat : nationalTankMat;
+          const tank = new THREE.Mesh(this.cylCache(1.6, 1.6, 2.4, 12), tankMat);
+          tank.position.set(bx, height + 1.2, bz);
+          this.scene.add(tank);
+        }
+
+        if (ring.minR <= 440) {
+          this.buildingColliders.push({
+            minX: bx - width / 2 - 2,
+            maxX: bx + width / 2 + 2,
+            minZ: bz - depth / 2 - 2,
+            maxZ: bz + depth / 2 + 2,
+            tag: 'distant_skyline',
+          });
+        }
+      }
+    });
   }
 
   private buildAuthenticDhakaStreetInfrastructure() {
@@ -4547,7 +4710,7 @@ export class DhakaCityEngine {
         isHigh ? Math.min(window.devicePixelRatio, 1.35) : 1
       );
       this.renderer.shadowMap.enabled = isHigh;
-      this.camera.far = isHigh ? 550 : 320;
+      this.camera.far = isHigh ? 1350 : 900;
       this.camera.updateProjectionMatrix();
     }
 
@@ -5155,8 +5318,14 @@ export class DhakaCityEngine {
         dt * 2
       );
     }
-    if (this.horizonRing) {
-      this.horizonRing.position.set(this.playerPos.x, 35, this.playerPos.z);
+
+    // Dynamic Aviation Hazard Beacon Pulse atop Tall Dhaka Skyline Towers
+    if (this.aviationBeacons.length > 0) {
+      const showBeacons = isNight || isGolden;
+      const beaconBlink = Math.sin(this.clock.getElapsedTime() * 3.8) > 0.2;
+      for (let i = 0; i < this.aviationBeacons.length; i++) {
+        this.aviationBeacons[i].visible = showBeacons && beaconBlink;
+      }
     }
 
     // Animate water normal ripples

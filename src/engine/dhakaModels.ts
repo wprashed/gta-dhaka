@@ -1413,6 +1413,54 @@ export function createVehicleMesh(
     seat.position.set(0, 0.88, -0.36);
     group.add(seat);
 
+    // Rear Sporty Cowl & Angled Mudguard / Fender (Bajaj Pulsar / Yamaha FZ Style)
+    const rearCowl = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 0.12, 0.38),
+      bikeMat
+    );
+    rearCowl.position.set(0, 0.86, -0.74);
+    rearCowl.rotation.x = -0.18;
+    group.add(rearCowl);
+
+    const rearFender = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.04, 0.44),
+      darkMat
+    );
+    rearFender.position.set(0, 0.62, -0.84);
+    rearFender.rotation.x = -0.38;
+    group.add(rearFender);
+
+    // Rear Glowing LED Brake Light
+    const tailLight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.06, 0.06),
+      new THREE.MeshBasicMaterial({ color: '#ef4444' })
+    );
+    tailLight.position.set(0, 0.74, -0.92);
+    group.add(tailLight);
+
+    // Official Dhaka Metropolitan Police Motorcycle Digital Number Plate
+    const bikePlate = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.26, 0.12),
+      new THREE.MeshBasicMaterial({
+        map: createBanglaNumberPlateTexture(`ঢাকা মেট্রো-হ ১২-${5100 + (seed % 9) * 23}`, false),
+        side: THREE.DoubleSide,
+      })
+    );
+    bikePlate.position.set(0, 0.54, -0.98);
+    bikePlate.rotation.x = 0.15;
+    group.add(bikePlate);
+
+    // Twin Rear Heavy-Duty Coil Spring Shock Absorbers
+    [-0.14, 0.14].forEach((sx) => {
+      const shock = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.024, 0.024, 0.44, 8),
+        chromeMat
+      );
+      shock.position.set(sx, 0.52, -0.62);
+      shock.rotation.x = 0.45;
+      group.add(shock);
+    });
+
     // Telescopic Chrome Front Forks
     [-0.11, 0.11].forEach((fx) => {
       const fork = new THREE.Mesh(
@@ -1440,6 +1488,24 @@ export function createVehicleMesh(
     bars.position.set(0, 1.16, 0.56);
     group.add(bars);
 
+    // Handlebar Dual Rearview Mirrors
+    [-0.34, 0.34].forEach((mx) => {
+      const mirrorStem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6),
+        chromeMat
+      );
+      mirrorStem.position.set(mx, 1.24, 0.54);
+      mirrorStem.rotation.z = mx > 0 ? -0.35 : 0.35;
+      group.add(mirrorStem);
+
+      const mirrorHead = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.05, 0.02),
+        darkMat
+      );
+      mirrorHead.position.set(mx * 1.08, 1.32, 0.54);
+      group.add(mirrorHead);
+    });
+
     const hl = new THREE.Mesh(
       new THREE.SphereGeometry(0.13, 14, 14),
       new THREE.MeshBasicMaterial({ color: '#fef08a' })
@@ -1457,14 +1523,7 @@ export function createVehicleMesh(
         rider.name = 'npc_driver';
         rider.scale.setScalar(0.84);
         rider.position.set(0, 0.26, -0.14);
-        const reachQuat = new THREE.Quaternion()
-          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.34)
-          .multiply(
-            new THREE.Quaternion().setFromAxisAngle(
-              new THREE.Vector3(0, 0, 1),
-              -0.85
-            )
-          );
+
         const hipBendQuat = new THREE.Quaternion().setFromAxisAngle(
           new THREE.Vector3(1, 0, 0),
           1.05
@@ -1473,13 +1532,50 @@ export function createVehicleMesh(
           new THREE.Vector3(1, 0, 0),
           -1.15
         );
+        const leftArmQuat = new THREE.Quaternion()
+          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
+          .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.45));
+        const rightArmQuat = new THREE.Quaternion()
+          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
+          .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45));
+
         rider.traverse((c) => {
-          if (c.name === 'LeftArm' || c.name === 'RightArm') {
-            c.quaternion.multiply(reachQuat);
+          if (c.name === 'Spine' || c.name === 'Spine1') {
+            c.quaternion.multiply(
+              new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.22)
+            );
+          } else if (c.name === 'LeftArm') {
+            c.quaternion.multiply(leftArmQuat);
+          } else if (c.name === 'RightArm') {
+            c.quaternion.multiply(rightArmQuat);
           } else if (c.name === 'LeftUpLeg' || c.name === 'RightUpLeg') {
             c.quaternion.multiply(hipBendQuat);
           } else if (c.name === 'LeftLeg' || c.name === 'RightLeg') {
             c.quaternion.multiply(kneeBendQuat);
+          }
+
+          // Dress biker in dark leather biker jacket and dark denim jeans
+          if ((c as THREE.Mesh).isMesh) {
+            const m = c as THREE.Mesh;
+            const nameLower = (m.name || '').toLowerCase();
+            if (nameLower.includes('top') || nameLower.includes('outfit_top')) {
+              m.material = new THREE.MeshStandardMaterial({
+                color: '#1e293b', // Sleek black leather biker jacket
+                roughness: 0.38,
+                metalness: 0.12,
+              });
+            } else if (nameLower.includes('bottom') || nameLower.includes('outfit_bottom')) {
+              m.material = new THREE.MeshStandardMaterial({
+                color: '#334155', // Charcoal denim rider trousers
+                roughness: 0.65,
+                metalness: 0.05,
+              });
+            } else if (nameLower.includes('footwear') || nameLower.includes('shoes')) {
+              m.material = new THREE.MeshStandardMaterial({
+                color: '#0f172a',
+                roughness: 0.45,
+              });
+            }
           }
         });
         group.add(rider);
