@@ -12,8 +12,8 @@ export function resolveAssetUrl(path: string): string {
   ) {
     return path;
   }
-  const base = import.meta.env.BASE_URL || '/';
-  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  const rawBase = import.meta.env.BASE_URL || '/';
+  const cleanBase = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `${cleanBase}${cleanPath}`;
 }

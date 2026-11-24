@@ -16,30 +16,21 @@ import { MinimapHUD } from './MinimapHUD';
 import {
   Box,
   Car,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
   Clock,
   CloudRain,
   Compass,
   Crosshair,
-  Flame,
   Heart,
   Languages,
-  Map as MapIcon,
   MapPin,
-  Navigation,
   Pause,
   Radio,
-  RotateCcw,
   Shield,
   ShieldAlert,
   Sparkles,
   Star,
   Sun,
   Swords,
-  Target,
   Volume2,
   Wrench,
   Zap,
@@ -48,15 +39,11 @@ import { RadioStationId, ToolWeaponId, WeatherType } from '../types/game';
 
 interface GameHUDProps {
   onTriggerAction: (
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'aim'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
   ) => void;
-  onVirtualMove?: (forward: number, right: number, sprint: boolean) => void;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({
-  onTriggerAction,
-  onVirtualMove,
-}) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
   const {
     language,
     toggleLanguage,
@@ -93,50 +80,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     equippedToolId,
     equipTool,
     tools,
-    weaponAmmo,
-    isReloading,
-    cycleWeapon,
-    reloadActiveWeapon,
     setGamePhase,
     requestSpawnVehicle,
     storyEndingEn,
     storyEndingBn,
-    districtArrivalNotice,
-    dismissDistrictArrival,
-    isAimingDownSights,
-    isNitroActive,
   } = useGameStore();
-
-  const [virtualInput, setVirtualInput] = React.useState({
-    forward: 0,
-    right: 0,
-    sprint: false,
-  });
-
-  const handlePadPress = (forward: number, right: number) => {
-    setVirtualInput((prev) => {
-      const next = { ...prev, forward, right };
-      onVirtualMove?.(next.forward, next.right, next.sprint);
-      return next;
-    });
-  };
-
-  const handlePadRelease = () => {
-    setVirtualInput((prev) => {
-      const next = { ...prev, forward: 0, right: 0 };
-      onVirtualMove?.(0, 0, next.sprint);
-      return next;
-    });
-  };
-
-  const toggleSprint = () => {
-    setVirtualInput((prev) => {
-      const nextSprint = !prev.sprint;
-      const next = { ...prev, sprint: nextSprint };
-      onVirtualMove?.(next.forward, next.right, nextSprint);
-      return next;
-    });
-  };
 
   const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
   const activeMission = allMissions.find((m) => m.id === activeMissionId);
@@ -153,17 +101,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   const districtInfo =
     DISTRICTS.find((d) => d.id === currentDistrict) || DISTRICTS[0];
 
-  const arrivalDistrict = districtArrivalNotice
-    ? DISTRICTS.find((d) => d.id === districtArrivalNotice.districtId) || districtInfo
-    : null;
-
   const vehicleStats = currentVehicleType
     ? VEHICLE_STATS[currentVehicleType]
     : null;
-
-  const activeWeapon =
-    tools.find((t) => t.id === equippedToolId) || tools[0];
-  const activeAmmo = weaponAmmo[activeWeapon.id] || { clip: 0, reserve: 0 };
 
   const radioLabels: Record<RadioStationId, { en: string; bn: string }> = {
     dhaka_folk: { en: '98.4 FM Folk Fusion', bn: '৯৮.৪ এফএম বাংলা ফোক' },
@@ -235,149 +175,58 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </div>
             </div>
           ) : (
-            <div
-              onClick={() => setGamePhase('paused', 'map')}
-              className="tactical-glass border border-emerald-500/50 glow-cng rounded-xl p-2.5 shadow-2xl flex items-center gap-3 cursor-pointer group hover:border-amber-400 transition-all tactical-chamfer"
-              title="Click to open Dhaka Locations Dossier & Fast Travel [M]"
-            >
-              <div className="relative shrink-0 overflow-hidden rounded-lg border border-emerald-400/60 shadow">
-                <img
-                  src={DHAKA_DISTRICT_PHOTOS[currentDistrict]}
-                  alt={districtInfo.nameEn}
-                  className="w-16 h-12 object-cover group-hover:scale-105 transition-transform"
-                />
-                <span className="absolute bottom-0.5 right-0.5 bg-slate-950/90 text-amber-300 text-[8px] font-mono font-bold px-1 rounded">
-                  {districtInfo.tacticalCode?.split('//')[0] || 'SEC'}
-                </span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                  <p className="text-[11px] font-black font-display text-white uppercase tracking-wider truncate">
-                    {language === 'en' ? districtInfo.nameEn : districtInfo.nameBn}
-                  </p>
-                </div>
-                <p className="text-[10px] text-amber-400 font-mono font-semibold truncate mt-0.5">
-                  {language === 'en' ? districtInfo.vibeEn : districtInfo.vibeBn}
+            <div className="bg-slate-950/88 backdrop-blur-md border border-slate-800 rounded-xl p-2.5 shadow-xl flex items-center gap-3">
+              <img
+                src={DHAKA_DISTRICT_PHOTOS[currentDistrict]}
+                alt={districtInfo.nameEn}
+                className="w-16 h-12 rounded-lg object-cover border border-amber-400/50 shrink-0 shadow"
+              />
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider truncate">
+                  {language === 'en' ? districtInfo.nameEn : districtInfo.nameBn}
                 </p>
-                <p className="text-[9px] text-slate-400 font-mono mt-0.5 truncate flex items-center gap-1">
-                  <span>GPS: {districtInfo.coordinates}</span>
-                  <span className="text-cyan-400 font-bold">[M]</span>
+                <p className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                  {language === 'en'
+                    ? 'Open [M] Missions or explore Dhaka landmarks.'
+                    : 'মিশন শুরু করতে [M] চাপুন অথবা শহর ঘুরে দেখুন।'}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Quick Action Strip - Monsoon Underworld Tactical Controls */}
+          {/* Quick Action Strip */}
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => requestSpawnVehicle('cng')}
-              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-mono font-black px-2.5 py-1.5 rounded-md border border-emerald-300 glow-cng flex items-center gap-1.5 transition-all active:scale-95 shadow"
+              className="bg-emerald-700/90 hover:bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-400/40 shadow-lg flex items-center gap-1.5 transition-all active:scale-95"
             >
-              <Car className="w-3.5 h-3.5 text-slate-950" />
-              {language === 'en' ? 'CALL CNG' : 'সিএনজি ডাকুন'}
+              <Car className="w-3.5 h-3.5 text-amber-300" />
+              {language === 'en' ? 'Call CNG' : 'সিএনজি ডাকুন'}
             </button>
 
             <button
               onClick={() => requestSpawnVehicle('rickshaw')}
-              className="bg-slate-900/90 hover:bg-pink-900/60 text-pink-300 hover:text-white text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-md border border-pink-500/40 shadow flex items-center gap-1.5 transition-all active:scale-95"
+              className="bg-pink-700/90 hover:bg-pink-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-pink-400/40 shadow-lg flex items-center gap-1.5 transition-all active:scale-95"
             >
-              <span className="text-amber-400">🚲</span>
-              {language === 'en' ? 'RICKSHAW' : 'রিকশা'}
-            </button>
-
-            <button
-              onClick={() => setGamePhase('paused', 'map')}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-mono font-black px-2.5 py-1.5 rounded-md border border-amber-200 glow-amber shadow flex items-center gap-1 transition-all active:scale-95"
-            >
-              <Navigation className="w-3.5 h-3.5" />
-              {language === 'en' ? 'LOCATIONS [M]' : 'লোকেশন [M]'}
+              {language === 'en' ? 'Call Rickshaw' : 'রিকশা ডাকুন'}
             </button>
 
             <button
               onClick={() => setGamePhase('paused', 'sketchfab')}
-              className="bg-cyan-500/90 hover:bg-cyan-400 text-slate-950 text-[11px] font-mono font-black px-2.5 py-1.5 rounded-md border border-cyan-300 glow-neon shadow flex items-center gap-1 transition-all active:scale-95"
+              className="bg-amber-500/95 hover:bg-amber-400 text-slate-950 text-[11px] font-extrabold px-2.5 py-1.5 rounded-lg border border-amber-200 shadow-lg flex items-center gap-1 transition-all active:scale-95"
             >
               <Box className="w-3.5 h-3.5" />
-              {language === 'en' ? '3D LAB' : 'থ্রিডি'}
+              {language === 'en' ? 'Sketchfab 3D' : 'স্কেচফ্যাব থ্রিডি'}
             </button>
 
             <button
-              onClick={() => setGamePhase('main_menu')}
-              className="bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white text-[11px] font-mono font-bold px-2 py-1.5 rounded-md border border-slate-700 shadow flex items-center gap-1 transition-all active:scale-95"
+              onClick={() => setGamePhase('paused', 'missions')}
+              className="bg-slate-900/90 hover:bg-slate-800 text-amber-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 shadow-lg transition-all"
             >
-              {language === 'en' ? 'MENU' : 'মেনু'}
+              {language === 'en' ? 'Missions' : 'মিশন'}
             </button>
           </div>
         </div>
-
-        {/* TOP-CENTER: Cinematic District Arrival Title Card & Celebratory Banners */}
-        <div className="pointer-events-auto flex flex-col items-center gap-2 max-w-lg w-full mx-auto">
-          {arrivalDistrict && (
-            <div
-              key={districtArrivalNotice?.key}
-              className="w-full tactical-glass-dark border border-emerald-400/80 rounded-xl overflow-hidden shadow-2xl glow-cng tactical-chamfer animate-location-banner relative"
-            >
-              <div className="relative h-28 sm:h-32 w-full overflow-hidden">
-                <img
-                  src={arrivalDistrict.bannerImage || DHAKA_DISTRICT_PHOTOS[arrivalDistrict.id]}
-                  alt={arrivalDistrict.nameEn}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
-                <div className="absolute inset-0 scanlines opacity-35 pointer-events-none" />
-
-                {/* Top Telemetry Header */}
-                <div className="absolute top-2 inset-x-3 flex items-center justify-between text-[10px] font-mono">
-                  <span className="bg-slate-950/90 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/40 tracking-wider flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    LOCATION ENTERED // {arrivalDistrict.tacticalCode || 'SEC-04'}
-                  </span>
-                  <button
-                    onClick={dismissDistrictArrival}
-                    className="bg-slate-950/80 hover:bg-slate-800 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-700 transition-colors"
-                  >
-                    [✕]
-                  </button>
-                </div>
-
-                {/* Title & Coordinates on Banner */}
-                <div className="absolute bottom-2 inset-x-3 flex items-end justify-between gap-2">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black font-display text-white tracking-tight leading-none drop-shadow-lg">
-                      {language === 'en' ? arrivalDistrict.nameEn : arrivalDistrict.nameBn}
-                    </h2>
-                    <p className="text-xs font-bold text-amber-300 drop-shadow mt-0.5">
-                      {language === 'en' ? arrivalDistrict.nameBn : arrivalDistrict.nameEn} • {language === 'en' ? arrivalDistrict.vibeEn : arrivalDistrict.vibeBn}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] font-mono font-bold text-cyan-300 block bg-slate-950/85 px-2 py-0.5 rounded border border-cyan-500/40">
-                      {arrivalDistrict.coordinates || '23°43\'N 90°24\'E'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Telemetry strip */}
-              <div className="bg-slate-950/95 px-3 py-1.5 flex items-center justify-between text-[11px] border-t border-slate-800">
-                <div className="flex items-center gap-1.5 truncate pr-2">
-                  <span className="text-[10px] font-mono font-extrabold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                    {arrivalDistrict.threatLevel || 'HEAT 3'}
-                  </span>
-                  <span className="text-slate-300 text-[10px] truncate">
-                    {arrivalDistrict.landmarksEn ? arrivalDistrict.landmarksEn[0] : 'Landmark Area'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setGamePhase('paused', 'map')}
-                  className="text-[10px] font-mono font-bold text-amber-400 hover:underline flex items-center gap-1 shrink-0"
-                >
-                  <MapIcon className="w-3 h-3" /> View Map [M]
-                </button>
-              </div>
-            </div>
-          )}
 
         {/* TOP-CENTER: Celebratory Banner Alert */}
         {bannerAlert && (
@@ -407,7 +256,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             )}
           </div>
         )}
-        </div>
 
         {/* TOP-RIGHT: Realistic Arif Portrait, Wallet (Taka ৳), Wanted Stars, Health/Armor/Stamina */}
         <div className="pointer-events-auto flex flex-col items-end gap-2">
@@ -541,124 +389,73 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </span>
             </div>
 
-            {/* Tactical Dhaka Armory Arsenal & Ammo Card */}
-            <div className="pt-2 border-t border-slate-800/90 flex flex-col gap-1.5">
+            {/* Bangladeshi Local Arms & Multiple Firearms Arsenal Selector */}
+            <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/90 text-[11px]">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-base select-none">{activeWeapon.icon}</span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-black text-amber-300 truncate font-mono tracking-tight leading-none">
-                      {language === 'en' ? activeWeapon.nameEn : activeWeapon.nameBn}
-                    </p>
-                    <span className="text-[9px] font-bold tracking-widest uppercase text-emerald-400">
-                      {activeWeapon.isGun
-                        ? activeWeapon.category === 'shotgun'
-                          ? 'DESHI SHOTGUN'
-                          : activeWeapon.category === 'rifle'
-                          ? 'ASSAULT RIFLE'
-                          : 'LOCAL PISTOL'
-                        : 'MELEE WEAPON'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Ammo Display / Reload Action */}
-                {activeWeapon.isGun ? (
-                  <div className="flex items-center gap-1.5">
-                    {isReloading ? (
-                      <span className="text-[10px] font-black text-amber-400 animate-pulse flex items-center gap-1">
-                        <RotateCcw className="w-3 h-3 animate-spin" />
-                        RELOAD
-                      </span>
-                    ) : (
-                      <div className="flex items-baseline gap-1 bg-slate-900/90 px-2 py-0.5 rounded border border-amber-500/30">
-                        <span className="text-sm font-black font-mono text-white">
-                          {activeAmmo.clip}
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-400">
-                          / {activeAmmo.reserve}
-                        </span>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => reloadActiveWeapon()}
-                      disabled={
-                        isReloading ||
-                        activeAmmo.clip >= activeWeapon.clipSize ||
-                        activeAmmo.reserve <= 0
-                      }
-                      className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white"
-                      title="Reload [R]"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
-                    DMG {activeWeapon.damage}
-                  </span>
-                )}
+                <span className="text-amber-400 font-bold flex items-center gap-1 text-[10px] uppercase tracking-wider">
+                  <Swords className="w-3.5 h-3.5 text-amber-400" />
+                  {language === 'en'
+                    ? 'Local Arms & Guns [1-0 / Q]:'
+                    : 'দেশীয় অস্ত্র ও বন্দুক [1-0 / Q]:'}
+                </span>
+                <button
+                  onClick={() => onTriggerAction('attack')}
+                  className="bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded font-black text-[10px] shadow flex items-center gap-1 active:scale-95"
+                >
+                  <Crosshair className="w-3 h-3" />
+                  {language === 'en' ? 'FIRE / SLASH [X]' : 'গুলি / কোপ [X]'}
+                </button>
               </div>
 
-              {/* Weapon Carousel & Quick Hotkeys Strip */}
-              <div className="flex items-center justify-between gap-1 pt-1">
-                <button
-                  onClick={() => cycleWeapon(-1)}
-                  className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-800 transition-colors"
-                  title="Previous Weapon [Q]"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
+              {/* Row 1: Bangladeshi Local Arms (দেশীয় অস্ত্র) */}
+              <div className="flex flex-wrap items-center gap-1">
+                {(
+                  [
+                    { id: 'fists', en: '1:Fist', bn: '১:ঘুষি' },
+                    { id: 'ramda', en: '2:Ramda', bn: '২:রামদা' },
+                    { id: 'chapati_cleaver', en: '3:Chapati', bn: '৩:চাপাতি' },
+                    { id: 'bamboo_lathi', en: '4:Lathi', bn: '৪:লাঠি' },
+                    { id: 'cricket_bat', en: '5:Bat', bn: '৫:ব্যাট' },
+                    { id: 'stun_baton', en: '6:Stun', bn: '৬:স্টান' },
+                  ] as Array<{ id: ToolWeaponId; en: string; bn: string }>
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => equipTool(item.id)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                      equippedToolId === item.id
+                        ? 'bg-amber-500 text-slate-950 shadow'
+                        : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {language === 'en' ? item.en : item.bn}
+                  </button>
+                ))}
+              </div>
 
-                <div className="flex items-center gap-1 overflow-x-auto max-w-[210px] no-scrollbar py-0.5">
-                  {tools
-                    .filter((t) => t.unlocked)
-                    .map((t, idx) => (
-                      <button
-                        key={t.id}
-                        onClick={() => equipTool(t.id as ToolWeaponId)}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold whitespace-nowrap transition-all border ${
-                          equippedToolId === t.id
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_8px_#f59e0b]'
-                            : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border-slate-800'
-                        }`}
-                        title={`${t.nameEn} [${idx + 1}]`}
-                      >
-                        <span className="mr-0.5 opacity-60">
-                          {idx === 9 ? '0' : idx + 1}:
-                        </span>
-                        {t.id === 'fists'
-                          ? 'Fist'
-                          : t.id === 'ramda'
-                          ? 'Ramda'
-                          : t.id === 'chapati'
-                          ? 'Chapati'
-                          : t.id === 'pipe_gun'
-                          ? 'Pipe'
-                          : t.id === 'shutter_pistol'
-                          ? 'Shutter'
-                          : t.id === 'tt_pistol'
-                          ? 'TT-33'
-                          : t.id === 'katta'
-                          ? 'Katta'
-                          : t.id === 'type56_ak'
-                          ? 'AK-47'
-                          : t.id === 'cricket_bat'
-                          ? 'Bat'
-                          : t.id === 'bamboo_lathi'
-                          ? 'Lathi'
-                          : 'Stun'}
-                      </button>
-                    ))}
-                </div>
-
-                <button
-                  onClick={() => cycleWeapon(1)}
-                  className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-800 transition-colors"
-                  title="Next Weapon [X / Wheel]"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+              {/* Row 2: Multiple Guns / Firearms (আগ্নেয়াস্ত্র) */}
+              <div className="flex flex-wrap items-center gap-1">
+                {(
+                  [
+                    { id: 'deshi_pipegun', en: '7:PipeGun', bn: '৭:পাইপগান' },
+                    { id: 'pistol_9mm', en: '8:9mm', bn: '৮:পিস্তল' },
+                    { id: 'bd08_rifle', en: '9:BD-08', bn: '৯:রাইফেল' },
+                    { id: 'police_shotgun', en: '0:Shotgun', bn: '০:শটগান' },
+                    { id: 'smg_uzi', en: '-:SMG', bn: '-:এসএমজি' },
+                  ] as Array<{ id: ToolWeaponId; en: string; bn: string }>
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => equipTool(item.id)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                      equippedToolId === item.id
+                        ? 'bg-red-500 text-white shadow'
+                        : 'bg-slate-900 text-amber-300 border border-amber-500/30 hover:bg-slate-800'
+                    }`}
+                  >
+                    {language === 'en' ? item.en : item.bn}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -696,6 +493,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
       </div>
+
+      {/* CENTER-SCREEN AIMING RETICLE WHEN HOLDING A FIREARM ON FOOT */}
+      {!inVehicleId &&
+        tools.find((t) => t.id === equippedToolId)?.isFirearm && (
+          <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-10">
+            <div className="relative w-8 h-8 flex items-center justify-center opacity-85">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
+              <div className="absolute w-6 h-6 rounded-full border border-amber-400/70" />
+            </div>
+          </div>
+        )}
 
       {/* CENTER-SCREEN: Story Ending Unlocked Banner */}
       {storyEndingEn && (
@@ -752,135 +560,37 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* BOTTOM BAR */}
       <div className="flex items-end justify-between gap-3 w-full">
-        {/* BOTTOM-LEFT: Interactive Radar Minimap & Tactical Movement Controls */}
-        <div className="pointer-events-auto flex items-end gap-2.5">
-          <div className="flex flex-col gap-2">
-            <MinimapHUD />
-            <div className="hidden md:flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] text-slate-300">
-              <span>
-                <strong className="text-amber-400">WASD</strong> Move/Drive
-              </span>
-              <span>•</span>
-              <span>
-                <strong className="text-amber-400">Shift</strong> Run
-              </span>
-              <span>•</span>
-              <span>
-                <strong className="text-amber-400">Space</strong> Jump
-              </span>
-              <span>•</span>
-              <span>
-                <strong className="text-amber-400">F/E</strong> Enter/Use
-              </span>
-            </div>
-          </div>
-
-          {/* On-screen Tactical Virtual Movement D-Pad (works seamlessly on mobile touch and mouse click) */}
-          <div className="flex items-center gap-1.5 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-2xl">
-            <div className="relative w-28 h-28 bg-slate-900/90 rounded-xl border border-slate-750 flex items-center justify-center select-none shadow-inner">
-              {/* UP / FORWARD */}
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  handlePadPress(1, 0);
-                }}
-                onPointerUp={handlePadRelease}
-                onPointerLeave={handlePadRelease}
-                className={`absolute top-1 left-1/2 -translate-x-1/2 w-8 h-8 rounded-lg flex flex-col items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
-                  virtualInput.forward > 0
-                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title="Move Forward [W / Up]"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
-
-              {/* DOWN / BACKWARD */}
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  handlePadPress(-1, 0);
-                }}
-                onPointerUp={handlePadRelease}
-                onPointerLeave={handlePadRelease}
-                className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-8 rounded-lg flex flex-col items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
-                  virtualInput.forward < 0
-                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title="Move Backward [S / Down]"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-
-              {/* LEFT / STEER LEFT */}
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  handlePadPress(0, -1);
-                }}
-                onPointerUp={handlePadRelease}
-                onPointerLeave={handlePadRelease}
-                className={`absolute left-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
-                  virtualInput.right < 0
-                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title="Move Left / Steer Left [A / Left]"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {/* RIGHT / STEER RIGHT */}
-              <button
-                type="button"
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  handlePadPress(0, 1);
-                }}
-                onPointerUp={handlePadRelease}
-                onPointerLeave={handlePadRelease}
-                className={`absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center border font-mono font-bold transition-all active:scale-95 ${
-                  virtualInput.right > 0
-                    ? 'bg-emerald-500 border-emerald-300 text-slate-950 shadow-[0_0_12px_#10b981]'
-                    : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-slate-700'
-                }`}
-                title="Move Right / Steer Right [D / Right]"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              {/* SPRINT RUN TOGGLE */}
-              <button
-                type="button"
-                onClick={toggleSprint}
-                className={`w-7 h-7 rounded-full flex flex-col items-center justify-center border text-[7px] font-mono font-black transition-all active:scale-90 ${
-                  virtualInput.sprint
-                    ? 'bg-cyan-500 border-cyan-300 text-slate-950 shadow-[0_0_10px_#06b6d4] animate-pulse'
-                    : 'bg-slate-850 border-slate-700 text-slate-400 hover:text-slate-200'
-                }`}
-                title="Toggle Sprint Run [Shift]"
-              >
-                <Zap className="w-3 h-3" />
-              </button>
-            </div>
-
-            {/* JUMP BUTTON */}
-            <button
-              type="button"
-              onClick={() => onTriggerAction('jump')}
-              className="w-9 h-28 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 hover:text-amber-400 font-mono font-bold text-[9px] flex flex-col items-center justify-center gap-1 shadow transition-all active:scale-95"
-              title="Jump [Space]"
-            >
-              <span>▲</span>
-              <span className="[writing-mode:vertical-rl] tracking-wider text-[8px] text-amber-300">
-                {language === 'en' ? 'JUMP' : 'লাফ'}
-              </span>
-            </button>
+        {/* BOTTOM-LEFT: Interactive Radar Minimap */}
+        <div className="pointer-events-auto flex flex-col gap-2">
+          <MinimapHUD />
+          <div className="hidden md:flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-[11px] text-slate-300">
+            <span>
+              <strong className="text-amber-400">WASD</strong> Move/Drive
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">F/E</strong> Enter Ride/Shop
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">H</strong> Horn/Bell
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">T</strong> Talk
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">1-0/Q</strong> Arms & Guns
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">Click/X/J</strong> Shoot/Slash
+            </span>
+            <span>•</span>
+            <span>
+              <strong className="text-amber-400">M</strong> Map
+            </span>
           </div>
         </div>
 
@@ -989,36 +699,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 </div>
               </div>
 
-              {/* Nitro / Turbo Boost Bar */}
-              <div className="flex items-center gap-2 mb-2">
-                <Flame
-                  className={`w-3.5 h-3.5 shrink-0 ${
-                    isNitroActive
-                      ? 'text-cyan-400 animate-pulse'
-                      : 'text-slate-400'
-                  }`}
-                />
-                <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      isNitroActive
-                        ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]'
-                        : 'bg-cyan-600'
-                    }`}
-                    style={{
-                      width: `${Math.max(0, Math.min(100, stamina))}%`,
-                    }}
-                  />
-                </div>
-                <span
-                  className={`text-[9px] font-mono font-bold shrink-0 ${
-                    isNitroActive ? 'text-cyan-300' : 'text-slate-400'
-                  }`}
-                >
-                  {isNitroActive ? 'NITRO!' : '[SHIFT] NITRO'}
-                </span>
-              </div>
-
               <button
                 onClick={() => {
                   const list: RadioStationId[] = [
@@ -1070,57 +750,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             {!inVehicleId && (
               <button
                 onClick={() => onTriggerAction('attack')}
-                className={`text-white text-xs font-black px-3.5 py-2 rounded-lg shadow-lg flex items-center gap-1.5 transition-transform active:scale-95 border ${
-                  activeWeapon.isGun
-                    ? 'bg-rose-600 hover:bg-rose-500 border-rose-400 shadow-[0_0_12px_rgba(225,29,72,0.4)]'
-                    : 'bg-amber-600 hover:bg-amber-500 border-amber-400'
-                }`}
-                title={activeWeapon.isGun ? 'Fire Weapon [J / Left-Click]' : 'Melee Strike [J / Left-Click]'}
+                className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold px-2.5 py-2 rounded-lg shadow transition-transform active:scale-95"
               >
-                {activeWeapon.isGun ? (
-                  <>
-                    <Crosshair className="w-3.5 h-3.5 animate-pulse" />
-                    {language === 'en' ? 'FIRE [J]' : 'গুলি [J]'}
-                  </>
-                ) : (
-                  <>
-                    <Swords className="w-3.5 h-3.5" />
-                    {language === 'en' ? 'STRIKE [J]' : 'আঘাত [J]'}
-                  </>
-                )}
-              </button>
-            )}
-
-            {!inVehicleId && activeWeapon.isGun && (
-              <button
-                onClick={() => onTriggerAction('aim')}
-                className={`text-xs font-black px-2.5 py-2 rounded-lg border shadow flex items-center gap-1 transition-transform active:scale-95 ${
-                  isAimingDownSights
-                    ? 'bg-cyan-600 border-cyan-400 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)]'
-                    : 'bg-slate-800 border-slate-750 text-slate-300'
-                }`}
-                title="Aim Down Sights [Right-Click / Z]"
-              >
-                <Target className="w-3.5 h-3.5" />
-                {language === 'en' ? 'AIM [Z]' : 'লক্ষ্য [Z]'}
-              </button>
-            )}
-
-            {!inVehicleId && activeWeapon.isGun && (
-              <button
-                onClick={() => reloadActiveWeapon()}
-                disabled={
-                  isReloading ||
-                  activeAmmo.clip >= activeWeapon.clipSize ||
-                  activeAmmo.reserve <= 0
-                }
-                className="bg-slate-850 hover:bg-slate-750 disabled:opacity-30 text-amber-300 text-xs font-bold px-2.5 py-2 rounded-lg border border-slate-700 flex items-center gap-1"
-                title="Reload [R]"
-              >
-                <RotateCcw
-                  className={`w-3.5 h-3.5 ${isReloading ? 'animate-spin' : ''}`}
-                />
-                {language === 'en' ? 'Reload [R]' : 'রিলোড [R]'}
+                {language === 'en' ? 'Strike [J]' : 'আঘাত [J]'}
               </button>
             )}
 
@@ -1134,46 +766,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Precision ADS Holographic Sight Reticle when Aiming Down Sights */}
-      {isAimingDownSights && activeWeapon.isGun && !inVehicleId && (
-        <div className="pointer-events-none fixed inset-0 flex items-center justify-center z-20">
-          <div className="relative w-28 h-28 flex items-center justify-center">
-            {/* Holographic Compass Reticle Outer Ring */}
-            <div className="absolute inset-0 rounded-full border-2 border-cyan-400/70 shadow-[0_0_20px_rgba(6,182,212,0.45)] animate-pulse" />
-            <div className="absolute inset-2.5 rounded-full border border-dashed border-emerald-400/50" />
-            {/* Precision Crosshair Wires */}
-            <div className="absolute w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
-            <div className="absolute h-full w-[1px] bg-gradient-to-b from-transparent via-cyan-400 to-transparent" />
-            {/* Mil-dot Range Ticks */}
-            <div className="absolute top-3 w-1 h-1 rounded-full bg-cyan-400/70" />
-            <div className="absolute bottom-3 w-1 h-1 rounded-full bg-cyan-400/70" />
-            <div className="absolute left-3 w-1 h-1 rounded-full bg-cyan-400/70" />
-            <div className="absolute right-3 w-1 h-1 rounded-full bg-cyan-400/70" />
-            {/* Center Red Optic Bead */}
-            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_12px_#f43f5e] z-10" />
-            {/* Tactical Status Readout */}
-            <div className="absolute -bottom-8 bg-slate-950/90 border border-cyan-400/60 px-2 py-0.5 rounded text-[8px] font-mono text-cyan-300 tracking-widest whitespace-nowrap">
-              ADS TACTICAL SIGHT // 2.4X // LOCKED
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hip-fire Dynamic Screen-Center Tactical Crosshair */}
-      {!isAimingDownSights && activeWeapon.isGun && !inVehicleId && (
-        <div className="pointer-events-none fixed inset-0 flex items-center justify-center z-10">
-          <div className="relative w-8 h-8 flex items-center justify-center">
-            {/* Center Reticle Pip */}
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]" />
-            {/* Compass Marks */}
-            <div className="absolute top-0 w-0.5 h-2 bg-emerald-400/80 shadow-[0_0_4px_#34d399]" />
-            <div className="absolute bottom-0 w-0.5 h-2 bg-emerald-400/80 shadow-[0_0_4px_#34d399]" />
-            <div className="absolute left-0 h-0.5 w-2 bg-emerald-400/80 shadow-[0_0_4px_#34d399]" />
-            <div className="absolute right-0 h-0.5 w-2 bg-emerald-400/80 shadow-[0_0_4px_#34d399]" />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

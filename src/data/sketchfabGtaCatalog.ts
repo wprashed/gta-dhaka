@@ -42,7 +42,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-6a0e3b97a8a54f2a909d351322916293',
     embedUrl: 'https://sketchfab.com/models/6a0e3b97a8a54f2a909d351322916293/embed',
-    thumbnail: '/sketchfab/gta_model_0.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_0.jpg'),
     category: 'building',
     spawnActionLabelEn: 'Spawn Modular Complex',
     spawnActionLabelBn: 'মডুলার ভবন স্থাপন করুন',
@@ -59,7 +59,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-32b8b82bb1e9489c993799c91967a916',
     embedUrl: 'https://sketchfab.com/models/32b8b82bb1e9489c993799c91967a916/embed',
-    thumbnail: '/sketchfab/gta_model_1.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_1.jpg'),
     category: 'prop',
     spawnActionLabelEn: 'Spawn Urban Street Props',
     spawnActionLabelBn: 'রাস্তার প্রপস স্থাপন করুন',
@@ -76,7 +76,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-31c1ede1fcbd49c7af85825905446ec5',
     embedUrl: 'https://sketchfab.com/models/31c1ede1fcbd49c7af85825905446ec5/embed',
-    thumbnail: '/sketchfab/gta_model_2.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_2.jpg'),
     category: 'building',
     spawnActionLabelEn: 'Spawn High-Rise Tower',
     spawnActionLabelBn: 'বহুতল ভবন স্থাপন করুন',
@@ -93,7 +93,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-d3d7c14c576547e8912df310eb1f0476',
     embedUrl: 'https://sketchfab.com/models/d3d7c14c576547e8912df310eb1f0476/embed',
-    thumbnail: '/sketchfab/gta_model_4.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_4.jpg'),
     category: 'building',
     spawnActionLabelEn: 'Spawn Asian Apartment Block',
     spawnActionLabelBn: 'এশিয়ান অ্যাপার্টমেন্ট স্থাপন',
@@ -110,7 +110,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-a9ce7f1cd9614376b39a96a1698d9109',
     embedUrl: 'https://sketchfab.com/models/a9ce7f1cd9614376b39a96a1698d9109/embed',
-    thumbnail: '/sketchfab/gta_model_5.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_5.jpg'),
     category: 'prop',
     spawnActionLabelEn: 'Drop Cash Pallet (+৳2,500)',
     spawnActionLabelBn: 'টাকার বান্ডিল ড্রপ (+৳২,৫০০)',
@@ -127,7 +127,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-2f603ad8d5c640f7b9794f6916f9fbdd',
     embedUrl: 'https://sketchfab.com/models/2f603ad8d5c640f7b9794f6916f9fbdd/embed',
-    thumbnail: '/sketchfab/gta_model_8.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_8.jpg'),
     category: 'building',
     spawnActionLabelEn: 'Spawn Asian Street Shopfront',
     spawnActionLabelBn: 'দোকান স্থাপন করুন',
@@ -144,7 +144,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-20d1a51fbfa94373900e29de74a0f9ee',
     embedUrl: 'https://sketchfab.com/models/20d1a51fbfa94373900e29de74a0f9ee/embed',
-    thumbnail: '/sketchfab/gta_model_10.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_10.jpg'),
     category: 'prop',
     spawnActionLabelEn: 'Spawn Highway Billboard',
     spawnActionLabelBn: 'হাইওয়ে বিলবোর্ড স্থাপন',
@@ -161,7 +161,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-82bd37c5065040098fb0b86e07fcb959',
     embedUrl: 'https://sketchfab.com/models/82bd37c5065040098fb0b86e07fcb959/embed',
-    thumbnail: '/sketchfab/gta_model_11.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_11.jpg'),
     category: 'vehicle',
     spawnActionLabelEn: 'Drive 2022 Toyota Hilux Pickup',
     spawnActionLabelBn: 'টয়োটা হাইলাক্স পিকআপ চালান',
@@ -178,7 +178,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-514ae7c16ba24d7db82bf05d0974c7e9',
     embedUrl: 'https://sketchfab.com/models/514ae7c16ba24d7db82bf05d0974c7e9/embed',
-    thumbnail: '/sketchfab/gta_model_12.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_12.jpg'),
     category: 'character',
     spawnActionLabelEn: 'Spawn Rigged 3D Partner Ally',
     spawnActionLabelBn: 'থ্রিডি সহযোগী চরিত্র আনুন',
@@ -195,7 +195,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-83351a4cd72346ccad6792dfde46d22e',
     embedUrl: 'https://sketchfab.com/models/83351a4cd72346ccad6792dfde46d22e/embed',
-    thumbnail: '/sketchfab/gta_model_13.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_13.jpg'),
     category: 'prop',
     spawnActionLabelEn: 'Spawn DMP Crime Scene Zone',
     spawnActionLabelBn: 'ক্রাইম সিন ব্যারিকেড স্থাপন',
@@ -212,7 +212,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-9490e77925934d199235030b1a4d32c9',
     embedUrl: 'https://sketchfab.com/models/9490e77925934d199235030b1a4d32c9/embed',
-    thumbnail: '/sketchfab/gta_model_16.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_16.jpg'),
     category: 'prop',
     spawnActionLabelEn: 'Drop Syndicate Ledger Briefcase',
     spawnActionLabelBn: 'সিন্ডিকেট ব্রিফকেস ড্রপ করুন',
@@ -229,7 +229,7 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
     isDownloadable: true,
     viewerUrl: 'https://sketchfab.com/3d-models/none-5ecf9daf4ab24784843daece45dcd58c',
     embedUrl: 'https://sketchfab.com/models/5ecf9daf4ab24784843daece45dcd58c/embed',
-    thumbnail: '/sketchfab/gta_model_17.jpg',
+    thumbnail: resolveAssetUrl('/sketchfab/gta_model_17.jpg'),
     category: 'building',
     spawnActionLabelEn: 'Spawn Asian Commercial Plaza',
     spawnActionLabelBn: 'বাণিজ্যিক প্লাজা স্থাপন করুন',
@@ -237,77 +237,55 @@ export const SKETCHFAB_GTA_CATALOG: SketchfabGtaAsset[] = [
   },
 ];
 
-// Cinematic open-world Dhaka concept art environments from stitch_dhaka_city_game_ui
+// Actual real-world photographs of Dhaka districts (fetched via image_search)
 export const DHAKA_DISTRICT_PHOTOS: Record<DistrictId, string> = {
-  farmgate: '/dhaka_locations/kawran_bazar.png',
-  old_dhaka: '/dhaka_locations/chawkbazar.png',
-  sadarghat: '/dhaka_locations/sadarghat.png',
-  dhanmondi: '/dhaka_locations/curzon_hall.png',
-  motijheel: '/dhaka_locations/motijheel.png',
-  hatirjheel: '/dhaka_locations/hatirjheel.png',
-  gulshan: '/dhaka_locations/gulshan_2.png',
-  banani: '/dhaka_locations/tejgaon.png',
-  uttara: '/dhaka_locations/gabtoli.png',
-  airport_road: '/dhaka_locations/dhaka_rooftop_twilight.png',
+  farmgate: resolveAssetUrl('/dhaka_photos/farmgate_real.jpg'),
+  old_dhaka: resolveAssetUrl('/dhaka_photos/old_dhaka_real.jpg'),
+  sadarghat: resolveAssetUrl('/dhaka_photos/sadarghat_real.jpg'),
+  dhanmondi: resolveAssetUrl('/dhaka_photos/dhanmondi_real.jpg'),
+  motijheel: resolveAssetUrl('/dhaka_photos/motijheel_real.jpg'),
+  hatirjheel: resolveAssetUrl('/dhaka_photos/hatirjheel_real.jpg'),
+  gulshan: resolveAssetUrl('/dhaka_photos/gulshan_real.jpg'),
+  banani: resolveAssetUrl('/dhaka_photos/banani_real.jpg'),
+  uttara: resolveAssetUrl('/dhaka_photos/uttara_real.jpg'),
+  airport_road: resolveAssetUrl('/dhaka_photos/airport_real.jpg'),
 };
 
-// Tactical vehicle inspect views and concept renders
+// Actual real-world photographs of Dhaka vehicles & 3D assets
 export const DHAKA_VEHICLE_PHOTOS: Record<VehicleType, string> = {
-  cng: '/dhaka_locations/tuned_cng_auto_rickshaw.png',
-  rickshaw: '/dhaka_locations/shakhari_bazar.png',
-  bus: '/dhaka_locations/gabtoli.png',
-  motorcycle: '/dhaka_locations/midnight_street_rally.png',
-  car: '/dhaka_locations/gulshan_2.png',
-  pickup: '/dhaka_locations/kawran_bazar.png',
-  police: '/dhaka_locations/dmp_riot_interceptor.png',
+  cng: resolveAssetUrl('/dhaka_photos/cng_real.jpg'),
+  rickshaw: resolveAssetUrl('/dhaka_photos/old_dhaka_real.jpg'),
+  bus: resolveAssetUrl('/dhaka_photos/bus_real.jpg'),
+  motorcycle: resolveAssetUrl('/dhaka_photos/motorcycle_real.jpg'),
+  car: resolveAssetUrl('/dhaka_photos/car_real.jpg'),
+  pickup: resolveAssetUrl('/sketchfab/gta_model_11.jpg'),
+  police: resolveAssetUrl('/dhaka_photos/police_real.jpg'),
 };
 
-// High-fidelity environmental concept art for Points of Interest
+// Actual real-world photographs for Dhaka Points of Interest
 export const DHAKA_POI_PHOTOS: Partial<Record<POIType, string>> = {
-  fuchka_stall: '/dhaka_photos/fuchka_real.jpg',
-  tea_stall: '/dhaka_locations/kawran_bazar.png',
-  biriyani_shop: '/dhaka_locations/chawkbazar.png',
-  ferry_ghat: '/dhaka_locations/sadarghat.png',
-  garage: '/dhaka_locations/tuned_cng_auto_rickshaw.png',
-  clothing_shop: '/dhaka_locations/gulshan_2.png',
-  safe_house: '/dhaka_locations/dhaka_rooftop_twilight.png',
-  mosque: '/dhaka_locations/lalbagh_fort.png',
-  police_box: '/dhaka_locations/dmp_riot_interceptor.png',
+  fuchka_stall: resolveAssetUrl('/dhaka_photos/fuchka_real.jpg'),
+  tea_stall: resolveAssetUrl('/dhaka_photos/tea_stall_real.jpg'),
+  biriyani_shop: resolveAssetUrl('/dhaka_photos/biriyani_real.jpg'),
+  ferry_ghat: resolveAssetUrl('/dhaka_photos/sadarghat_real.jpg'),
+  garage: resolveAssetUrl('/dhaka_photos/cng_real.jpg'),
+  clothing_shop: resolveAssetUrl('/dhaka_photos/banani_real.jpg'),
+  safe_house: resolveAssetUrl('/dhaka_photos/dhanmondi_real.jpg'),
+  mosque: resolveAssetUrl('/dhaka_photos/ahsan_manzil_real.jpg'),
+  police_box: resolveAssetUrl('/dhaka_photos/police_real.jpg'),
 };
 
 export const CHARACTER_PORTRAITS: Record<string, string> = {
-  arif: '/textures/arif_portrait.jpg',
-  nadia: '/textures/nadia_portrait.jpg',
-  kamal: '/textures/kamal_portrait.jpg',
-  sikder: '/textures/sikder_portrait.jpg',
-  rickshaw_puller: '/dhaka_photos/rickshaw_puller_real.jpg',
-  police_officer: '/dhaka_photos/police_real.jpg',
-  tea_seller: '/dhaka_photos/tea_stall_real.jpg',
-  street_vendor: '/dhaka_photos/fuchka_real.jpg',
-  default_npc: '/sketchfab/gta_model_12.jpg',
+  arif: resolveAssetUrl('/textures/arif_portrait.jpg'),
+  nadia: resolveAssetUrl('/textures/nadia_portrait.jpg'),
+  kamal: resolveAssetUrl('/textures/kamal_portrait.jpg'),
+  sikder: resolveAssetUrl('/textures/sikder_portrait.jpg'),
+  rickshaw_puller: resolveAssetUrl('/dhaka_photos/rickshaw_puller_real.jpg'),
+  police_officer: resolveAssetUrl('/dhaka_photos/police_real.jpg'),
+  tea_seller: resolveAssetUrl('/dhaka_photos/tea_stall_real.jpg'),
+  street_vendor: resolveAssetUrl('/dhaka_photos/fuchka_real.jpg'),
+  default_npc: resolveAssetUrl('/sketchfab/gta_model_12.jpg'),
 };
-
-SKETCHFAB_GTA_CATALOG.forEach((item) => {
-  item.thumbnail = resolveAssetUrl(item.thumbnail);
-});
-
-(Object.keys(DHAKA_DISTRICT_PHOTOS) as DistrictId[]).forEach((k) => {
-  DHAKA_DISTRICT_PHOTOS[k] = resolveAssetUrl(DHAKA_DISTRICT_PHOTOS[k]);
-});
-
-(Object.keys(DHAKA_VEHICLE_PHOTOS) as VehicleType[]).forEach((k) => {
-  DHAKA_VEHICLE_PHOTOS[k] = resolveAssetUrl(DHAKA_VEHICLE_PHOTOS[k]);
-});
-
-(Object.keys(DHAKA_POI_PHOTOS) as POIType[]).forEach((k) => {
-  if (DHAKA_POI_PHOTOS[k]) {
-    DHAKA_POI_PHOTOS[k] = resolveAssetUrl(DHAKA_POI_PHOTOS[k]!);
-  }
-});
-
-Object.keys(CHARACTER_PORTRAITS).forEach((k) => {
-  CHARACTER_PORTRAITS[k] = resolveAssetUrl(CHARACTER_PORTRAITS[k]);
-});
 
 export function getPortraitForSpeaker(speakerName: string): string {
   const lower = speakerName.toLowerCase();

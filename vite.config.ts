@@ -16,9 +16,14 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    port: 5173,
+    // Must NOT match the dev server port (5173): strictPort would make the
+    // preview fail to bind whenever the dev server is already running.
+    port: 4173,
     strictPort: true,
     allowedHosts: true,
     cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
   },
 });

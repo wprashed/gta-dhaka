@@ -1,9 +1,18 @@
-# DHAKA CITY: MONSOON UNDERWORLD (ঢাকা সিটি) — 3D Open-World Action Game
+# DHAKA CITY (ঢাকা সিটি) — 3D Open-World Action Game
 
 > **🎮 Live Playable Game:** [https://wprashed.github.io/gta-dhaka/](https://wprashed.github.io/gta-dhaka/)  
 > **📦 GitHub Repository:** [https://github.com/wprashed/gta-dhaka](https://github.com/wprashed/gta-dhaka)
 
 An original, real-time 3D browser-based open-world action-adventure game set in a fictionalized, modern-day **Dhaka, Bangladesh** built with Three.js, React, TypeScript, Tailwind CSS, and WebGL.
+
+---
+
+## 📸 In-Game Screenshots
+
+| 3D Character Models & Urban Dhaka | Realistic 3D Vehicles & Cockpits |
+| :---: | :---: |
+| ![3D Character Model](shots/character.png) | ![Ferrari Sports Car](shots/car_ferrari.png) |
+| ![Dhaka City Streets](shots/city_street.png) | ![Dynamic Night Rain](shots/night_rain.png) |
 
 ---
 

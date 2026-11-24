@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { PauseTab, useGameStore } from '../store/useGameStore';
 import {
-  DHAKA_GAME_LOCATIONS,
   DISTRICTS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
@@ -20,23 +19,17 @@ import {
   Car,
   CheckCircle2,
   Compass,
-  Crosshair,
   ExternalLink,
-  Flame,
   Gamepad2,
   Heart,
   Home,
   Map as MapIcon,
-  MapPin,
   Navigation,
   Play,
   Save,
-  Search,
   Settings,
   Shield,
   ShoppingBag,
-  Sparkles,
-  Swords,
   Upload,
   User,
   ZoomIn,
@@ -70,7 +63,6 @@ export const PauseMenuModal: React.FC = () => {
     equipTool,
     customWaypoint,
     setCustomWaypoint,
-    discoveredLocations,
     requestSpawnVehicle,
     requestSpawnSketchfabAsset,
     requestCustomGlbUrl,
@@ -89,9 +81,6 @@ export const PauseMenuModal: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictId | null>(
     null
   );
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('ahsan_manzil');
-  const [locationSearch, setLocationSearch] = useState<string>('');
-  const [locationMode, setLocationMode] = useState<'locations' | 'districts'>('locations');
   const [sketchfabFilter, setSketchfabFilter] = useState<
     'all' | 'building' | 'vehicle' | 'character' | 'prop'
   >('all');
@@ -102,7 +91,7 @@ export const PauseMenuModal: React.FC = () => {
     labelBn: string;
     icon: React.ElementType;
   }> = [
-    { id: 'map', labelEn: 'Locations & Map', labelBn: 'লোকেশন ও ম্যাপ', icon: MapIcon },
+    { id: 'map', labelEn: 'Dhaka Map', labelBn: 'ঢাকার ম্যাপ', icon: MapIcon },
     {
       id: 'missions',
       labelEn: 'Missions',
@@ -240,591 +229,295 @@ export const PauseMenuModal: React.FC = () => {
 
       {/* MAIN CONTENT BODY */}
       <div className="max-w-6xl w-full mx-auto flex-1 overflow-y-auto pt-4">
-        {/* TAB 1: DHAKA GAME LOCATIONS, SKINS & FAST TRAVEL */}
+        {/* TAB 1: INTERACTIVE DHAKA GPS CITY MAP */}
         {pauseTab === 'map' && (
-          <div className="flex flex-col gap-4 h-full">
-            {/* Top Tactical Selector Strip */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-lg">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setLocationMode('locations')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
-                    locationMode === 'locations'
-                      ? 'bg-emerald-500 text-slate-950 glow-cng'
-                      : 'bg-slate-800 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {language === 'en' ? '16 Iconic Locations (Skins)' : '১৬টি বিশেষ স্থান ও আর্ট'}
-                </button>
-
-                <button
-                  onClick={() => setLocationMode('districts')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
-                    locationMode === 'districts'
-                      ? 'bg-amber-400 text-slate-950 glow-amber'
-                      : 'bg-slate-800 text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  {language === 'en' ? '10 Map Districts' : '১০টি প্রশাসনিক এলাকা'}
-                </button>
-              </div>
-
-              {/* Search / Filter input */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
-                    placeholder={
-                      language === 'en'
-                        ? 'Search location (Ahsan Manzil, Chawkbazar...)'
-                        : 'লোকেশন খুঁজুন (আহসান মঞ্জিল, চকবাজার...)'
-                    }
-                    className="w-full bg-slate-950/80 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-400"
-                  />
-                  {locationSearch && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+            <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col relative overflow-hidden min-h-[420px]">
+              <div className="flex items-center justify-between mb-2 z-10">
+                <div>
+                  <h3 className="text-sm font-extrabold text-amber-400 uppercase tracking-wider">
+                    {language === 'en'
+                      ? 'Interactive Dhaka Metropolitan GPS Map'
+                      : 'ঢাকা মেট্রোপলিটন ইন্টারেক্টিভ জিপিএস ম্যাপ'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {language === 'en'
+                      ? 'Click any District or Point of Interest to set a GPS route or Fast-Travel by CNG.'
+                      : 'যেকোনো এলাকা বা স্থানে ক্লিক করে জিপিএস রুট সেট করুন অথবা দ্রুত ভ্রমণ করুন।'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setMapZoom((z) => Math.max(0.8, z - 0.2))}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setMapZoom((z) => Math.min(1.8, z + 0.2))}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  {customWaypoint && (
                     <button
-                      onClick={() => setLocationSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white"
+                      onClick={() => setCustomWaypoint(null)}
+                      className="text-[11px] bg-rose-900/80 text-rose-200 px-2.5 py-1 rounded-lg font-bold"
                     >
-                      ✕
+                      Clear Pin
                     </button>
                   )}
                 </div>
+              </div>
 
-                {customWaypoint && (
-                  <button
-                    onClick={() => setCustomWaypoint(null)}
-                    className="text-[11px] bg-rose-900/80 hover:bg-rose-800 text-rose-200 px-2.5 py-1.5 rounded-xl font-bold border border-rose-700 shrink-0"
+              <div className="flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center relative">
+                <svg
+                  viewBox="-400 -400 800 800"
+                  className="w-full h-full max-h-[480px] transition-transform duration-200"
+                  style={{ transform: `scale(${mapZoom})` }}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const nx =
+                      ((e.clientX - rect.left) / rect.width) * 800 - 400;
+                    const nz =
+                      ((e.clientY - rect.top) / rect.height) * 800 - 400;
+                    setCustomWaypoint({
+                      x: Math.round(nx),
+                      z: Math.round(nz),
+                      name: 'Custom GPS Pin',
+                    });
+                  }}
+                >
+                  {DISTRICTS.map((d) => {
+                    const w = d.bounds.maxX - d.bounds.minX;
+                    const h = d.bounds.maxZ - d.bounds.minZ;
+                    const isSelected = selectedDistrict === d.id;
+                    return (
+                      <g
+                        key={d.id}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setSelectedDistrict(d.id);
+                          setCustomWaypoint({
+                            x: d.center.x,
+                            z: d.center.z,
+                            name: d.nameEn,
+                          });
+                        }}
+                        className="cursor-pointer group"
+                      >
+                        <rect
+                          x={d.bounds.minX}
+                          y={d.bounds.minZ}
+                          width={w}
+                          height={h}
+                          fill={d.color}
+                          fillOpacity={isSelected ? 0.32 : 0.14}
+                          stroke={d.color}
+                          strokeWidth={isSelected ? 4 : 1.5}
+                          strokeOpacity={0.65}
+                        />
+                        <text
+                          x={d.center.x}
+                          y={d.center.z}
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="16"
+                          fontWeight="bold"
+                          className="pointer-events-none drop-shadow"
+                        >
+                          {language === 'en'
+                            ? d.nameEn.split(' ')[0]
+                            : d.nameBn.split(' ')[0]}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  <rect
+                    x={-390}
+                    y={300}
+                    width={780}
+                    height={95}
+                    fill="#0891b2"
+                    fillOpacity={0.75}
+                  />
+                  <text
+                    x={0}
+                    y={355}
+                    textAnchor="middle"
+                    fill="#bae6fd"
+                    fontSize="18"
+                    fontWeight="bold"
                   >
-                    {language === 'en' ? 'Clear Pin' : 'পিন মুছুন'}
-                  </button>
-                )}
+                    BURIGANGA RIVER • বুড়িগঙ্গা নদী
+                  </text>
+                  <rect
+                    x={170}
+                    y={-75}
+                    width={100}
+                    height={145}
+                    rx={14}
+                    fill="#0891b2"
+                    fillOpacity={0.6}
+                  />
+                  <rect
+                    x={-260}
+                    y={-35}
+                    width={80}
+                    height={120}
+                    rx={14}
+                    fill="#0891b2"
+                    fillOpacity={0.6}
+                  />
+
+                  {[-170, 0, 220].map((rx) => (
+                    <line
+                      key={`ns_${rx}`}
+                      x1={rx}
+                      y1={-370}
+                      x2={rx}
+                      y2={295}
+                      stroke="#475569"
+                      strokeWidth={11}
+                    />
+                  ))}
+                  {[-315, -175, 0, 175, 285].map((rz) => (
+                    <line
+                      key={`ew_${rz}`}
+                      x1={-370}
+                      y1={rz}
+                      x2={370}
+                      y2={rz}
+                      stroke="#475569"
+                      strokeWidth={11}
+                    />
+                  ))}
+
+                  {POINTS_OF_INTEREST.map((poi) => (
+                    <g
+                      key={poi.id}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setCustomWaypoint({
+                          x: poi.x,
+                          z: poi.z,
+                          name: poi.nameEn,
+                        });
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <circle
+                        cx={poi.x}
+                        cy={poi.z}
+                        r={9}
+                        fill="#f59e0b"
+                        stroke="#0f172a"
+                        strokeWidth={2.5}
+                      />
+                    </g>
+                  ))}
+
+                  {customWaypoint && (
+                    <g>
+                      <line
+                        x1={playerX}
+                        y1={playerZ}
+                        x2={customWaypoint.x}
+                        y2={customWaypoint.z}
+                        stroke="#ec4899"
+                        strokeWidth={4}
+                        strokeDasharray="10 6"
+                      />
+                      <circle
+                        cx={customWaypoint.x}
+                        cy={customWaypoint.z}
+                        r={12}
+                        fill="#ec4899"
+                        stroke="#ffffff"
+                        strokeWidth={3}
+                      />
+                    </g>
+                  )}
+
+                  <g transform={`translate(${playerX}, ${playerZ})`}>
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={13}
+                      fill="#22d3ee"
+                      stroke="#083344"
+                      strokeWidth={3.5}
+                    />
+                    <circle cx={0} cy={0} r={5} fill="#ffffff" />
+                  </g>
+                </svg>
               </div>
             </div>
 
-            {/* MAIN CONTENT AREA */}
-            {locationMode === 'locations' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[460px]">
-                {/* Left: Scrollable List of 16 Locations */}
-                <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 max-h-[520px]">
-                  <div className="flex items-center justify-between text-xs text-slate-400 pb-1 border-b border-slate-800 font-mono">
-                    <span>DHAKA_LOCATIONS // {DHAKA_GAME_LOCATIONS.length} IDENTIFIED</span>
-                    <span className="text-emerald-400">SELECT TO INSPECT</span>
-                  </div>
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Navigation className="w-4 h-4 text-emerald-400" />
+                {language === 'en'
+                  ? '10 Dhaka Districts & Fast Travel'
+                  : 'ঢাকার ১০টি এলাকা ও দ্রুত ভ্রমণ'}
+              </h3>
 
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                    {DHAKA_GAME_LOCATIONS.filter((l) => {
-                      if (!locationSearch) return true;
-                      const q = locationSearch.toLowerCase();
-                      return (
-                        l.titleEn.toLowerCase().includes(q) ||
-                        l.titleBn.includes(q) ||
-                        l.taglineEn.toLowerCase().includes(q) ||
-                        l.districtId.toLowerCase().includes(q)
-                      );
-                    }).map((loc) => {
-                      const isSelected = selectedLocationId === loc.id;
-                      const isDiscovered = discoveredLocations.includes(loc.id);
-                      return (
-                        <div
-                          key={loc.id}
-                          onClick={() => setSelectedLocationId(loc.id)}
-                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? 'bg-slate-800/95 border-emerald-400 glow-cng'
-                              : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <img
-                            src={loc.image}
-                            alt={loc.titleEn}
-                            className="w-16 h-12 rounded-lg object-cover border border-emerald-500/40 shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-black font-display text-white truncate">
-                                {language === 'en' ? loc.titleEn : loc.titleBn}
-                              </p>
-                              {isDiscovered ? (
-                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-bold">
-                                  {language === 'en' ? 'DISCOVERED' : 'আবিষ্কৃত'}
-                                </span>
-                              ) : (
-                                <span className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 font-mono">
-                                  {language === 'en' ? 'UNEXPLORED' : 'অজানা'}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-amber-300 font-mono truncate">
-                              {loc.coordinates} • {loc.threatLevel}
-                            </p>
-                            <p className="text-[9px] text-slate-400 truncate mt-0.5">
-                              {language === 'en' ? loc.taglineEn : loc.taglineBn}
-                            </p>
-                          </div>
-                          <div className="flex flex-col gap-1 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                requestTeleport(loc.x, loc.z);
-                                setGamePhase('playing');
-                              }}
-                              className="px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-400 text-[10px] font-mono font-black text-slate-950 shadow"
-                              title="Instantly Travel here by CNG"
-                            >
-                              {language === 'en' ? 'GO' : 'যান'}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCustomWaypoint({
-                                  x: loc.x,
-                                  z: loc.z,
-                                  name: loc.titleEn,
-                                });
-                                setGamePhase('playing');
-                              }}
-                              className="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[9px] font-mono font-bold text-cyan-300 border border-slate-700"
-                            >
-                              GPS
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Right: Selected Location Dossier & Cinematic Inspection View */}
-                {(() => {
-                  const loc =
-                    DHAKA_GAME_LOCATIONS.find((l) => l.id === selectedLocationId) ||
-                    DHAKA_GAME_LOCATIONS[0];
-                  return (
-                    <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative">
-                      {/* Cinematic Widescreen Concept Art Preview */}
-                      <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-slate-950">
-                        <img
-                          src={loc.image}
-                          alt={loc.titleEn}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                        <div className="absolute inset-0 scanlines opacity-30 pointer-events-none" />
-
-                        {/* Top Telemetry Header */}
-                        <div className="absolute top-3 inset-x-4 flex items-center justify-between text-xs font-mono">
-                          <span className="bg-slate-950/90 text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-500/40 tracking-wider flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                            LOC://{loc.id.toUpperCase()} • {loc.coordinates}
-                          </span>
-                          <span className="bg-rose-500/20 text-rose-300 font-extrabold px-2.5 py-1 rounded-lg border border-rose-500/40">
-                            {loc.threatLevel} (HEAT {loc.threatHeat})
-                          </span>
-                        </div>
-
-                        {/* Bottom Banner Title */}
-                        <div className="absolute bottom-3 inset-x-4">
-                          <h2 className="text-2xl sm:text-3xl font-black font-display text-white tracking-tight leading-none drop-shadow-xl">
-                            {language === 'en' ? loc.titleEn : loc.titleBn}
-                          </h2>
-                          <p className="text-sm font-bold text-amber-300 mt-1 drop-shadow">
-                            {language === 'en' ? loc.titleBn : loc.titleEn} • {language === 'en' ? loc.taglineEn : loc.taglineBn}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Dossier Body Information */}
-                      <div className="p-4 flex-1 flex flex-col justify-between gap-4">
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                            <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-slate-400 block text-[10px]">CATEGORY</span>
-                              <span className="text-white font-bold uppercase">{loc.category}</span>
-                            </div>
-                            <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-slate-400 block text-[10px]">DISTRICT</span>
-                              <span className="text-emerald-400 font-bold uppercase">{loc.districtId}</span>
-                            </div>
-                            <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-slate-400 block text-[10px]">COORDINATES</span>
-                              <span className="text-cyan-300 font-bold">{loc.x}, {loc.z}</span>
-                            </div>
-                            <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800">
-                              <span className="text-slate-400 block text-[10px]">HEAT THREAT</span>
-                              <span className="text-amber-400 font-bold">LEVEL {loc.threatHeat} / 5</span>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
-                            <p className="font-medium">
-                              {language === 'en' ? loc.loreEn : loc.loreBn}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                requestTeleport(loc.x, loc.z);
-                                setGamePhase('playing');
-                              }}
-                              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-black text-xs sm:text-sm shadow-xl glow-cng flex items-center gap-2 transition-transform active:scale-95"
-                            >
-                              <Car className="w-4 h-4 text-slate-950" />
-                              {language === 'en' ? 'FAST TRAVEL HERE (CNG)' : 'দ্রুত ভ্রমণ করুন (সিএনজি)'}
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setCustomWaypoint({
-                                  x: loc.x,
-                                  z: loc.z,
-                                  name: loc.titleEn,
-                                });
-                                setGamePhase('playing');
-                              }}
-                              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs sm:text-sm border border-slate-700 flex items-center gap-1.5"
-                            >
-                              <MapPin className="w-4 h-4" />
-                              {language === 'en' ? 'SET GPS PIN' : 'জিপিএস পিন দিন'}
-                            </button>
-                          </div>
-
-                          <span className="text-[11px] font-mono text-slate-400">
-                            SYS://TELEPORT_READY
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-[440px]">
-                <div className="lg:col-span-2 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col relative overflow-hidden min-h-[420px]">
-                  <div className="flex items-center justify-between mb-2 z-10">
-                    <div>
-                      <h3 className="text-sm font-extrabold text-amber-400 uppercase tracking-wider">
-                        {language === 'en'
-                          ? 'Interactive Dhaka Metropolitan GPS Map'
-                          : 'ঢাকা মেট্রোপলিটন ইন্টারেক্টিভ জিপিএস ম্যাপ'}
-                      </h3>
-                      <p className="text-[11px] text-slate-400">
-                        {language === 'en'
-                          ? 'Click any District or Point of Interest to set a GPS route or Fast-Travel by CNG.'
-                          : 'যেকোনো এলাকা বা স্থানে ক্লিক করে জিপিএস রুট সেট করুন অথবা দ্রুত ভ্রমণ করুন।'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => setMapZoom((z) => Math.max(0.8, z - 0.2))}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
-                      >
-                        <ZoomOut className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setMapZoom((z) => Math.min(1.8, z + 0.2))}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
-                      >
-                        <ZoomIn className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center relative">
-                    <svg
-                      viewBox="-400 -400 800 800"
-                      className="w-full h-full max-h-[480px] transition-transform duration-200"
-                      style={{ transform: `scale(${mapZoom})` }}
-                      onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const nx =
-                          ((e.clientX - rect.left) / rect.width) * 800 - 400;
-                        const nz =
-                          ((e.clientY - rect.top) / rect.height) * 800 - 400;
-                        setCustomWaypoint({
-                          x: Math.round(nx),
-                          z: Math.round(nz),
-                          name: 'Custom GPS Pin',
-                        });
-                      }}
-                    >
-                      {DISTRICTS.map((d) => {
-                        const w = d.bounds.maxX - d.bounds.minX;
-                        const h = d.bounds.maxZ - d.bounds.minZ;
-                        const isSelected = selectedDistrict === d.id;
-                        return (
-                          <g
-                            key={d.id}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              setSelectedDistrict(d.id);
-                              setCustomWaypoint({
-                                x: d.center.x,
-                                z: d.center.z,
-                                name: d.nameEn,
-                              });
-                            }}
-                            className="cursor-pointer group"
-                          >
-                            <rect
-                              x={d.bounds.minX}
-                              y={d.bounds.minZ}
-                              width={w}
-                              height={h}
-                              fill={d.color}
-                              fillOpacity={isSelected ? 0.32 : 0.14}
-                              stroke={d.color}
-                              strokeWidth={isSelected ? 4 : 1.5}
-                              strokeOpacity={0.65}
-                            />
-                            <text
-                              x={d.center.x}
-                              y={d.center.z}
-                              textAnchor="middle"
-                              fill="#ffffff"
-                              fontSize="16"
-                              fontWeight="bold"
-                              className="pointer-events-none drop-shadow"
-                            >
-                              {language === 'en'
-                                ? d.nameEn.split(' ')[0]
-                                : d.nameBn.split(' ')[0]}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                      <rect
-                        x={-390}
-                        y={300}
-                        width={780}
-                        height={95}
-                        fill="#0891b2"
-                        fillOpacity={0.75}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
+                {DISTRICTS.map((d) => (
+                  <div
+                    key={d.id}
+                    className={`p-3 rounded-xl border transition-all ${
+                      selectedDistrict === d.id
+                        ? 'bg-slate-800 border-amber-400'
+                        : 'bg-slate-950/75 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2.5">
+                      <img
+                        src={DHAKA_DISTRICT_PHOTOS[d.id]}
+                        alt={d.nameEn}
+                        className="w-16 h-12 rounded-lg object-cover border border-amber-400/40 shrink-0"
                       />
-                      <text
-                        x={0}
-                        y={355}
-                        textAnchor="middle"
-                        fill="#bae6fd"
-                        fontSize="18"
-                        fontWeight="bold"
-                      >
-                        BURIGANGA RIVER • বুড়িগঙ্গা নদী
-                      </text>
-                      <rect
-                        x={170}
-                        y={-75}
-                        width={100}
-                        height={145}
-                        rx={14}
-                        fill="#0891b2"
-                        fillOpacity={0.6}
-                      />
-                      <rect
-                        x={-260}
-                        y={-35}
-                        width={80}
-                        height={120}
-                        rx={14}
-                        fill="#0891b2"
-                        fillOpacity={0.6}
-                      />
-
-                      {[-170, 0, 220].map((rx) => (
-                        <line
-                          key={`ns_${rx}`}
-                          x1={rx}
-                          y1={-370}
-                          x2={rx}
-                          y2={295}
-                          stroke="#475569"
-                          strokeWidth={11}
-                        />
-                      ))}
-                      {[-315, -175, 0, 175, 285].map((rz) => (
-                        <line
-                          key={`ew_${rz}`}
-                          x1={-370}
-                          y1={rz}
-                          x2={370}
-                          y2={rz}
-                          stroke="#475569"
-                          strokeWidth={11}
-                        />
-                      ))}
-
-                      {POINTS_OF_INTEREST.map((poi) => (
-                        <g
-                          key={poi.id}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setCustomWaypoint({
-                              x: poi.x,
-                              z: poi.z,
-                              name: poi.nameEn,
-                            });
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <circle
-                            cx={poi.x}
-                            cy={poi.z}
-                            r={9}
-                            fill="#f59e0b"
-                            stroke="#0f172a"
-                            strokeWidth={2.5}
-                          />
-                        </g>
-                      ))}
-
-                      {customWaypoint && (
-                        <g>
-                          <line
-                            x1={playerX}
-                            y1={playerZ}
-                            x2={customWaypoint.x}
-                            y2={customWaypoint.z}
-                            stroke="#ec4899"
-                            strokeWidth={4}
-                            strokeDasharray="10 6"
-                          />
-                          <circle
-                            cx={customWaypoint.x}
-                            cy={customWaypoint.z}
-                            r={12}
-                            fill="#ec4899"
-                            stroke="#ffffff"
-                            strokeWidth={3}
-                          />
-                        </g>
-                      )}
-
-                      {/* 16 Authentic Dhaka Landmark Diamonds on Tactical World Map */}
-                      {DHAKA_GAME_LOCATIONS.map((loc) => {
-                        const isDisc = discoveredLocations.includes(loc.id);
-                        return (
-                          <g
-                            key={`svg_loc_${loc.id}`}
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              setSelectedLocationId(loc.id);
-                              setLocationMode('locations');
-                            }}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                          >
-                            <polygon
-                              points={`${loc.x},${loc.z - 11} ${loc.x + 11},${loc.z} ${loc.x},${loc.z + 11} ${loc.x - 11},${loc.z}`}
-                              fill={isDisc ? '#f59e0b' : '#334155'}
-                              stroke={isDisc ? '#fef08a' : '#1e293b'}
-                              strokeWidth={2.5}
-                            />
-                            <text
-                              x={loc.x}
-                              y={loc.z + 20}
-                              textAnchor="middle"
-                              fill={isDisc ? '#fef08a' : '#94a3b8'}
-                              fontSize={10}
-                              fontFamily="monospace"
-                              fontWeight="bold"
-                              className="select-none pointer-events-none drop-shadow"
-                            >
-                              {language === 'en' ? loc.titleEn.split(' ')[0] : loc.titleBn.split(' ')[0]}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                      <g transform={`translate(${playerX}, ${playerZ})`}>
-                        <circle
-                          cx={0}
-                          cy={0}
-                          r={13}
-                          fill="#00ff66"
-                          stroke="#0b0e13"
-                          strokeWidth={3.5}
-                        />
-                        <circle cx={0} cy={0} r={5} fill="#ffffff" />
-                      </g>
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                    <Navigation className="w-4 h-4 text-emerald-400" />
-                    {language === 'en'
-                      ? '10 Dhaka Districts & Fast Travel'
-                      : 'ঢাকার ১০টি এলাকা ও দ্রুত ভ্রমণ'}
-                  </h3>
-
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
-                    {DISTRICTS.map((d) => (
-                      <div
-                        key={d.id}
-                        className={`p-3 rounded-xl border transition-all ${
-                          selectedDistrict === d.id
-                            ? 'bg-slate-800 border-amber-400'
-                            : 'bg-slate-950/75 border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2.5">
-                          <img
-                            src={DHAKA_DISTRICT_PHOTOS[d.id]}
-                            alt={d.nameEn}
-                            className="w-16 h-12 rounded-lg object-cover border border-amber-400/40 shrink-0"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-extrabold text-white truncate">
-                              {language === 'en' ? d.nameEn : d.nameBn}
-                            </p>
-                            <p className="text-[10px] text-amber-400 font-semibold truncate">
-                              {d.coordinates} • {language === 'en' ? d.vibeEn : d.vibeBn}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={() => {
-                                setCustomWaypoint({
-                                  x: d.center.x,
-                                  z: d.center.z,
-                                  name: d.nameEn,
-                                });
-                                setGamePhase('playing');
-                              }}
-                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-cyan-300 border border-slate-700"
-                            >
-                              GPS Pin
-                            </button>
-                            <button
-                              onClick={() => {
-                                requestTeleport(d.center.x, d.center.z);
-                                setGamePhase('playing');
-                              }}
-                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white shadow"
-                            >
-                              {language === 'en' ? 'Go Now' : 'যান'}
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
-                          {language === 'en' ? d.descriptionEn : d.descriptionBn}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-extrabold text-white truncate">
+                          {language === 'en' ? d.nameEn : d.nameBn}
+                        </p>
+                        <p className="text-[10px] text-amber-400 font-semibold truncate">
+                          {language === 'en' ? d.vibeEn : d.vibeBn}
                         </p>
                       </div>
-                    ))}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => {
+                            setCustomWaypoint({
+                              x: d.center.x,
+                              z: d.center.z,
+                              name: d.nameEn,
+                            });
+                            setGamePhase('playing');
+                          }}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-cyan-300 border border-slate-700"
+                        >
+                          GPS Pin
+                        </button>
+                        <button
+                          onClick={() =>
+                            requestTeleport(d.center.x, d.center.z)
+                          }
+                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white shadow"
+                        >
+                          {language === 'en' ? 'Go Now' : 'যান'}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
+                      {language === 'en' ? d.descriptionEn : d.descriptionBn}
+                    </p>
                   </div>
-                </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -1193,59 +886,32 @@ export const PauseMenuModal: React.FC = () => {
               </div>
 
               <div>
-                <h4 className="text-xs font-extrabold uppercase text-slate-300 mb-2 flex items-center gap-1.5">
-                  <Swords className="w-3.5 h-3.5 text-amber-400" />
+                <h4 className="text-xs font-extrabold uppercase text-slate-300 mb-2">
                   {language === 'en'
-                    ? 'Dhaka Underworld Armory & Local Arms (দেশি অস্ত্রাগার)'
-                    : 'আন্ডারওয়ার্ল্ড অস্ত্রাগার ও দেশি অস্ত্র'}
+                    ? 'Street Defense Gear & Tools'
+                    : 'আত্মরক্ষার সরঞ্জাম'}
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-2">
                   {tools.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => equipTool(t.id)}
                       className={`p-2.5 rounded-xl border text-left transition-all ${
                         equippedToolId === t.id
-                          ? 'bg-amber-500/20 border-amber-400 text-white shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                          ? 'bg-amber-500/20 border-amber-400 text-white'
+                          : 'bg-slate-950 border-slate-800 text-slate-300'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-lg">{t.icon}</span>
-                          <div>
-                            <p className="text-xs font-black text-amber-300">
-                              {language === 'en' ? t.nameEn : t.nameBn}
-                            </p>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                              {t.isGun
-                                ? t.category === 'shotgun'
-                                  ? 'Sawed-Off Shotgun'
-                                  : t.category === 'rifle'
-                                  ? 'Military Rifle'
-                                  : 'Local Firearm'
-                                : 'Street Melee'}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold text-amber-400">
-                          {t.unlocked
-                            ? equippedToolId === t.id
-                              ? 'EQUIPPED ✓'
-                              : 'EQUIP'
-                            : `৳${t.price}`}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
-                        {language === 'en' ? t.loreEn : t.loreBn}
+                      <p className="text-xs font-bold">
+                        {language === 'en' ? t.nameEn : t.nameBn}
                       </p>
-                      <div className="flex items-center gap-3 mt-1.5 text-[9px] font-mono text-slate-300 border-t border-slate-850 pt-1">
-                        <span>DMG: <strong className="text-white">{t.damage}</strong></span>
-                        <span>RNG: <strong className="text-white">{t.range}m</strong></span>
-                        {t.isGun && (
-                          <span>CLIP: <strong className="text-emerald-400">{t.clipSize}</strong></span>
-                        )}
-                      </div>
+                      <p className="text-[10px] text-emerald-400 mt-0.5">
+                        {t.unlocked
+                          ? equippedToolId === t.id
+                            ? 'Equipped ✓'
+                            : 'Click to Equip'
+                          : `Buy — ৳${t.price}`}
+                      </p>
                     </button>
                   ))}
                 </div>
@@ -1556,19 +1222,16 @@ export const PauseMenuModal: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {[
                 ['W, A, S, D / Arrow Keys', 'Walk, Run, Steer & Drive Vehicle'],
-                ['Left Shift (Hold)', 'Sprint on Foot / Nitro Boost (In Vehicle)'],
-                ['Right Click / Z', 'Aim Down Sights (ADS Precision Mode)'],
-                ['Spacebar', 'Jump / Evade Roll (in ADS) / Drift (In Vehicle)'],
-                ['1 – 0', 'Quick-Select Weapon (AK, Katta, TT, Ramda)'],
-                ['Left Click / J / K', 'Fire Gun / Melee Strike (Ramda, Bat)'],
-                ['Q / X / Mouse Wheel', 'Cycle Equipped Weapons'],
-                ['R', 'Reload Firearm (On Foot) / Radio Station (In Vehicle)'],
+                ['Left Shift (Hold)', 'Sprint on Foot (Drains Stamina)'],
                 ['F or E', 'Enter / Exit Vehicle, Buy Street Food, Use Shop'],
                 ['H', 'Honk CNG/Bus Horn or Ring Cycle Rickshaw Bell'],
-                ['C', 'Toggle Crouch / Stealth (On Foot)'],
+                ['Spacebar', 'Jump (On Foot) / Handbrake Drift (In Vehicle)'],
+                ['C', 'Toggle Crouch (On Foot)'],
                 ['T', 'Talk to Nearby Dhaka Citizens & Contacts'],
+                ['J or K', 'Melee Punch / Swing Cricket Bat or Lathi'],
                 ['Mouse Drag', 'Orbit 360° Third-Person Camera'],
-                ['V', 'Cycle Camera Mode (Third, Far Chase, Hood / Cockpit)'],
+                ['V', 'Cycle Camera Distance (Close, Standard, Far Chase)'],
+                ['R', 'Switch Bangladeshi FM Radio Station'],
                 ['M or ESC', 'Open Interactive Dhaka GPS Map & Pause Menu'],
               ].map(([key, desc]) => (
                 <div

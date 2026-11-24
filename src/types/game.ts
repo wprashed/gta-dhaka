@@ -23,31 +23,6 @@ export interface DistrictInfo {
   color: string;
   vibeEn: string;
   vibeBn: string;
-  tacticalCode: string;
-  coordinates: string;
-  threatLevel: string;
-  threatHeat: number;
-  bannerImage: string;
-  landmarksEn: string[];
-  landmarksBn: string[];
-}
-
-export interface DhakaGameLocation {
-  id: string;
-  titleEn: string;
-  titleBn: string;
-  districtId: DistrictId;
-  category: 'landmark' | 'underworld' | 'transit' | 'market' | 'vehicle_lab';
-  coordinates: string;
-  x: number;
-  z: number;
-  image: string;
-  threatLevel: 'MINIMAL' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'MILITARIZED';
-  threatHeat: number;
-  taglineEn: string;
-  taglineBn: string;
-  loreEn: string;
-  loreBn: string;
 }
 
 export type VehicleType =
@@ -235,39 +210,29 @@ export interface PlayerOutfit {
   unlocked: boolean;
 }
 
-export type ToolWeaponCategory = 'melee' | 'pistol' | 'shotgun' | 'rifle';
-
 export type ToolWeaponId =
   | 'fists'
-  | 'cricket_bat'
-  | 'bamboo_lathi'
-  | 'stun_baton'
   | 'ramda'
-  | 'chapati'
-  | 'pipe_gun'
-  | 'shutter_pistol'
-  | 'tt_pistol'
-  | 'katta'
-  | 'type56_ak';
+  | 'chapati_cleaver'
+  | 'bamboo_lathi'
+  | 'cricket_bat'
+  | 'stun_baton'
+  | 'deshi_pipegun'
+  | 'pistol_9mm'
+  | 'bd08_rifle'
+  | 'police_shotgun'
+  | 'smg_uzi';
 
 export interface ToolWeapon {
   id: ToolWeaponId;
   nameEn: string;
   nameBn: string;
-  category: ToolWeaponCategory;
   damage: number;
   range: number;
   price: number;
   unlocked: boolean;
-  isGun: boolean;
-  clipSize: number;
-  maxAmmo: number;
-  fireRate: number; // shots per second
-  reloadTime: number; // in seconds
-  pelletsPerShot?: number;
-  recoilStrength: number;
-  sound: 'hit' | 'melee_slash' | 'gunshot_shotgun' | 'gunshot_pistol' | 'gunshot_rifle';
-  loreEn: string;
-  loreBn: string;
-  icon: string;
+  category?: 'melee' | 'local_arm' | 'firearm';
+  isFirearm?: boolean;
+  fireRate?: number;
+  pellets?: number;
 }

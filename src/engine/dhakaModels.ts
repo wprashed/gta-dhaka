@@ -77,7 +77,7 @@ export function loadCustomGLBFromUrl(
   url: string,
   onLoaded: (group: THREE.Group) => void
 ) {
-  gltfLoader.load(url, (gltf) => {
+  gltfLoader.load(resolveAssetUrl(url), (gltf) => {
     const model = gltf.scene;
     const box = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3();
@@ -190,6 +190,228 @@ function createCngScooterWheel(x: number, y: number, z: number): THREE.Group {
   wGroup.add(hubCap);
 
   return wGroup;
+}
+
+// ---------------------------------------------------------------------------
+// Procedural car surface textures. ferrari.glb ships with no textures at all
+// and CarConcept.glb only bakes tires/disks/plates, so carbon weave, alcantara
+// and paint flake are generated once here and shared across all vehicles.
+// ---------------------------------------------------------------------------
+let carbonTexCache: THREE.Texture | null = null;
+let alcantaraTexCache: THREE.Texture | null = null;
+let noiseTexCache: THREE.Texture | null = null;
+
+function createCarbonWeaveTexture(): THREE.Texture {
+  if (carbonTexCache) return carbonTexCache;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const cell = 16;
+  for (let y = 0; y < size; y += cell) {
+    for (let x = 0; x < size; x += cell) {
+      const horizontal = ((x / cell) + (y / cell)) % 2 === 0;
+      const g = ctx.createLinearGradient(x, y, horizontal ? x + cell : x, horizontal ? y : y + cell);
+      g.addColorStop(0, horizontal ? '#14171c' : '#262b33');
+      g.addColorStop(0.5, horizontal ? '#2b3138' : '#12151a');
+      g.addColorStop(1, horizontal ? '#14171c' : '#262b33');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, cell, cell);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  carbonTexCache = tex;
+  return tex;
+}
+
+function createAlcantaraTexture(): THREE.Texture {
+  if (alcantaraTexCache) return alcantaraTexCache;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#1b1d21';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 2600; i++) {
+    const v = 18 + Math.floor(Math.random() * 26);
+    ctx.fillStyle = `rgb(${v},${v + 2},${v + 4})`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1.6, 1.6);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  alcantaraTexCache = tex;
+  return tex;
+}
+
+function createPaintFlakeTexture(): THREE.Texture {
+  if (noiseTexCache) return noiseTexCache;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 5200; i++) {
+    const v = Math.random() < 0.5 ? 40 : 215;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.5)`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  noiseTexCache = tex;
+  return tex;
+}
+
+/** Factory so every car gets its own lacquer (tint varies per vehicle). */
+function makeCarPaint(color: THREE.Color, metallic = true): THREE.MeshPhysicalMaterial {
+  const flake = createPaintFlakeTexture();
+  return new THREE.MeshPhysicalMaterial({
+    color,
+    metalness: metallic ? 0.72 : 0.25,
+    roughness: metallic ? 0.16 : 0.28,
+    roughnessMap: flake,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.03,
+    envMapIntensity: 1.35,
+    iridescence: metallic ? 0.12 : 0,
+    iridescenceIOR: 1.4,
+  });
+}
+
+function makeCarbonFibre(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: '#ffffff',
+    map: createCarbonWeaveTexture(),
+    bumpMap: createCarbonWeaveTexture(),
+    bumpScale: 0.015,
+    metalness: 0.55,
+    roughness: 0.34,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.12,
+    envMapIntensity: 1.1,
+  });
+}
+
+function makeAlcantara(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: '#ffffff',
+    map: createAlcantaraTexture(),
+    metalness: 0.0,
+    roughness: 0.92,
+    sheen: 0.6,
+    sheenRoughness: 0.9,
+    sheenColor: new THREE.Color('#4b5563'),
+  });
+}
+
+function makeLeather(color: string): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color,
+    metalness: 0.0,
+    roughness: 0.55,
+    clearcoat: 0.28,
+    clearcoatRoughness: 0.55,
+    sheen: 0.35,
+    sheenColor: new THREE.Color('#9ca3af'),
+  });
+}
+
+interface CarAccentFit {
+  fx: number; fy: number; fz: number; // front plate
+  rx: number; ry: number; rz: number; // rear plate
+  hx: number; hy: number; hz: number; // headlight glow
+  tx: number; ty: number; tz: number; // taillight glow
+  topY: number; topZ: number; // roof / beacon height
+  plateInside: number;
+}
+
+/**
+ * Fits BRTA plates, headlight/taillight glow lenses and the police beacon onto
+ * the loaded car bodywork. Positions are computed from each GLB's real bounds
+ * so nothing floats in mid-air or floats inside the body.
+ */
+function fitCarAccents(
+  carRoot: THREE.Object3D,
+  fit: CarAccentFit,
+  isPolice: boolean,
+  seed: number,
+  plateTex: THREE.Texture
+) {
+  const plateMat = new THREE.MeshBasicMaterial({
+    map: plateTex,
+    side: THREE.DoubleSide,
+  });
+
+  const frontPlate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.46, 0.14),
+    plateMat
+  );
+  frontPlate.name = 'accent_plate_front';
+  frontPlate.position.set(fit.fx, fit.fy, fit.fz - fit.plateInside);
+  carRoot.add(frontPlate);
+
+  const rearPlate = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.14), plateMat);
+  rearPlate.name = 'accent_plate_rear';
+  rearPlate.position.set(fit.rx, fit.ry, fit.rz + fit.plateInside);
+  rearPlate.rotation.y = Math.PI;
+  carRoot.add(rearPlate);
+
+  const headMat = new THREE.MeshBasicMaterial({
+    color: '#fef9c3',
+    transparent: true,
+    opacity: 0.85,
+  });
+  const tailMat = new THREE.MeshBasicMaterial({ color: '#ef4444' });
+  for (const sx of [-1, 1]) {
+    const hl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 10, 10).scale(1.5, 0.8, 0.45),
+      headMat
+    );
+    hl.name = 'accent_headlight';
+    hl.position.set(fit.hx * sx, fit.hy, fit.hz);
+    carRoot.add(hl);
+
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.09, 0.05), tailMat);
+    tl.name = 'accent_taillight';
+    tl.position.set(fit.tx * sx, fit.ty, fit.tz);
+    carRoot.add(tl);
+  }
+
+  if (isPolice) {
+    const barBase = new THREE.Mesh(
+      new THREE.BoxGeometry(0.97, 0.05, 0.22),
+      new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.85 })
+    );
+    barBase.position.set(0, fit.topY + 0.03, fit.topZ);
+    carRoot.add(barBase);
+
+    const redLight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.1, 0.18),
+      new THREE.MeshBasicMaterial({ color: '#ef4444' })
+    );
+    redLight.position.set(-0.26, fit.topY + 0.09, fit.topZ);
+    redLight.name = 'siren_red';
+    carRoot.add(redLight);
+
+    const blueLight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.1, 0.18),
+      new THREE.MeshBasicMaterial({ color: '#3b82f6' })
+    );
+    blueLight.position.set(0.26, fit.topY + 0.09, fit.topZ);
+    blueLight.name = 'siren_blue';
+    carRoot.add(blueLight);
+  }
+  void seed;
 }
 
 export function createVehicleMesh(
@@ -867,14 +1089,25 @@ export function createVehicleMesh(
     rearArtPanel.position.set(0, 1.18, -1.14);
     group.add(rearArtPanel);
 
-    // 5. Real 3D Human GLB Rickshaw Puller in Checkered Bangladeshi Lungi
+    // 5. Real 3D Human GLB Rickshaw Puller in Checkered Bangladeshi Lungi gripping handlebars
     ensureModelLoaded('readyplayerme1', (gltf) => {
       try {
         const puller = SkeletonUtils.clone(gltf.scene);
         puller.scale.setScalar(0.88);
         puller.position.set(0, 0.22, 0.34);
         const lungiTex = createLungiPatternTexture('#1e3a8a', '#facc15');
+        const reachQuat = new THREE.Quaternion()
+          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.32)
+          .multiply(
+            new THREE.Quaternion().setFromAxisAngle(
+              new THREE.Vector3(0, 0, 1),
+              -0.68
+            )
+          );
         puller.traverse((c) => {
+          if (c.name === 'LeftArm' || c.name === 'RightArm') {
+            c.quaternion.multiply(reachQuat);
+          }
           if ((c as THREE.Mesh).isMesh) {
             const m = c as THREE.Mesh;
             if (m.name === 'Wolf3D_Outfit_Bottom') {
@@ -914,20 +1147,14 @@ export function createVehicleMesh(
     cab.position.set(0, 1.45, 0.8);
     cab.castShadow = true;
     fallbackGroup.add(cab);
-
-    addWheel(-1.05, 0.38, 1.48, 1.1);
-    addWheel(1.05, 0.38, 1.48, 1.1);
-    addWheel(-1.05, 0.38, -1.48, 1.1);
-    addWheel(1.05, 0.38, -1.48, 1.1);
     group.add(fallbackGroup);
 
     ensureModelLoaded('truck', (gltf) => {
       const cloned = gltf.scene.clone(true);
       cloned.scale.setScalar(1.05);
+      // CesiumMilkTruck.glb tires reach y = -0.07 in model space.
+      cloned.position.y = 0.074;
       cloned.traverse((c) => {
-        if (c.name && (c.name.includes('Wheel') || c.name.includes('wheel'))) {
-          c.name = 'wheel';
-        }
         if ((c as THREE.Mesh).isMesh) {
           c.castShadow = true;
           c.receiveShadow = true;
@@ -941,114 +1168,126 @@ export function createVehicleMesh(
   }
 
   if (type === 'bus') {
-    const busColors = ['#0f766e', '#b91c1c', '#1d4ed8', '#15803d'];
-    const bodyColor =
-      customColor || busColors[Math.abs(seed) % busColors.length];
-    const busMat = new THREE.MeshPhysicalMaterial({
-      color: bodyColor,
+    const busSkinTex = loadRealTexture('/textures/dhaka_bus_skin.jpg', 1, 1, false);
+    const busBodyMat = new THREE.MeshPhysicalMaterial({
+      color: customColor || '#b91c1c',
+      roughness: 0.24,
+      metalness: 0.25,
+      clearcoat: 0.85,
+    });
+    const busGreenMat = new THREE.MeshPhysicalMaterial({
+      color: '#15803d',
+      roughness: 0.26,
+      metalness: 0.22,
+      clearcoat: 0.82,
+    });
+    const busSideSkinMat = new THREE.MeshPhysicalMaterial({
+      map: busSkinTex,
       roughness: 0.28,
-      clearcoat: 0.8,
+      metalness: 0.18,
+      clearcoat: 0.78,
     });
-    const stripeMat = new THREE.MeshStandardMaterial({ color: '#dc2626' });
-    const creamMat = new THREE.MeshStandardMaterial({ color: '#fef3c7' });
     const glassMat = new THREE.MeshPhysicalMaterial({
-      color: '#38bdf8',
+      color: '#0f172a',
       transparent: true,
-      opacity: 0.65,
-      metalness: 0.2,
-      roughness: 0.1,
+      opacity: 0.52,
+      metalness: 0.25,
+      roughness: 0.08,
     });
 
-    const lowerBody = new THREE.Mesh(
-      new THREE.BoxGeometry(2.68, 1.38, 8.5),
-      busMat
+    // Lower green BRTC skirt & chassis
+    const lowerSkirt = new THREE.Mesh(
+      new THREE.BoxGeometry(2.68, 0.92, 8.6),
+      busGreenMat
     );
-    lowerBody.position.set(0, 1.06, 0);
-    lowerBody.castShadow = true;
-    group.add(lowerBody);
+    lowerSkirt.position.set(0, 0.82, 0);
+    lowerSkirt.castShadow = true;
+    group.add(lowerSkirt);
 
-    const redStripe = new THREE.Mesh(
-      new THREE.BoxGeometry(2.72, 0.32, 8.54),
-      stripeMat
+    // Upper crimson coach body
+    const upperBody = new THREE.Mesh(
+      new THREE.BoxGeometry(2.66, 1.82, 8.54),
+      busBodyMat
     );
-    redStripe.position.set(0, 1.56, 0);
-    group.add(redStripe);
+    upperBody.position.set(0, 2.12, 0);
+    upperBody.castShadow = true;
+    group.add(upperBody);
 
-    const upperCabin = new THREE.Mesh(
-      new THREE.BoxGeometry(2.64, 1.28, 8.42),
-      creamMat
-    );
-    upperCabin.position.set(0, 2.34, 0);
-    upperCabin.castShadow = true;
-    group.add(upperCabin);
+    // Orthographic Photorealistic Dhaka BRTC Bus Side Skins (ফার্মগেট - শাহবাগ - মতিঝিল - উত্তরা)
+    [-1.345, 1.345].forEach((sx) => {
+      const sidePanel = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.5, 2.55),
+        busSideSkinMat
+      );
+      sidePanel.position.set(sx, 1.66, 0);
+      sidePanel.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      group.add(sidePanel);
+    });
 
-    const windows = new THREE.Mesh(
-      new THREE.BoxGeometry(2.7, 0.82, 7.7),
+    // Panoramic Front & Rear Bus Windshields
+    const frontWindshield = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.42, 1.12),
       glassMat
     );
-    windows.position.set(0, 2.38, 0.1);
-    group.add(windows);
+    frontWindshield.position.set(0, 2.18, 4.28);
+    group.add(frontWindshield);
 
+    const rearWindshield = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.36, 0.92),
+      glassMat
+    );
+    rearWindshield.position.set(0, 2.22, -4.28);
+    rearWindshield.rotation.y = Math.PI;
+    group.add(rearWindshield);
+
+    // Illuminated Bangla Destination Board (ফার্মগেট - মতিঝিল - উত্তরা)
     const routeSign = new THREE.Mesh(
-      new THREE.BoxGeometry(1.9, 0.36, 0.08),
+      new THREE.BoxGeometry(2.05, 0.38, 0.08),
       new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(seed + 2) })
     );
-    routeSign.position.set(0, 2.86, 4.24);
+    routeSign.position.set(0, 2.86, 4.26);
     group.add(routeSign);
 
     const roofAc = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 0.28, 3.2),
-      new THREE.MeshStandardMaterial({ color: '#e2e8f0' })
+      new THREE.BoxGeometry(1.75, 0.28, 3.4),
+      new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.4 })
     );
-    roofAc.position.set(0, 3.12, 1.2);
+    roofAc.position.set(0, 3.14, 0.3);
     group.add(roofAc);
 
-    // Roof luggage carrier with blue and yellow tarp parcels (বাসের ছাদের মালবাহী ক্যারিয়ার)
-    const carrier = new THREE.Mesh(
-      new THREE.BoxGeometry(2.1, 0.22, 3.8),
-      new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.8, roughness: 0.3 })
+    // Front Bumper, Grille & Glowing Xenon Headlights
+    const frontBumper = new THREE.Mesh(
+      new THREE.BoxGeometry(2.74, 0.36, 0.22),
+      new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.5 })
     );
-    carrier.position.set(0, 3.12, -1.2);
-    group.add(carrier);
+    frontBumper.position.set(0, 0.54, 4.28);
+    group.add(frontBumper);
 
-    [-0.45, 0.45].forEach((sx, sIdx) => {
-      const sack = new THREE.Mesh(
-        new THREE.BoxGeometry(0.75, 0.42, 1.3),
-        new THREE.MeshStandardMaterial({
-          color: sIdx === 0 ? '#0284c7' : '#eab308',
-          roughness: 0.85,
-        })
-      );
-      sack.position.set(sx, 3.36, -1.2 + (sIdx === 0 ? -0.4 : 0.4));
-      group.add(sack);
-    });
-
-    // Heavy steel anti-ram crash guard on front
-    const bullBar = new THREE.Mesh(
-      new THREE.BoxGeometry(2.5, 0.48, 0.16),
-      new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.9, roughness: 0.2 })
-    );
-    bullBar.position.set(0, 0.62, 4.34);
-    group.add(bullBar);
-
-    // Rear Bangla blessing plate: "মা বাবার দোয়া"
-    const rearSignTex = createBanglaNumberPlateTexture('মা বাবার দোয়া', true);
-    const rearBlessing = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5, 0.32),
-      new THREE.MeshBasicMaterial({ map: rearSignTex, side: THREE.DoubleSide })
-    );
-    rearBlessing.position.set(0, 2.65, -4.26);
-    rearBlessing.rotation.y = Math.PI;
-    group.add(rearBlessing);
-
-    [-0.95, 0.95].forEach((hx) => {
+    [-0.96, 0.96].forEach((hx) => {
       const hl = new THREE.Mesh(
-        new THREE.BoxGeometry(0.38, 0.24, 0.1),
+        new THREE.BoxGeometry(0.42, 0.24, 0.1),
         new THREE.MeshBasicMaterial({ color: '#fef08a' })
       );
-      hl.position.set(hx, 0.85, 4.26);
+      hl.position.set(hx, 0.86, 4.29);
       group.add(hl);
+
+      const tl = new THREE.Mesh(
+        new THREE.BoxGeometry(0.38, 0.26, 0.1),
+        new THREE.MeshBasicMaterial({ color: '#ef4444' })
+      );
+      tl.position.set(hx, 0.92, -4.29);
+      group.add(tl);
     });
+
+    const busPlate = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.56, 0.18),
+      new THREE.MeshBasicMaterial({
+        map: createBanglaNumberPlateTexture(`ঢাকা মেট্রো-ব ১১-${4102 + (seed % 9) * 17}`, false),
+        side: THREE.DoubleSide,
+      })
+    );
+    busPlate.position.set(0, 0.54, 4.4);
+    group.add(busPlate);
 
     addWheel(-1.34, 0.48, 2.65, 1.35);
     addWheel(1.34, 0.48, 2.65, 1.35);
@@ -1059,242 +1298,118 @@ export function createVehicleMesh(
   }
 
   if (type === 'motorcycle') {
-    const bikePalette = ['#e11d48', '#2563eb', '#16a34a', '#d97706', '#09090b'];
-    const bikeHex = customColor || bikePalette[Math.abs(seed) % bikePalette.length];
     const bikeMat = new THREE.MeshPhysicalMaterial({
-      color: bikeHex,
+      color: customColor || '#e11d48',
       metalness: 0.65,
-      roughness: 0.18,
+      roughness: 0.16,
       clearcoat: 0.95,
-      clearcoatRoughness: 0.08,
     });
-    const frameMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      metalness: 0.85,
-      roughness: 0.25,
-    });
-    const engineMat = new THREE.MeshStandardMaterial({
-      color: '#475569',
-      metalness: 0.8,
+    const darkMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      metalness: 0.6,
       roughness: 0.35,
     });
-    const leatherSeatMat = new THREE.MeshStandardMaterial({
-      color: '#18181b',
-      roughness: 0.85,
-    });
     const chromeMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      metalness: 0.95,
-      roughness: 0.1,
-    });
-    const glassMat = new THREE.MeshPhysicalMaterial({
-      color: '#0f172a',
-      transparent: true,
-      opacity: 0.65,
-      roughness: 0.1,
-      metalness: 0.2,
+      color: '#f1f5f9',
+      metalness: 0.92,
+      roughness: 0.12,
     });
 
-    // 1. Perimeter Twin-Spar Alloy Frame
-    const mainFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.36, 0.48, 1.75),
-      frameMat
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(0.26, 0.46, 1.48),
+      darkMat
     );
-    mainFrame.position.set(0, 0.64, 0.02);
-    mainFrame.castShadow = true;
-    group.add(mainFrame);
+    frame.position.set(0, 0.6, 0);
+    frame.castShadow = true;
+    group.add(frame);
 
-    // 2. Sculpted 150cc 4-Valve Engine Block with Cooling Fins & Crankcase
-    const engineBlock = new THREE.Mesh(
-      new THREE.BoxGeometry(0.32, 0.38, 0.52),
-      engineMat
+    // Sculpted Teardrop Fuel Tank (Bajaj Pulsar / Yamaha FZ 150cc Dhaka Style)
+    const tank = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 16, 12).scale(0.85, 0.72, 1.45),
+      bikeMat
     );
-    engineBlock.position.set(0, 0.44, 0.08);
-    group.add(engineBlock);
-
-    [-0.06, 0.02, 0.1].forEach((finY) => {
-      const fin = new THREE.Mesh(
-        new THREE.BoxGeometry(0.36, 0.02, 0.48),
-        frameMat
-      );
-      fin.position.set(0, 0.44 + finY, 0.08);
-      group.add(fin);
-    });
-
-    // Round chrome clutch cover
-    const clutchCover = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.12, 0.06, 16).rotateZ(Math.PI / 2),
-      chromeMat
-    );
-    clutchCover.position.set(0.19, 0.42, 0.05);
-    group.add(clutchCover);
-
-    // 3. Muscular Sculpted Fuel Tank with Knee Indents
-    const tankShape = new THREE.Shape();
-    tankShape.moveTo(-0.4, 0);
-    tankShape.quadraticCurveTo(-0.42, 0.25, -0.25, 0.32);
-    tankShape.lineTo(0.2, 0.32);
-    tankShape.quadraticCurveTo(0.42, 0.22, 0.38, 0);
-    tankShape.closePath();
-
-    const tankGeo = new THREE.ExtrudeGeometry(tankShape, {
-      depth: 0.46,
-      bevelEnabled: true,
-      bevelThickness: 0.06,
-      bevelSize: 0.05,
-      bevelSegments: 4,
-    });
-    tankGeo.rotateY(Math.PI / 2);
-    tankGeo.translate(-0.23, 0.72, 0.16);
-    const tank = new THREE.Mesh(tankGeo, bikeMat);
+    tank.position.set(0, 0.96, 0.24);
     tank.castShadow = true;
     group.add(tank);
 
-    // Chrome Fuel Cap
-    const fuelCap = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.065, 0.065, 0.025, 16),
-      chromeMat
+    const seat = new THREE.Mesh(
+      new THREE.BoxGeometry(0.32, 0.14, 0.76),
+      darkMat
     );
-    fuelCap.position.set(0, 1.06, 0.22);
-    group.add(fuelCap);
+    seat.position.set(0, 0.88, -0.36);
+    group.add(seat);
 
-    // 4. Aggressive Twin LED Hawk-Eye Front Headlight Mask & Windscreen
-    const cowl = new THREE.Mesh(
-      new THREE.BoxGeometry(0.38, 0.38, 0.34),
-      bikeMat
-    );
-    cowl.position.set(0, 1.08, 0.82);
-    group.add(cowl);
-
-    // Twin angular LED projectors
-    [-0.1, 0.1].forEach((hlX) => {
-      const hl = new THREE.Mesh(
-        new THREE.BoxGeometry(0.11, 0.09, 0.06),
-        new THREE.MeshBasicMaterial({ color: '#fef08a' })
-      );
-      hl.position.set(hlX, 1.06, 0.98);
-      group.add(hl);
-    });
-
-    // Tinted sports aerodynamic windscreen
-    const screen = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.24, 0.08),
-      glassMat
-    );
-    screen.rotation.x = -0.45;
-    screen.position.set(0, 1.25, 0.84);
-    group.add(screen);
-
-    // 5. Clip-On Handlebars, Controls & Rearview Mirrors
-    const bar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, 0.78, 10).rotateZ(Math.PI / 2),
-      frameMat
-    );
-    bar.position.set(0, 1.15, 0.68);
-    group.add(bar);
-
-    [-0.38, 0.38].forEach((mirrorX) => {
-      const mirrorStem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6).rotateZ(mirrorX > 0 ? -0.4 : 0.4),
-        frameMat
-      );
-      mirrorStem.position.set(mirrorX * 0.85, 1.22, 0.68);
-      group.add(mirrorStem);
-
-      const mirrorHead = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.07, 0.03),
+    // Telescopic Chrome Front Forks
+    [-0.11, 0.11].forEach((fx) => {
+      const fork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.02, 0.78, 10),
         chromeMat
       );
-      mirrorHead.position.set(mirrorX, 1.28, 0.68);
-      group.add(mirrorHead);
+      fork.position.set(fx, 0.72, 0.68);
+      fork.rotation.x = -0.34;
+      group.add(fork);
     });
 
-    // Digital Instrument Cluster
-    const cluster = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.04, 0.1),
-      new THREE.MeshBasicMaterial({ color: '#06b6d4' })
-    );
-    cluster.rotation.x = -0.3;
-    cluster.position.set(0, 1.16, 0.62);
-    group.add(cluster);
-
-    // 6. Stepped Two-Tier Rider and Pillion Saddle
-    const riderSeat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 0.12, 0.46),
-      leatherSeatMat
-    );
-    riderSeat.position.set(0, 0.9, -0.22);
-    group.add(riderSeat);
-
-    const pillionSeat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.14, 0.38),
-      leatherSeatMat
-    );
-    pillionSeat.position.set(0, 1.01, -0.6);
-    group.add(pillionSeat);
-
-    // Sharp aerodynamic tail cowl
-    const tailCowl = new THREE.Mesh(
-      new THREE.ConeGeometry(0.16, 0.48, 4).rotateX(-Math.PI / 2),
-      bikeMat
-    );
-    tailCowl.position.set(0, 0.98, -0.92);
-    group.add(tailCowl);
-
-    // 7. Upswept Chrome Exhaust Canister with Carbon Heat Shield
-    const exhaustPipe = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.045, 0.055, 0.85, 12).rotateX(Math.PI / 2 - 0.28),
+    // Chrome Exhaust Muffler Pipe
+    const exhaust = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.036, 0.72, 12).rotateX(Math.PI / 2),
       chromeMat
     );
-    exhaustPipe.position.set(0.22, 0.48, -0.48);
-    group.add(exhaustPipe);
+    exhaust.position.set(0.18, 0.48, -0.45);
+    exhaust.rotation.x = 0.15;
+    group.add(exhaust);
 
-    const exhaustTip = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.038, 0.038, 0.04, 10).rotateX(Math.PI / 2 - 0.28),
-      new THREE.MeshBasicMaterial({ color: '#09090b' })
+    const bars = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.022, 0.74, 8).rotateZ(Math.PI / 2),
+      chromeMat
     );
-    exhaustTip.position.set(0.22, 0.58, -0.86);
-    group.add(exhaustTip);
+    bars.position.set(0, 1.16, 0.56);
+    group.add(bars);
 
-    // 8. Spoke Alloy Wheels with Disc Brakes and Red Calipers
-    addWheel(0, 0.35, 0.82, 0.95);
-    addWheel(0, 0.35, -0.82, 0.95);
+    const hl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 14, 14),
+      new THREE.MeshBasicMaterial({ color: '#fef08a' })
+    );
+    hl.position.set(0, 1.04, 0.78);
+    group.add(hl);
 
-    // Brake discs on wheels
-    [0.82, -0.82].forEach((wz) => {
-      const disc = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.24, 0.24, 0.012, 16).rotateZ(Math.PI / 2),
-        chromeMat
-      );
-      disc.position.set(0.08, 0.35, wz);
-      group.add(disc);
+    addWheel(0, 0.35, 0.76, 0.95);
+    addWheel(0, 0.35, -0.76, 0.95);
 
-      const caliper = new THREE.Mesh(
-        new THREE.BoxGeometry(0.05, 0.09, 0.08),
-        new THREE.MeshStandardMaterial({ color: '#dc2626', roughness: 0.3 })
-      );
-      caliper.position.set(0.08, 0.44, wz + 0.12);
-      group.add(caliper);
+    // 3D Human GLB Rider seated on Dhaka Motorcycle gripping handlebars
+    ensureModelLoaded('readyplayerme1', (gltf) => {
+      try {
+        const rider = SkeletonUtils.clone(gltf.scene);
+        rider.scale.setScalar(0.84);
+        rider.position.set(0, 0.26, -0.14);
+        const reachQuat = new THREE.Quaternion()
+          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.34)
+          .multiply(
+            new THREE.Quaternion().setFromAxisAngle(
+              new THREE.Vector3(0, 0, 1),
+              -0.85
+            )
+          );
+        const hipBendQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0),
+          1.05
+        );
+        const kneeBendQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0),
+          -1.15
+        );
+        rider.traverse((c) => {
+          if (c.name === 'LeftArm' || c.name === 'RightArm') {
+            c.quaternion.multiply(reachQuat);
+          } else if (c.name === 'LeftUpLeg' || c.name === 'RightUpLeg') {
+            c.quaternion.multiply(hipBendQuat);
+          } else if (c.name === 'LeftLeg' || c.name === 'RightLeg') {
+            c.quaternion.multiply(kneeBendQuat);
+          }
+        });
+        group.add(rider);
+      } catch {}
     });
-
-    // 9. Rear Digital Smart Number Plate & LED Taillight
-    const tailLight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.05, 0.04),
-      new THREE.MeshBasicMaterial({ color: '#ef4444' })
-    );
-    tailLight.position.set(0, 0.94, -1.14);
-    group.add(tailLight);
-
-    const bikePlateTex = createBanglaNumberPlateTexture(
-      `ঢাকা মেট্রো-ল ২৬-${4100 + (seed % 9) * 59}`,
-      false
-    );
-    const rearPlate = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.36, 0.16),
-      new THREE.MeshBasicMaterial({ map: bikePlateTex, side: THREE.DoubleSide })
-    );
-    rearPlate.position.set(0, 0.62, -1.16);
-    group.add(rearPlate);
 
     return group;
   }
@@ -1320,10 +1435,10 @@ export function createVehicleMesh(
   const fallbackGroup = new THREE.Group();
   const paintMat = new THREE.MeshPhysicalMaterial({
     color: bodyHex,
-    metalness: 0.55,
-    roughness: 0.18,
-    clearcoat: 0.95,
-    clearcoatRoughness: 0.08,
+    metalness: 0.65,
+    roughness: 0.14,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.06,
   });
 
   const sedanProfile = new THREE.Shape();
@@ -1351,84 +1466,95 @@ export function createVehicleMesh(
   fallbackBody.castShadow = true;
   fallbackBody.receiveShadow = true;
   fallbackGroup.add(fallbackBody);
-
-  // 4 Wheels with alloy rims for fallback sedan so vehicle never hovers from frame 0
-  const fallbackWheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.24, 16);
-  fallbackWheelGeo.rotateZ(Math.PI / 2);
-  const fallbackTireMat = new THREE.MeshStandardMaterial({
-    color: '#0f172a',
-    roughness: 0.9,
-  });
-  const fallbackHubMat = new THREE.MeshStandardMaterial({
-    color: '#cbd5e1',
-    metalness: 0.85,
-    roughness: 0.2,
-  });
-
-  const addFallbackWheel = (wx: number, wy: number, wz: number) => {
-    const wg = new THREE.Group();
-    wg.position.set(wx, wy, wz);
-    const tire = new THREE.Mesh(fallbackWheelGeo, fallbackTireMat);
-    tire.castShadow = true;
-    wg.add(tire);
-    const hub = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.19, 0.19, 0.26, 12).rotateZ(Math.PI / 2),
-      fallbackHubMat
-    );
-    wg.add(hub);
-    wg.name = 'wheel';
-    fallbackGroup.add(wg);
-  };
-
-  addFallbackWheel(-0.95, 0.35, 1.35);
-  addFallbackWheel(0.95, 0.35, 1.35);
-  addFallbackWheel(-0.95, 0.35, -1.35);
-  addFallbackWheel(0.95, 0.35, -1.35);
-
   group.add(fallbackGroup);
 
   const carModelKey: ModelKey =
     !isPolice && Math.abs(seed) % 2 === 1 ? 'ferrari' : 'car_concept';
+
+  // BRTA Bangla registration plate (ঢাকা মেট্রো-গ ৩৪-৮৯১২) shared by body + accents
+  const frontPlateTex = createBanglaNumberPlateTexture(
+    isPolice
+      ? `ঢাকা মেট্রো-প ১১-${1020 + (seed % 9) * 31}`
+      : `ঢাকা মেট্রো-গ ৩৪-${5120 + (seed % 9) * 83}`,
+    false
+  );
 
   ensureModelLoaded(carModelKey, (gltf) => {
     try {
       const cloned = gltf.scene.clone(true);
 
       if (carModelKey === 'car_concept') {
-        // CarConcept.glb root node BodyUnderside is Z-up with -Y forward;
-        // rotating X by -Math.PI/2 places wheels on y=0 and headlights facing +Z!
-        cloned.rotation.x = -Math.PI / 2;
-        cloned.scale.setScalar(1.02);
+        // CarConcept.glb tire contact patch sits at y = 0.000 once the baked
+        // showroom wheel rotations are reset, so a 2cm lift keeps the tires
+        // flush on the road without sinking the floor pan.
+        cloned.scale.setScalar(1.06);
+        cloned.position.y = 0.02;
       } else {
-        // ferrari.glb faces -Z in local space; rotating Y by Math.PI faces +Z!
+        // ferrari.glb faces -Z after load (headlights at -Z); rotating Y by
+        // Math.PI faces +Z. Tires already touch y = 0 in model space.
         cloned.rotation.y = Math.PI;
-        cloned.scale.setScalar(1.02);
+        cloned.scale.setScalar(1.08);
+        cloned.position.y = 0.02;
       }
 
       const targetColor = new THREE.Color(bodyHex);
 
+      // Fix baked showroom wheel rotations on CarConcept.glb (cambered/drooped wheels)
+      // and tag all 4 wheels so the engine can spin them. localX is the true axle.
+      if (carModelKey === 'car_concept') {
+        for (const wheelName of [
+          'WheelFrontL',
+          'WheelFrontR',
+          'WheelRearL',
+          'WheelRearR',
+        ]) {
+          const wheelNode = cloned.getObjectByName(wheelName);
+          if (wheelNode) {
+            wheelNode.rotation.set(0, 0, 0);
+            wheelNode.name = 'wheel';
+            wheelNode.userData.spinAxis = 'x';
+            wheelNode.userData.steer =
+              wheelName === 'WheelFrontL' || wheelName === 'WheelFrontR';
+            wheelNode.userData.steerAxis = 'y';
+          }
+        }
+      } else {
+        // ferrari.glb: wheel parts (tire/rim/brake/centre/nuts) are SIBLINGS of a
+        // node named 'wheel', so nothing visible ever rotated. Re-parent each
+        // wheel's parts under a pivot at the hub, axle = local X (verified).
+        for (const wheelName of [
+          'wheel_fl',
+          'wheel_fr',
+          'wheel_rl',
+          'wheel_rr',
+        ]) {
+          const hub = cloned.getObjectByName(wheelName);
+          if (!hub) continue;
+          const pivot = new THREE.Group();
+          pivot.name = 'wheel';
+          pivot.userData.spinAxis = 'x';
+          const parts = hub.children.slice();
+          if (parts.length === 0) continue;
+          const hubInv = new THREE.Matrix4();
+          hub.updateWorldMatrix(true, false);
+          hubInv.copy(hub.matrixWorld).invert();
+          const localMat = new THREE.Matrix4();
+          for (const part of parts) {
+            part.updateWorldMatrix(true, false);
+            localMat.copy(hubInv).multiply(part.matrixWorld);
+            localMat.decompose(part.position, part.quaternion, part.scale);
+            // The rim mesh is also named 'wheel'; rename it so the engine only
+            // spins the single pivot (avoids a double-speed rim).
+            if (part.name === 'wheel') part.name = 'wheel_rim';
+            hub.remove(part);
+            pivot.add(part);
+          }
+          hub.add(pivot);
+          pivot.userData.steer = wheelName === 'wheel_fl' || wheelName === 'wheel_fr';
+        }
+      }
+
       cloned.traverse((node) => {
-        if (
-          node.name &&
-          !node.name.toLowerCase().includes('steering') &&
-          (node.name === 'WheelFrontL' ||
-            node.name === 'WheelFrontR' ||
-            node.name === 'WheelRearL' ||
-            node.name === 'WheelRearR' ||
-            node.name.startsWith('wheel_') ||
-            (node.name.startsWith('Wheel') &&
-              !node.name.includes('Rim') &&
-              !node.name.includes('Brake')))
-        ) {
-          node.name = 'wheel';
-        }
-        if (
-          node.name &&
-          (node.name.toLowerCase().includes('steering_wheel') ||
-            node.name === 'InteriorSteeringWheel01')
-        ) {
-          node.name = 'steering_wheel';
-        }
         if ((node as THREE.Mesh).isMesh) {
           const m = node as THREE.Mesh;
           m.castShadow = true;
@@ -1439,67 +1565,240 @@ export function createVehicleMesh(
           if (!origMat) return;
           const mName = origMat.name || '';
 
-          if (
-            mName === 'Body_Color' ||
-            mName.startsWith('Paint 1') ||
-            mName.startsWith('Paint 2')
-          ) {
-            const customPaint = (
-              origMat as THREE.MeshPhysicalMaterial
-            ).clone() as THREE.MeshPhysicalMaterial;
-            if (isPolice && mName.startsWith('Paint 2')) {
-              customPaint.color.set('#ffffff');
+          // ---- Body paint (CarConcept 'Paint 1/2', ferrari 'Body_Color') ----
+          if (mName === 'Body_Color' || mName.startsWith('Paint 1')) {
+            m.material = makeCarPaint(targetColor);
+          } else if (mName.startsWith('Paint 2')) {
+            if (m.name === 'BodyRoofPanel') {
+              // Panoramic roof glass: dark, glossy, lightly transmissive.
+              m.material = new THREE.MeshPhysicalMaterial({
+                color: '#0b1220',
+                transparent: true,
+                opacity: 0.62,
+                metalness: 0.1,
+                roughness: 0.04,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.02,
+                envMapIntensity: 1.5,
+              });
+            } else if (m.name === 'BodyHoodTopgrill') {
+              m.material = new THREE.MeshStandardMaterial({
+                color: '#111827',
+                metalness: 0.85,
+                roughness: 0.42,
+              });
+            } else if (m.name === 'BodyPanelsColor2') {
+              // Contrasting trim: white livery on police, graphite on civilian.
+              m.material = makeCarPaint(
+                isPolice ? new THREE.Color('#f8fafc') : new THREE.Color('#232a33'),
+                !isPolice
+              );
             } else {
-              customPaint.color.copy(targetColor);
+              m.material = makeCarPaint(
+                isPolice ? new THREE.Color('#f8fafc') : targetColor
+              );
             }
-            m.material = customPaint;
+          } else if (mName === 'License') {
+            const plateTex = createBanglaNumberPlateTexture(
+              isPolice
+                ? `ঢাকা মেট্রো-প ১১-${1020 + (seed % 9) * 31}`
+                : `ঢাকা মেট্রো-গ ৩৪-${5120 + (seed % 9) * 83}`,
+              false
+            );
+            m.material = new THREE.MeshStandardMaterial({
+              map: plateTex,
+              side: THREE.DoubleSide,
+              roughness: 0.45,
+              metalness: 0.1,
+            });
+          } else if (mName === 'Signallight') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#f59e0b',
+              emissive: '#f59e0b',
+              emissiveIntensity: 1.4,
+              roughness: 0.15,
+            });
+          } else if (mName === 'Mirror') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#f8fafc',
+              metalness: 1.0,
+              roughness: 0.02,
+              envMapIntensity: 2.0,
+            });
+          } else if (mName === 'Glass' || mName === 'Glass_Gray') {
+            m.material = new THREE.MeshPhysicalMaterial({
+              color: '#0b1220',
+              transparent: true,
+              opacity: 0.38,
+              metalness: 0.1,
+              roughness: 0.03,
+              clearcoat: 1.0,
+              clearcoatRoughness: 0.02,
+              envMapIntensity: 1.6,
+            });
+          } else if (mName === 'Headlight' || mName === 'Projector_Glass') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#fefce8',
+              emissive: '#fde68a',
+              emissiveIntensity: 2.2,
+              roughness: 0.06,
+              metalness: 0.4,
+            });
+          } else if (
+            mName === 'Brakelight' ||
+            mName === 'Taillight_Glass' ||
+            mName === 'Turn_Signal_LED'
+          ) {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#dc2626',
+              emissive: '#b91c1c',
+              emissiveIntensity: 2.0,
+              roughness: 0.12,
+              metalness: 0.2,
+            });
+          } else if (mName === 'Rim1' || mName === 'Rim2') {
+            // Polished alloy: bright metal, sharp environment reflections.
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#cbd5e1',
+              metalness: 1.0,
+              roughness: 0.16,
+              envMapIntensity: 1.8,
+            });
+          } else if (
+            mName === 'metal_chrome' ||
+            mName === 'metal_gray' ||
+            mName === 'Hardware'
+          ) {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#e2e8f0',
+              metalness: 1.0,
+              roughness: 0.12,
+              envMapIntensity: 1.9,
+            });
+          } else if (mName === 'Brake') {
+            // Brake caliper: painted, slightly rough cast metal.
+            m.material = new THREE.MeshStandardMaterial({
+              color: isPolice ? '#1d4ed8' : '#b91c1c',
+              metalness: 0.55,
+              roughness: 0.42,
+            });
+          } else if (mName === 'Disc') {
+            const clonedMat = (origMat as THREE.MeshStandardMaterial).clone();
+            clonedMat.roughness = 0.42;
+            clonedMat.metalness = 0.85;
+            m.material = clonedMat;
+          } else if (mName === 'Tireside') {
+            // Keep the baked tire sidewall (branding/lettering) but make it rubber.
+            const clonedMat = (origMat as THREE.MeshStandardMaterial).clone();
+            clonedMat.roughness = 0.88;
+            clonedMat.metalness = 0.0;
+            m.material = clonedMat;
+          } else if (mName === 'Tiretread' || mName === 'Tires') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#0d1014',
+              roughness: 0.94,
+              metalness: 0.02,
+            });
+          } else if (mName === 'Carbon_Fiber' || mName === 'carbon_fibre_trim') {
+            m.material = makeCarbonFibre();
+          } else if (mName === 'Leather') {
+            m.material = makeLeather('#1e2229');
+          } else if (mName === 'Leather_red' || mName === 'trim') {
+            m.material = makeLeather('#7f1d1d');
+          } else if (mName === 'Interior_dark' || mName === 'Interior_light') {
+            m.material = makeAlcantara();
+          } else if (mName === 'Carpet') {
+            m.material = makeAlcantara();
+          } else if (mName === 'plastic_gray') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#2b3038',
+              roughness: 0.72,
+              metalness: 0.05,
+            });
+          } else if (mName === 'Ferrari_Yellow') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#facc15',
+              metalness: 0.3,
+              roughness: 0.35,
+            });
+          } else if (mName === '_0098_DodgerBlue') {
+            m.material = new THREE.MeshStandardMaterial({
+              color: '#1d4ed8',
+              metalness: 0.4,
+              roughness: 0.4,
+            });
+          } else if (mName === 'Dashboard') {
+            m.material = new THREE.MeshPhysicalMaterial({
+              color: '#15181d',
+              metalness: 0.1,
+              roughness: 0.6,
+              clearcoat: 0.4,
+            });
+          } else if (
+            mName.startsWith('Interior') ||
+            mName === 'Floormat' ||
+            mName === 'Panel Sides'
+          ) {
+            // Interior trims: soft-touch surfaces with a subtle sheen.
+            const clonedMat = (origMat as THREE.MeshStandardMaterial).clone();
+            clonedMat.roughness = Math.max(0.5, clonedMat.roughness ?? 0.5);
+            clonedMat.metalness = 0.05;
+            m.material = clonedMat;
           }
         }
       });
 
       group.remove(fallbackGroup);
       group.add(cloned);
+
+      // Fit plates / glow / beacon to this GLB's real bounds (local space).
+      if (carModelKey === 'car_concept') {
+        const sc = cloned.scale.x;
+        fitCarAccents(cloned, {
+          fx: 0,
+          fy: 0.3 * sc + cloned.position.y,
+          fz: 2.2 * sc,
+          rx: 0,
+          ry: 0.33 * sc + cloned.position.y,
+          rz: -1.9 * sc,
+          hx: 0.52 * sc,
+          hy: 0.66 * sc + cloned.position.y,
+          hz: 2.2 * sc,
+          tx: 0.6 * sc,
+          ty: 0.97 * sc + cloned.position.y,
+          tz: -1.56 * sc,
+          topY: 1.16 * sc + cloned.position.y,
+          topZ: 0.2,
+          plateInside: 0.01,
+        }, isPolice, seed, frontPlateTex);
+      } else {
+        // ferrari.glb is authored front-at--Z and then flipped by rotation.y = PI,
+        // so its front work is the -Z side of local space (was inverted before).
+        const sc = cloned.scale.x;
+        fitCarAccents(cloned, {
+          fx: 0,
+          fy: 0.24 * sc + cloned.position.y,
+          fz: -2.19 * sc,
+          rx: 0,
+          ry: 0.26 * sc + cloned.position.y,
+          rz: 2.12 * sc,
+          hx: 0.63 * sc,
+          hy: 0.6 * sc + cloned.position.y,
+          hz: -2.19 * sc,
+          tx: 0.62 * sc,
+          ty: 0.86 * sc + cloned.position.y,
+          tz: 2.13 * sc,
+          topY: 1.2 * sc + cloned.position.y,
+          topZ: -0.1,
+          plateInside: 0.01,
+        }, isPolice, seed, frontPlateTex);
+      }
     } catch {}
   });
 
-  // BRTA Bangla Vehicle Registration Plates (ঢাকা মেট্রো-গ ৩৪-৮৯১২)
-  const carPlateTex = createBanglaNumberPlateTexture(
-    isPolice
-      ? `ঢাকা মেট্রো-প ১১-${1020 + (seed % 9) * 31}`
-      : `ঢাকা মেট্রো-গ ৩৪-${5120 + (seed % 9) * 83}`,
-    false
-  );
-  const frontPlate = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.48, 0.16),
-    new THREE.MeshBasicMaterial({ map: carPlateTex, side: THREE.DoubleSide })
-  );
-  frontPlate.position.set(0, 0.42, 2.28);
-  group.add(frontPlate);
-
-  if (isPolice) {
-    const barBase = new THREE.Mesh(
-      new THREE.BoxGeometry(1.05, 0.06, 0.24),
-      new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.85 })
-    );
-    barBase.position.set(0, 1.48, -0.1);
-    group.add(barBase);
-
-    const redLight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.44, 0.12, 0.2),
-      new THREE.MeshBasicMaterial({ color: '#ef4444' })
-    );
-    redLight.position.set(-0.28, 1.54, -0.1);
-    redLight.name = 'siren_red';
-    group.add(redLight);
-
-    const blueLight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.44, 0.12, 0.2),
-      new THREE.MeshBasicMaterial({ color: '#3b82f6' })
-    );
-    blueLight.position.set(0.28, 1.54, -0.1);
-    blueLight.name = 'siren_blue';
-    group.add(blueLight);
-  }
+  // Plates, headlight/taillight glow and the police beacon are fitted to the
+  // loaded bodywork inside the loader callback above (see fitCarAccents), so
+  // they always land on the real model instead of a guessed offset.
 
   return group;
 }
@@ -1509,8 +1808,12 @@ export interface RpmBoneRig {
   rightUpLeg?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   leftLeg?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   rightLeg?: { bone: THREE.Object3D; rest: THREE.Quaternion };
+  leftFoot?: { bone: THREE.Object3D; rest: THREE.Quaternion };
+  rightFoot?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   leftArm?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   rightArm?: { bone: THREE.Object3D; rest: THREE.Quaternion };
+  leftForeArm?: { bone: THREE.Object3D; rest: THREE.Quaternion };
+  rightForeArm?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   spine?: { bone: THREE.Object3D; rest: THREE.Quaternion };
   phase: number;
 }
@@ -1528,11 +1831,21 @@ export interface CharacterLimbs {
     idle?: THREE.AnimationAction;
     walk?: THREE.AnimationAction;
     run?: THREE.AnimationAction;
-    driving?: THREE.AnimationAction;
   };
-  currentActionName?: 'idle' | 'walk' | 'run' | 'driving';
+  currentActionName?: 'idle' | 'walk' | 'run';
   gltfRoot?: THREE.Object3D;
   rpmRig?: RpmBoneRig;
+  weaponHand?: THREE.Object3D;
+  fingerBones?: Array<{ bone: THREE.Object3D; rest: THREE.Quaternion }>;
+  gripAmount?: number;
+  aimBones?: {
+    rightArm: THREE.Object3D;
+    rightArmRest: THREE.Quaternion;
+    rightForeArm: THREE.Object3D;
+    rightForeArmRest: THREE.Quaternion;
+    spine?: THREE.Object3D;
+    spineRest?: THREE.Quaternion;
+  };
 }
 
 const SOUTH_ASIAN_SKIN_TONES = [
@@ -1591,81 +1904,6 @@ export function createCharacterMesh(
   const head = new THREE.Object3D();
   const weaponMesh = new THREE.Group();
 
-  // Instant sculpted humanoid fallback body so character is immediately visible from frame 0
-  const fallbackMeshGroup = new THREE.Group();
-  fallbackMeshGroup.name = 'fallback_avatar';
-
-  const skinMat = new THREE.MeshStandardMaterial({
-    color: SOUTH_ASIAN_SKIN_TONES[seed % SOUTH_ASIAN_SKIN_TONES.length],
-    roughness: 0.65,
-  });
-  const shirtMat = new THREE.MeshStandardMaterial({
-    color: shirtColor,
-    roughness: 0.75,
-  });
-  const pantsMat = new THREE.MeshStandardMaterial({
-    color: pantsColor,
-    roughness: 0.8,
-  });
-
-  const torso = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.24, 0.2, 0.68, 12),
-    shirtMat
-  );
-  torso.position.y = 1.15;
-  torso.castShadow = true;
-  fallbackMeshGroup.add(torso);
-
-  const headMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.14, 12, 12),
-    skinMat
-  );
-  headMesh.position.y = 1.62;
-  headMesh.castShadow = true;
-  head.add(headMesh);
-  fallbackMeshGroup.add(head);
-
-  const hairMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.145, 10, 10),
-    new THREE.MeshStandardMaterial({ color: '#18181b', roughness: 0.9 })
-  );
-  hairMesh.position.set(0, 1.66, -0.02);
-  fallbackMeshGroup.add(hairMesh);
-
-  const limbGeo = new THREE.CylinderGeometry(0.075, 0.065, 0.65, 8);
-
-  const leftLegMesh = new THREE.Mesh(limbGeo, pantsMat);
-  leftLegMesh.position.y = -0.325;
-  leftLegMesh.castShadow = true;
-  leftLeg.position.set(-0.13, 0.82, 0);
-  leftLeg.add(leftLegMesh);
-  fallbackMeshGroup.add(leftLeg);
-
-  const rightLegMesh = new THREE.Mesh(limbGeo, pantsMat);
-  rightLegMesh.position.y = -0.325;
-  rightLegMesh.castShadow = true;
-  rightLeg.position.set(0.13, 0.82, 0);
-  rightLeg.add(rightLegMesh);
-  fallbackMeshGroup.add(rightLeg);
-
-  const leftArmMesh = new THREE.Mesh(limbGeo, shirtMat);
-  leftArmMesh.position.y = -0.28;
-  leftArmMesh.castShadow = true;
-  leftArm.position.set(-0.31, 1.38, 0);
-  leftArm.add(leftArmMesh);
-  fallbackMeshGroup.add(leftArm);
-
-  const rightArmMesh = new THREE.Mesh(limbGeo, shirtMat);
-  rightArmMesh.position.y = -0.28;
-  rightArmMesh.castShadow = true;
-  rightArm.position.set(0.31, 1.38, 0);
-  rightArm.add(rightArmMesh);
-  fallbackMeshGroup.add(rightArm);
-
-  weaponMesh.position.set(0.28, 0.95, 0.25);
-  group.add(weaponMesh);
-  group.add(fallbackMeshGroup);
-
   const limbs: CharacterLimbs = {
     group,
     leftLeg,
@@ -1704,10 +1942,8 @@ export function createCharacterMesh(
   let modelKey: ModelKey = 'rpm_male';
   if (isPlayer) {
     modelKey = 'rpm_male'; // Realistic 3D Human Man with full hair for Arif Rahman
-  } else if (isNadia) {
-    modelKey = 'hvgirl'; // Realistic 3D Human Woman with skeletal Idle/Walking clips
   } else if (isFemale) {
-    modelKey = seed % 2 === 0 ? 'hvgirl' : 'michelle';
+    modelKey = 'michelle'; // Photorealistic 3D Human Woman
   } else if (isPolice) {
     modelKey = 'soldier';
   } else if (isKamal || isSikder || isHajiElder || wearsLungi) {
@@ -1720,33 +1956,30 @@ export function createCharacterMesh(
     try {
       const clonedScene = SkeletonUtils.clone(gltf.scene);
 
-      // Normalize height so every 3D human stands ~1.72m - 1.84m with feet flush on y = 0
-      clonedScene.updateMatrixWorld(true);
-      const rawBox = new THREE.Box3().setFromObject(clonedScene);
-      const rawSize = new THREE.Vector3();
-      rawBox.getSize(rawSize);
-
-      const baseTargetHeight = isFemale
-        ? 1.66 + (seed % 4) * 0.025
+      // Exact verified human scale for each .GLB model so every human stands ~1.72m - 1.82m
+      // with shoes planted flush on y = 0 (avoids SkinnedMesh Box3 distortion)
+      const heightVar = isPlayer ? 1.0 : 0.96 + (seed % 5) * 0.025;
+      const widthVar = isKamal
+        ? 1.12
+        : isSikder
+        ? 1.14
         : isPlayer
-        ? 1.8
-        : 1.72 + (seed % 5) * 0.03;
+        ? 1.0
+        : 0.95 + (seed % 4) * 0.035;
 
-      if (modelKey === 'hvgirl' || modelKey === 'soldier') {
-        clonedScene.scale.setScalar(1.0);
-        if (modelKey === 'hvgirl') {
-          clonedScene.scale.setScalar(0.11);
-        }
-      } else if (rawSize.y > 0.1) {
-        const s = baseTargetHeight / rawSize.y;
-        const widthFactor = isKamal
-          ? 1.14
-          : isSikder
-          ? 1.16
-          : isFemale
-          ? 0.94
-          : 0.95 + (seed % 4) * 0.04;
-        clonedScene.scale.set(s * widthFactor, s, s * widthFactor);
+      if (modelKey === 'soldier' || modelKey === 'michelle') {
+        // Uniform scaling only — non-uniform Y stretch visibly distorts faces
+        // and limbs on fully sculpted humans.
+        const s = heightVar;
+        clonedScene.scale.setScalar(s);
+      } else {
+        // rpm_male.glb (1.85m native) and readyplayerme1.glb (1.87m native)
+        const baseScale = 0.96;
+        clonedScene.scale.set(
+          baseScale * widthVar,
+          baseScale * heightVar,
+          baseScale * widthVar
+        );
       }
 
       // Face forward (+Z) in the game engine's coordinate system
@@ -1757,17 +1990,20 @@ export function createCharacterMesh(
       const skinTint = new THREE.Color(
         SOUTH_ASIAN_SKIN_TONES[seed % SOUTH_ASIAN_SKIN_TONES.length]
       );
-      const hairTint = new THREE.Color(
-        isSikder || (isHajiElder && seed % 2 === 0)
-          ? '#e2e8f0'
-          : HAIR_COLORS[seed % HAIR_COLORS.length]
-      );
+      // Keep garment colours close to the authored palette: heavy white mixing
+      // was making panjabis and shirts look neon and plastic.
+      const brightTopTint = new THREE.Color(
+        isSikder ? '#334155' : shirtColor
+      ).lerp(new THREE.Color('#ffffff'), 0.12);
+      const brightBottomTint = new THREE.Color(
+        isSikder ? '#e2e8f0' : pantsColor
+      ).lerp(new THREE.Color('#ffffff'), 0.1);
       const lungiPal = LUNGI_PALETTES[seed % LUNGI_PALETTES.length];
       const lungiTex = wearsLungi
         ? createLungiPatternTexture(lungiPal.a, lungiPal.b)
         : null;
 
-      // Customize sub-meshes & materials per person so EVERY human looks distinct
+      // Customize sub-meshes & materials while preserving photorealistic baked PBR textures!
       clonedScene.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const m = child as THREE.Mesh;
@@ -1780,18 +2016,21 @@ export function createCharacterMesh(
             return;
           }
 
-          // Toggle Beard & Headwear (Tupi / Cap) on ReadyPlayerMe Human
+          // Beard & headwear: readyplayerme1.glb uses 'Wolf3D_Beard' and
+          // 'Wolf3D_Headwear' / 'Mesh'. Women never get a beard.
           if (m.name === 'Wolf3D_Beard') {
             m.visible =
-              isKamal ||
-              isSikder ||
-              isHajiElder ||
-              wearsLungi ||
-              seed % 2 === 0;
+              !isFemale &&
+              (isKamal ||
+                isSikder ||
+                isHajiElder ||
+                wearsLungi ||
+                seed % 2 === 0);
           }
-          if (m.name === 'Mesh') {
-            // Headwear mesh in readyplayerme1.glb
-            m.visible = isHajiElder || isKamal || (wearsLungi && seed % 2 === 0);
+          if (m.name === 'Mesh' || m.name === 'Wolf3D_Headwear') {
+            m.visible =
+              !isFemale &&
+              (isHajiElder || isKamal || (wearsLungi && seed % 2 === 0));
           }
 
           const mat = (
@@ -1799,6 +2038,21 @@ export function createCharacterMesh(
               ? m.material[0].clone()
               : (m.material as THREE.MeshStandardMaterial).clone()
           ) as THREE.MeshStandardMaterial;
+          m.material = mat;
+          // Player keeps crisp original PBR colors, but materials are cloned so
+          // tintCharacterOutfit() never mutates the cached GLTF.
+          if (modelKey === 'michelle') {
+            mat.roughness = Math.min(0.85, Math.max(0.6, mat.roughness ?? 0.7));
+            mat.metalness = 0;
+          }
+          if (isPlayer) {
+            // Keep the authored colours, but make cloth read as cloth.
+            if (/Outfit/i.test(mat.name || '')) {
+              mat.roughness = 0.86;
+              mat.metalness = 0.0;
+            }
+            return;
+          }
           const matName = mat.name || '';
 
           if (
@@ -1806,7 +2060,15 @@ export function createCharacterMesh(
             matName === 'Wolf3D_Outfit_Top' ||
             matName === 'T-shirt'
           ) {
-            mat.color.set(isSikder ? '#1e293b' : shirtColor);
+            mat.color.copy(brightTopTint);
+            // Cloth should not read as glossy plastic.
+            mat.roughness = 0.88;
+            mat.metalness = 0.0;
+            if ('sheen' in mat) {
+              (mat as THREE.MeshPhysicalMaterial).sheen = 0.35;
+              (mat as THREE.MeshPhysicalMaterial).sheenColor =
+                new THREE.Color('#ffffff');
+            }
           } else if (
             m.name === 'Wolf3D_Outfit_Bottom' ||
             matName === 'Wolf3D_Outfit_Bottom' ||
@@ -1816,8 +2078,10 @@ export function createCharacterMesh(
               mat.map = lungiTex;
               mat.color.set('#ffffff');
             } else {
-              mat.color.set(isSikder ? '#f8fafc' : pantsColor);
+              mat.color.copy(brightBottomTint);
             }
+            mat.roughness = 0.9;
+            mat.metalness = 0.0;
           } else if (
             m.name === 'Wolf3D_Skin' ||
             m.name === 'Wolf3D_Head' ||
@@ -1825,30 +2089,33 @@ export function createCharacterMesh(
             matName === 'Wolf3D_Skin' ||
             matName === 'skin'
           ) {
-            mat.color.lerp(skinTint, 0.35);
-          } else if (
-            m.name === 'Wolf3D_Hair' ||
-            m.name === 'Wolf3D_Beard' ||
-            matName === 'Wolf3D_Hair' ||
-            matName === 'Wolf3D_Beard' ||
-            matName === 'hair'
-          ) {
-            mat.color.set(hairTint);
+            // The RPM/ReadyPlayerMe base skin is very pale; pull it much
+            // closer to realistic Bangladeshi complexions.
+            mat.color.set('#ffffff').lerp(skinTint, 0.55);
           } else if (m.name === 'Mesh' || matName === 'Wolf3D_Headwear') {
-            // White Prayer Tupi for Old Dhaka Haji, Red Gamcha Cap for Puller, Navy for Kamal
             mat.color.set(
-              isHajiElder ? '#f8fafc' : wearsLungi ? '#dc2626' : '#1d4ed8'
+              isHajiElder ? '#ffffff' : wearsLungi ? '#f87171' : '#93c5fd'
             );
-          } else if (modelKey === 'michelle' || modelKey === 'soldier') {
-            mat.color.lerp(new THREE.Color(shirtColor), 0.45);
+          } else if (modelKey === 'soldier') {
+            // Soldier has separate body/visor materials; a light tint keeps the
+            // DMP uniform readable without destroying the baked detail.
+            mat.color.set('#ffffff').lerp(brightTopTint, 0.18);
           }
+          // Michelle.glb packs skin, hair, glasses and clothing into one baked
+          // 'Ch03_Body' material, so tinting it darkened her skin to near-black.
+          // Her authored texture is kept intact and only made less glossy.
 
           m.material = mat;
         }
       });
 
-      // Set up skeletal animation (either native AnimationMixer or ReadyPlayerMe bone rig)
-      if (gltf.animations && gltf.animations.length > 0) {
+      // Set up skeletal animation: native AnimationMixer for Soldier,
+      // and smooth humanoid bone rig for ReadyPlayerMe & Michelle
+      if (
+        modelKey === 'soldier' &&
+        gltf.animations &&
+        gltf.animations.length > 0
+      ) {
         const mixer = new THREE.AnimationMixer(clonedScene);
         const idleClip =
           THREE.AnimationClip.findByName(gltf.animations, 'Idle') ||
@@ -1876,30 +2143,203 @@ export function createCharacterMesh(
         limbs.actions = actions;
         limbs.currentActionName = 'idle';
       } else {
-        // ReadyPlayerMe 3D Human Skeleton Bone Rig (rpm_male.glb & readyplayerme1.glb)
+        // Humanoid Skeleton Bone Rig (rpm_male.glb, readyplayerme1.glb, Michelle.glb)
         const rig: RpmBoneRig = { phase: seed * 1.3 };
+        // Relaxed arm quaternions in Mixamo shoulder space so Michelle is never in T-pose
+        const relaxedLeftArmQuat = new THREE.Quaternion(
+          0.476682,
+          0.0426,
+          -0.058619,
+          0.876084
+        );
+        const relaxedRightArmQuat = new THREE.Quaternion(
+          0.47668,
+          -0.042601,
+          0.058619,
+          0.876085
+        );
+        // Bring ReadyPlayerMe arms inward from 30° A-pose to natural relaxed standing posture
+        const rpmAdductQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0),
+          0.3
+        );
+
         clonedScene.traverse((node) => {
-          if (node.name === 'LeftUpLeg')
+          const n = node.name.replace(/^mixamorig[:_]?/, '');
+          if (n === 'LeftUpLeg')
             rig.leftUpLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'RightUpLeg')
+          else if (n === 'RightUpLeg')
             rig.rightUpLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'LeftLeg')
+          else if (n === 'LeftLeg')
             rig.leftLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'RightLeg')
+          else if (n === 'RightLeg')
             rig.rightLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'LeftArm')
+          else if (n === 'LeftFoot')
+            rig.leftFoot = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightFoot')
+            rig.rightFoot = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'LeftArm') {
+            if (modelKey === 'michelle') {
+              node.quaternion.copy(relaxedLeftArmQuat);
+            } else {
+              node.quaternion.multiply(rpmAdductQuat);
+            }
             rig.leftArm = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'RightArm')
+          } else if (n === 'RightArm') {
+            if (modelKey === 'michelle') {
+              node.quaternion.copy(relaxedRightArmQuat);
+            } else {
+              node.quaternion.multiply(rpmAdductQuat);
+            }
             rig.rightArm = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'Spine' || node.name === 'Spine1')
-            rig.spine = { bone: node, rest: node.quaternion.clone() };
-          else if (node.name === 'Spine')
+          } else if (n === 'LeftForeArm')
+            rig.leftForeArm = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightForeArm')
+            rig.rightForeArm = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'Spine')
             rig.spine = { bone: node, rest: node.quaternion.clone() };
         });
         limbs.rpmRig = rig;
       }
 
-      fallbackMeshGroup.visible = false;
+      // Upgrade to real 65-bone Mixamo motion capture from HVGirl.glb
+      // (Idle + Walking) retargeted onto rpm_male / readyplayerme1 / Michelle.
+      // Verified in Node: Head stays ~[0,1.64,-0.04], hands swing naturally.
+      if (modelKey !== 'soldier') {
+        ensureModelLoaded('hvgirl', (hvGltf) => {
+          try {
+            if (!hvGltf.animations || hvGltf.animations.length === 0) return;
+            const isMichelle = modelKey === 'michelle';
+            // HVGirl.glb is authored Z-up, so its Hips rotation only lines up
+            // with the Y-up RPM rig after a -90deg X correction. Michelle.glb
+            // already shares HVGirl's rig/orientation and needs no fix, but its
+            // mocap translations are in a different unit, so scale them down.
+            const hipsFix = new THREE.Quaternion().setFromAxisAngle(
+              new THREE.Vector3(1, 0, 0),
+              Math.PI / 2
+            );
+            const retarget = (clip: THREE.AnimationClip) => {
+              const c = clip.clone();
+              // HVGirl.glb's clips carry centimetre-scale .position/.scale tracks
+              // that would shatter the RPM skeleton; rotation-only retargeting
+              // keeps Head at ~1.64m with hands at ±0.30m (verified in Node).
+              c.tracks = c.tracks
+                .filter((track) => track.name.endsWith('.quaternion'))
+                .map((track) => {
+                const t = track.clone();
+                t.name = t.name.replace(/^mixamorig[:_]?/, '');
+                if (!isMichelle && t.name === 'Hips.quaternion') {
+                  const v = (t as unknown as { values: number[] }).values;
+                  const q = new THREE.Quaternion();
+                  const q2 = new THREE.Quaternion();
+                  for (let i = 0; i < v.length; i += 4) {
+                    q.set(v[i], v[i + 1], v[i + 2], v[i + 3]);
+                    q2.copy(hipsFix).multiply(q);
+                    v[i] = q2.x;
+                    v[i + 1] = q2.y;
+                    v[i + 2] = q2.z;
+                    v[i + 3] = q2.w;
+                  }
+                }
+                return t;
+              });
+              return c;
+            };
+            const idleClip =
+              THREE.AnimationClip.findByName(hvGltf.animations, 'Idle') ||
+              hvGltf.animations[0];
+            const walkClip =
+              THREE.AnimationClip.findByName(hvGltf.animations, 'Walking') ||
+              THREE.AnimationClip.findByName(hvGltf.animations, 'Walk') ||
+              idleClip;
+            if (!idleClip) return;
+            // GLTFLoader sanitizes 'mixamorig:' to 'mixamorig_', so Michelle's
+            // bones must be renamed to the bare Mixamo names or the clips
+            // silently bind to nothing (verified: hips stayed frozen before).
+            if (isMichelle) {
+              clonedScene.traverse((o) => {
+                if (o.name.startsWith('mixamorig')) {
+                  o.name = o.name.replace(/^mixamorig[:_]?/, '');
+                }
+              });
+            }
+            const mixer = new THREE.AnimationMixer(clonedScene);
+            const actions: CharacterLimbs['actions'] = {};
+            actions.idle = mixer.clipAction(retarget(idleClip));
+            actions.idle.play();
+            // De-sync the crowd so no two people breathe/stand in lockstep.
+            actions.idle.time =
+              ((seed * 0.6180339887) % 1) * idleClip.duration;
+            actions.idle.timeScale = 0.92 + ((seed % 7) / 7) * 0.18;
+            if (walkClip) actions.walk = mixer.clipAction(retarget(walkClip));
+            if (walkClip) {
+              actions.run = mixer.clipAction(retarget(walkClip));
+              actions.run.timeScale = 1.7;
+            }
+            limbs.mixer = mixer;
+            limbs.actions = actions;
+            limbs.currentActionName = 'idle';
+            limbs.rpmRig = undefined;
+          } catch {}
+        });
+      }
+
+      // Cache upper-body bones for aim/slash overrides on the mixer path.
+      {
+        let ra: THREE.Object3D | undefined;
+        let rfa: THREE.Object3D | undefined;
+        let sp: THREE.Object3D | undefined;
+        clonedScene.traverse((node) => {
+          const n = node.name.replace(/^mixamorig[:_]?/, '');
+          if (n === 'RightArm' && !ra) ra = node;
+          else if (n === 'RightForeArm' && !rfa) rfa = node;
+          else if (n === 'Spine' && !sp) sp = node;
+        });
+        if (ra && rfa) {
+          limbs.aimBones = {
+            rightArm: ra,
+            rightArmRest: ra.quaternion.clone(),
+            rightForeArm: rfa,
+            rightForeArmRest: rfa.quaternion.clone(),
+            spine: sp,
+            spineRest: sp ? sp.quaternion.clone() : undefined,
+          };
+        }
+      }
+
+      // Attach weapon to the RightHand bone so it tracks the hand exactly.
+      {
+        let rightHand: THREE.Object3D | undefined;
+        clonedScene.traverse((node) => {
+          if (!rightHand && node.name.replace(/^mixamorig[:_]?/, '') === 'RightHand') {
+            rightHand = node;
+          }
+        });
+        if (rightHand) {
+          limbs.weaponHand = rightHand;
+          // Cache every right-hand finger joint so the hand can close into a grip.
+          const fingers: Array<{
+            bone: THREE.Object3D;
+            rest: THREE.Quaternion;
+          }> = [];
+          clonedScene.traverse((node) => {
+            if (
+              /^RightHand(Thumb|Index|Middle|Ring|Pinky)[1-4]$/.test(
+                node.name.replace(/^mixamorig[:_]?/, '')
+              )
+            ) {
+              fingers.push({ bone: node, rest: node.quaternion.clone() });
+            }
+          });
+          limbs.fingerBones = fingers;
+          rightHand.add(weaponMesh);
+          weaponMesh.position.set(0, 0, 0.06);
+          weaponMesh.rotation.set(0.22, 0, 0);
+        } else {
+          weaponMesh.position.set(-0.26, 1.02, 0.16);
+          group.add(weaponMesh);
+        }
+      }
       group.add(clonedScene);
       limbs.gltfRoot = clonedScene;
 
@@ -1918,55 +2358,109 @@ export function createCharacterMesh(
   return limbs;
 }
 
+
+const _hwPos = new THREE.Vector3();
+const _hwQuat = new THREE.Quaternion();
+const _hwTmp = new THREE.Vector3();
+
+/**
+ * Accumulates the world position / rotation of `node` up to `root` without
+ * touching matrixWorld (cheap enough to run per character, per frame).
+ */
+function accumulateTransform(
+  node: THREE.Object3D,
+  root: THREE.Object3D,
+  outPos: THREE.Vector3,
+  outQuat: THREE.Quaternion
+) {
+  const chain: THREE.Object3D[] = [];
+  let cur: THREE.Object3D | null = node;
+  while (cur && cur !== root) {
+    chain.push(cur);
+    cur = cur.parent;
+  }
+  outPos.set(0, 0, 0);
+  outQuat.identity();
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const n = chain[i];
+    _hwTmp.copy(n.position).applyQuaternion(outQuat);
+    outPos.add(_hwTmp);
+    outQuat.multiply(n.quaternion);
+  }
+}
+
 const _axisX = new THREE.Vector3(1, 0, 0);
 const _axisZ = new THREE.Vector3(0, 0, 1);
 const _tmpQuat = new THREE.Quaternion();
 
 export function setCharacterAnimationState(
   limbs: CharacterLimbs,
-  targetState: 'idle' | 'walk' | 'run' | 'driving',
+  targetState: 'idle' | 'walk' | 'run',
   dt: number,
-  activeToolId?: ToolWeaponId,
-  isAimingOrFiring = false,
-  aimPitch = 0
+  attackTimer = 0,
+  isAimingGun = false,
+  /** Playback speed for the walk/run clip; keeps feet in sync with the ground. */
+  speedScale = 1
 ) {
-  // 1. Drive ReadyPlayerMe 3D Human Skeleton Bones smoothly when walking, running, idling, or driving
+  // Close the right hand into a grip around the weapon (fingers curl on +X,
+  // measured on the live RPM hand: index tip travels 3.0cm toward the palm at
+  // 0.7 rad). Relaxed when nothing is held.
+  if (limbs.fingerBones && limbs.fingerBones.length > 0) {
+    const holdsWeapon = limbs.weaponMesh.children.length > 0;
+    const target = holdsWeapon ? 1 : 0;
+    // Reuse the rig accumulator's field for smoothing.
+    const cur = limbs.gripAmount ?? target;
+    const next = cur + (target - cur) * Math.min(1, dt * 9);
+    limbs.gripAmount = next;
+    for (const f of limbs.fingerBones) {
+      const name = f.bone.name.replace(/^mixamorig[:_]?/, '');
+      const isThumb = name.startsWith('RightHandThumb');
+      // Thumb wraps across the grip and therefore curls less.
+      const amount = next * (isThumb ? 0.45 : 1.15);
+      _tmpQuat.setFromAxisAngle(_axisX, amount);
+      f.bone.quaternion.copy(f.rest).multiply(_tmpQuat);
+    }
+  }
+
+  // Animate 3D weapon held in RightHand. When attached to the hand bone,
+  // positions are local to the hand; otherwise they are group-space.
+  if (limbs.weaponMesh) {
+    const attachedToHand =
+      limbs.weaponMesh.parent && limbs.weaponMesh.parent !== limbs.group;
+    if (attachedToHand) {
+      if (isAimingGun) {
+        const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.14 : 0;
+        limbs.weaponMesh.position.set(0, 0, 0.06 - recoil * 0.3);
+        limbs.weaponMesh.rotation.set(-recoil, 0, 0);
+      } else if (attackTimer > 0) {
+        const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+        limbs.weaponMesh.position.set(0, 0, 0.06 + slash * 0.05);
+        limbs.weaponMesh.rotation.set(slash * 1.45, slash * 0.45, 0);
+      } else {
+        limbs.weaponMesh.position.set(0, 0, 0.06);
+        limbs.weaponMesh.rotation.set(0.22, 0, 0);
+      }
+    } else if (isAimingGun) {
+      const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.14 : 0;
+      limbs.weaponMesh.position.set(-0.25, 1.33, 0.46 - recoil * 0.5);
+      limbs.weaponMesh.rotation.set(-recoil, 0, 0);
+    } else if (attackTimer > 0) {
+      const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+      limbs.weaponMesh.position.set(
+        -0.26 + slash * 0.18,
+        1.16 - slash * 0.22,
+        0.38 + slash * 0.28
+      );
+      limbs.weaponMesh.rotation.set(slash * 1.45, slash * 0.45, 0);
+    } else {
+      limbs.weaponMesh.position.set(-0.28, 1.0, 0.18);
+      limbs.weaponMesh.rotation.set(0.22, 0, 0);
+    }
+  }
+
+  // 1. Drive ReadyPlayerMe & Michelle 3D Human Skeleton Bones smoothly
   if (limbs.rpmRig) {
     const rig = limbs.rpmRig;
-
-    if (targetState === 'driving') {
-      // Natural seated driving posture inside vehicle
-      if (rig.leftUpLeg) {
-        _tmpQuat.setFromAxisAngle(_axisX, 1.48);
-        rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(_tmpQuat);
-      }
-      if (rig.rightUpLeg) {
-        _tmpQuat.setFromAxisAngle(_axisX, 1.48);
-        rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(_tmpQuat);
-      }
-      if (rig.leftLeg) {
-        _tmpQuat.setFromAxisAngle(_axisX, -1.52);
-        rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(_tmpQuat);
-      }
-      if (rig.rightLeg) {
-        _tmpQuat.setFromAxisAngle(_axisX, -1.52);
-        rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(_tmpQuat);
-      }
-      if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, -1.22);
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.rightArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, -1.22);
-        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.spine) {
-        _tmpQuat.setFromAxisAngle(_axisX, 0.14);
-        rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
-      }
-      return;
-    }
-
     const speed =
       targetState === 'run' ? 14 : targetState === 'walk' ? 9 : 2.2;
     rig.phase += dt * speed;
@@ -1997,64 +2491,79 @@ export function setCharacterAnimationState(
       _tmpQuat.setFromAxisAngle(_axisX, kneeBend);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(_tmpQuat);
     }
-
+    if (rig.leftFoot) {
+      const ankleFlex = targetState === 'idle' ? 0 : s * 0.32;
+      _tmpQuat.setFromAxisAngle(_axisX, ankleFlex);
+      rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(_tmpQuat);
+    }
+    if (rig.rightFoot) {
+      const ankleFlex = targetState === 'idle' ? 0 : -s * 0.32;
+      _tmpQuat.setFromAxisAngle(_axisX, ankleFlex);
+      rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(_tmpQuat);
+    }
     if (rig.spine) {
-      const spineFlex = Math.sin(rig.phase * 0.9) * (targetState === 'idle' ? 0.025 : 0.06);
-      const pitchTilt = isAimingOrFiring ? -aimPitch * 0.5 : 0;
-      _tmpQuat.setFromAxisAngle(_axisX, spineFlex + pitchTilt);
+      const sprintLean =
+        targetState === 'run'
+          ? 0.14
+          : targetState === 'walk'
+          ? 0.05
+          : Math.sin(rig.phase) * 0.015;
+      _tmpQuat.setFromAxisAngle(_axisX, sprintLean);
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
     }
-
-    // Realistic weapon-specific arm poses for firearms and melee
-    if (activeToolId === 'type56_ak' || activeToolId === 'katta') {
-      // Two-handed rifle assault hold
-      if (rig.rightArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, isAimingOrFiring ? -1.55 : -1.35);
+    if (limbs.gltfRoot) {
+      limbs.gltfRoot.position.y =
+        targetState === 'idle' ? 0 : Math.abs(Math.sin(rig.phase)) * 0.025;
+    }
+    if (rig.leftArm) {
+      _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+    }
+    if (rig.leftForeArm) {
+      const elbowBend =
+        targetState === 'run'
+          ? -0.65 - Math.max(0, s) * 0.35
+          : targetState === 'walk'
+          ? -0.28 - Math.max(0, s) * 0.22
+          : -0.12;
+      _tmpQuat.setFromAxisAngle(_axisZ, elbowBend);
+      rig.leftForeArm.bone.quaternion
+        .copy(rig.leftForeArm.rest)
+        .multiply(_tmpQuat);
+    }
+    if (rig.rightArm) {
+      if (isAimingGun) {
+        const recoilKick = attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
+        _tmpQuat.setFromAxisAngle(_axisZ, -1.1 + recoilKick);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, isAimingOrFiring ? -1.35 : -1.15);
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-      }
-    } else if (
-      activeToolId === 'shutter_pistol' ||
-      activeToolId === 'pipe_gun' ||
-      activeToolId === 'tt_pistol'
-    ) {
-      // Tactical pistol aim
-      if (rig.rightArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, isAimingOrFiring ? -1.6 : -1.45);
+      } else if (attackTimer > 0) {
+        const swingAngle = -1.25 * Math.sin((attackTimer / 0.35) * Math.PI);
+        _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, isAimingOrFiring ? -1.35 : -0.2);
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-      }
-    } else if (activeToolId && activeToolId !== 'fists') {
-      // Melee hold (Ramda, Chapati, Bat, Lathi)
-      if (rig.rightArm) {
-        _tmpQuat.setFromAxisAngle(_axisX, isAimingOrFiring ? -1.85 : -0.75);
-        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-      }
-    } else {
-      // Unarmed natural gait swing - arms swing in opposing natural synchrony
-      if (rig.leftArm) {
-        _tmpQuat.setFromAxisAngle(_axisZ, s * 0.7);
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-      }
-      if (rig.rightArm) {
+      } else {
         _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
       }
+    }
+    if (rig.rightForeArm) {
+      const rElbowBend = isAimingGun
+        ? -0.18
+        : attackTimer > 0
+        ? -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
+        : targetState === 'run'
+        ? -0.65 - Math.max(0, -s) * 0.35
+        : targetState === 'walk'
+        ? -0.28 - Math.max(0, -s) * 0.22
+        : -0.12;
+      _tmpQuat.setFromAxisAngle(_axisZ, rElbowBend);
+      rig.rightForeArm.bone.quaternion
+        .copy(rig.rightForeArm.rest)
+        .multiply(_tmpQuat);
     }
     return;
   }
 
-  // 2. Drive native GLTF AnimationMixer for HVGirl, Michelle, Soldier, etc.
+  // 2. Drive native GLTF AnimationMixer for Soldier & mocap-retargeted humans
   if (!limbs.mixer || !limbs.actions) return;
   if (limbs.currentActionName !== targetState) {
     const prev = limbs.currentActionName
@@ -2067,26 +2576,67 @@ export function setCharacterAnimationState(
         prev.fadeOut(0.18);
       }
       limbs.currentActionName = targetState;
-    } else if (targetState === 'driving') {
-      if (prev) {
-        prev.fadeOut(0.2);
-      }
-      limbs.currentActionName = 'driving';
     }
   }
+  // Sync the gait to the character's real ground speed so the feet stop
+  // sliding: crouch-walking plays slower, sprinting plays faster.
+  if (limbs.actions) {
+    const clampScale = Math.max(0.45, Math.min(1.9, speedScale));
+    if (limbs.actions.walk) limbs.actions.walk.timeScale = 0.85 * clampScale;
+    if (limbs.actions.run) limbs.actions.run.timeScale = 1.15 * clampScale;
+  }
   limbs.mixer.update(dt);
+
+  // Upper-body aim / slash overrides applied AFTER the mixer so the gun arm
+  // points forward and melee swings read clearly over the mocap base pose.
+  if (limbs.aimBones && (isAimingGun || attackTimer > 0)) {
+    const ab = limbs.aimBones;
+    if (isAimingGun) {
+      const recoilKick =
+        attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
+      _tmpQuat.setFromAxisAngle(_axisZ, -1.1 + recoilKick);
+      ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+      _tmpQuat.setFromAxisAngle(_axisZ, -0.18);
+      ab.rightForeArm.quaternion
+        .copy(ab.rightForeArmRest)
+        .multiply(_tmpQuat);
+      if (ab.spine && ab.spineRest) {
+        _tmpQuat.setFromAxisAngle(_axisX, -0.08);
+        ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+      }
+    } else {
+      const swingAngle = -1.25 * Math.sin((attackTimer / 0.35) * Math.PI);
+      _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+      ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+      _tmpQuat.setFromAxisAngle(
+        _axisZ,
+        -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
+      );
+      ab.rightForeArm.quaternion
+        .copy(ab.rightForeArmRest)
+        .multiply(_tmpQuat);
+    }
+
+    // Point the gun along the character's facing (not the hand's twist) so it
+    // never aims sideways while the arm is raised.
+    const wm = limbs.weaponMesh;
+    if (wm && limbs.weaponHand && limbs.group) {
+      accumulateTransform(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
+      wm.quaternion.copy(_hwQuat).invert();
+      _tmpQuat.setFromAxisAngle(_axisX, -0.04);
+      wm.quaternion.multiply(_tmpQuat);
+      wm.position.set(0, 0.02, 0.08).applyQuaternion(wm.quaternion);
+    }
+  }
 }
 
 export function tintCharacterOutfit(
   limbs: CharacterLimbs,
   shirtHex: string,
-  pantsHex?: string,
-  isLungi = false
+  pantsHex?: string
 ) {
   if (!limbs.gltfRoot) return;
-  const lungiTex = isLungi
-    ? createLungiPatternTexture('#1e3a8a', '#facc15')
-    : null;
+  const isDefault = shirtHex === '#0f766e';
   limbs.gltfRoot.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const m = child as THREE.Mesh;
@@ -2097,19 +2647,20 @@ export function tintCharacterOutfit(
         mat.name === 'Wolf3D_Outfit_Top' ||
         mat.name === 'T-shirt'
       ) {
-        mat.color.set(shirtHex);
-      } else if (
-        m.name === 'Wolf3D_Outfit_Bottom' ||
-        mat.name === 'Wolf3D_Outfit_Bottom'
-      ) {
-        if (isLungi && lungiTex) {
-          mat.map = lungiTex;
+        if (isDefault) {
           mat.color.set('#ffffff');
-          mat.needsUpdate = true;
-        } else if (pantsHex) {
-          mat.map = null;
-          mat.color.set(pantsHex);
-          mat.needsUpdate = true;
+        } else {
+          mat.color.set(shirtHex).lerp(new THREE.Color('#ffffff'), 0.55);
+        }
+      } else if (
+        pantsHex &&
+        (m.name === 'Wolf3D_Outfit_Bottom' ||
+          mat.name === 'Wolf3D_Outfit_Bottom')
+      ) {
+        if (isDefault) {
+          mat.color.set('#ffffff');
+        } else {
+          mat.color.set(pantsHex).lerp(new THREE.Color('#ffffff'), 0.55);
         }
       }
     }
@@ -2125,540 +2676,262 @@ export function updateWeaponAttachment(
   }
   if (toolId === 'fists') return;
 
-  const metalMat = new THREE.MeshStandardMaterial({
+  const steelMat = new THREE.MeshStandardMaterial({
+    color: '#e2e8f0',
+    metalness: 0.92,
+    roughness: 0.18,
+  });
+  const gunmetalMat = new THREE.MeshStandardMaterial({
     color: '#1e293b',
-    metalness: 0.88,
+    metalness: 0.85,
     roughness: 0.25,
   });
-  const darkSteelMat = new THREE.MeshStandardMaterial({
-    color: '#0f172a',
-    metalness: 0.92,
-    roughness: 0.2,
-  });
-  const rustedPipeMat = new THREE.MeshStandardMaterial({
-    color: '#57534e',
-    metalness: 0.72,
-    roughness: 0.62,
-  });
-  const woodStockMat = new THREE.MeshStandardMaterial({
+  const woodMat = new THREE.MeshStandardMaterial({
     color: '#78350f',
-    roughness: 0.52,
-  });
-  const tapeMat = new THREE.MeshStandardMaterial({
-    color: '#18181b',
-    roughness: 0.85,
-  });
-  const bladeSteelMat = new THREE.MeshStandardMaterial({
-    color: '#e2e8f0',
-    metalness: 0.95,
-    roughness: 0.12,
+    roughness: 0.65,
   });
   const brassMat = new THREE.MeshStandardMaterial({
-    color: '#d97706',
+    color: '#eab308',
     metalness: 0.85,
-    roughness: 0.28,
+    roughness: 0.22,
   });
 
-  const addMuzzle = (x: number, y: number, z: number) => {
-    const muzzle = new THREE.Object3D();
-    muzzle.name = 'muzzle';
-    muzzle.position.set(x, y, z);
-    weaponGroup.add(muzzle);
-  };
-
-  if (toolId === 'cricket_bat') {
-    // Kashmir Willow Cricket Bat with rubber grip
-    const blade = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 0.045, 0.76),
-      new THREE.MeshStandardMaterial({ color: '#d97706', roughness: 0.42 })
+  if (toolId === 'ramda') {
+    // Authentic Bangladeshi Curved Ramda Machete (দেশীয় রামদা)
+    const grip = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.024, 0.028, 0.28, 10).rotateX(Math.PI / 2),
+      woodMat
     );
-    blade.position.set(0, 0, 0.35);
-    weaponGroup.add(blade);
+    grip.position.set(0, 0, 0.08);
+    weaponGroup.add(grip);
 
-    const handle = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.022, 0.022, 0.32, 10).rotateX(Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: '#dc2626', roughness: 0.8 })
-    );
-    handle.position.set(0, 0, -0.15);
-    weaponGroup.add(handle);
-  } else if (toolId === 'bamboo_lathi') {
-    // Solid Oil-Cured Bamboo Lathi
-    const stick = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.028, 0.024, 1.25, 12).rotateX(Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: '#92400e', roughness: 0.55 })
-    );
-    stick.position.set(0, 0, 0.45);
-    weaponGroup.add(stick);
-
-    // Bamboo nodal rings
-    [-0.1, 0.2, 0.5, 0.8].forEach((zPos) => {
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.03, 0.006, 8, 16),
-        brassMat
-      );
-      ring.position.set(0, 0, zPos);
-      weaponGroup.add(ring);
-    });
-  } else if (toolId === 'ramda') {
-    // Authentic Deshi Ramda (দেশি রামদা - Heavy Hooked Bengali Cleaver)
-    const handle = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.026, 0.028, 0.38, 10).rotateX(Math.PI / 2),
-      woodStockMat
-    );
-    handle.position.set(0, 0, -0.12);
-    weaponGroup.add(handle);
-
-    const guard = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.042, 0.042, 0.04, 12).rotateX(Math.PI / 2),
+    const bolster = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.032, 0.05, 10).rotateX(Math.PI / 2),
       brassMat
     );
-    guard.position.set(0, 0, 0.06);
-    weaponGroup.add(guard);
+    bolster.position.set(0, 0, 0.22);
+    weaponGroup.add(bolster);
 
-    // Sculpted curved heavy hooked blade
     const ramdaShape = new THREE.Shape();
-    ramdaShape.moveTo(0, 0.06);
-    ramdaShape.lineTo(0.03, 0.15);
-    ramdaShape.lineTo(0.08, 0.65);
-    ramdaShape.quadraticCurveTo(0.18, 0.95, 0.28, 1.05); // Distinctive hook tip
-    ramdaShape.lineTo(0.24, 1.08);
-    ramdaShape.quadraticCurveTo(0.02, 0.95, -0.01, 0.68);
-    ramdaShape.lineTo(-0.01, 0.06);
+    ramdaShape.moveTo(0, -0.025);
+    ramdaShape.lineTo(0.56, -0.045);
+    ramdaShape.quadraticCurveTo(0.68, -0.01, 0.64, 0.095);
+    ramdaShape.quadraticCurveTo(0.45, 0.06, 0, 0.025);
+    ramdaShape.closePath();
 
-    const ramdaGeo = new THREE.ExtrudeGeometry(ramdaShape, {
-      depth: 0.018,
+    const bladeGeo = new THREE.ExtrudeGeometry(ramdaShape, {
+      depth: 0.012,
       bevelEnabled: true,
-      bevelThickness: 0.006,
-      bevelSize: 0.005,
-      bevelSegments: 3,
+      bevelThickness: 0.004,
+      bevelSize: 0.004,
+      bevelSegments: 2,
     });
-    ramdaGeo.rotateY(Math.PI / 2);
-    ramdaGeo.translate(-0.009, 0, 0);
+    bladeGeo.rotateY(-Math.PI / 2);
+    const blade = new THREE.Mesh(bladeGeo, steelMat);
+    blade.position.set(0.006, 0, 0.23);
+    weaponGroup.add(blade);
+    return;
+  }
 
-    const ramdaMesh = new THREE.Mesh(ramdaGeo, bladeSteelMat);
-    ramdaMesh.rotation.x = Math.PI / 2;
-    ramdaMesh.position.set(0, 0, 0.06);
-    weaponGroup.add(ramdaMesh);
-  } else if (toolId === 'chapati') {
-    // Authentic Street Chapati (ধারালো চাপাতি - Street Meat Cleaver)
+  if (toolId === 'chapati_cleaver') {
+    // Old Dhaka Broad Rectangular Chapati Cleaver (পুরান ঢাকার চাপাতি)
     const handle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.032, 0.042, 0.24),
-      tapeMat
+      new THREE.CylinderGeometry(0.022, 0.026, 0.22, 10).rotateX(Math.PI / 2),
+      woodMat
     );
-    handle.position.set(0, 0, -0.08);
+    handle.position.set(0, 0, 0.06);
     weaponGroup.add(handle);
 
-    // Heavy rectangular cleaver blade with hanging hole
-    const chapatiGeo = new THREE.BoxGeometry(0.012, 0.16, 0.55);
-    const blade = new THREE.Mesh(chapatiGeo, bladeSteelMat);
-    blade.position.set(0, 0.05, 0.26);
-    weaponGroup.add(blade);
-
-    // Dark spine reinforcement
-    const spine = new THREE.Mesh(
-      new THREE.BoxGeometry(0.018, 0.025, 0.55),
-      darkSteelMat
+    const cleaverBlade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.14, 0.42),
+      steelMat
     );
-    spine.position.set(0, 0.13, 0.26);
-    weaponGroup.add(spine);
-  } else if (toolId === 'stun_baton') {
+    cleaverBlade.position.set(0, 0.03, 0.36);
+    weaponGroup.add(cleaverBlade);
+    return;
+  }
+
+  if (toolId === 'cricket_bat') {
+    const handle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.022, 0.28, 10).rotateX(Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: '#dc2626', roughness: 0.6 })
+    );
+    handle.position.set(0, 0, 0.08);
+    weaponGroup.add(handle);
+
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.11, 0.045, 0.64),
+      new THREE.MeshStandardMaterial({ color: '#d97706', roughness: 0.45 })
+    );
+    blade.position.set(0, 0, 0.52);
+    weaponGroup.add(blade);
+    return;
+  }
+
+  if (toolId === 'bamboo_lathi') {
+    const stick = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.026, 0.03, 1.25, 10).rotateX(Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: '#ca8a04', roughness: 0.55 })
+    );
+    stick.position.set(0, 0, 0.48);
+    weaponGroup.add(stick);
+    return;
+  }
+
+  if (toolId === 'stun_baton') {
     const baton = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.032, 0.032, 0.72, 12).rotateX(Math.PI / 2),
+      new THREE.CylinderGeometry(0.032, 0.032, 0.68, 10).rotateX(Math.PI / 2),
       new THREE.MeshStandardMaterial({
-        color: '#0284c7',
-        emissive: '#0369a1',
-        emissiveIntensity: 0.65,
-        metalness: 0.8,
+        color: '#0ea5e9',
+        emissive: '#0284c7',
+        emissiveIntensity: 0.9,
       })
     );
     baton.position.set(0, 0, 0.32);
     weaponGroup.add(baton);
+    return;
+  }
 
-    const tipGlow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.045, 12, 12),
-      new THREE.MeshBasicMaterial({ color: '#38bdf8' })
+  if (toolId === 'deshi_pipegun') {
+    // Improvised Bangladeshi Deshi One-Shot Pipe Gun (দেশীয় পাইপগান / কাটা রাইফেল)
+    const grip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.042, 0.16, 0.07),
+      woodMat
     );
-    tipGlow.position.set(0, 0, 0.68);
-    weaponGroup.add(tipGlow);
-  } else if (toolId === 'pipe_gun') {
-    // Authentic Deshi Pipe Gun (দেশি পাইপ গান - 1-Shot Handcrafted Smoothbore)
-    // 1. Galvanized iron water pipe barrel
-    const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.026, 0.026, 0.58, 12).rotateX(Math.PI / 2),
-      rustedPipeMat
-    );
-    barrel.position.set(0, 0.02, 0.28);
-    weaponGroup.add(barrel);
+    grip.position.set(0, -0.07, 0.08);
+    grip.rotation.x = 0.32;
+    weaponGroup.add(grip);
 
-    // Barrel bore opening
-    const bore = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.018, 0.04, 12).rotateX(Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: '#09090b' })
-    );
-    bore.position.set(0, 0.02, 0.57);
-    weaponGroup.add(bore);
-
-    // 2. Welded breech chamber & lock bolt
     const breech = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.034, 0.034, 0.14, 12).rotateX(Math.PI / 2),
-      darkSteelMat
+      new THREE.BoxGeometry(0.055, 0.065, 0.18),
+      brassMat
     );
-    breech.position.set(0, 0.02, 0.03);
+    breech.position.set(0, 0.02, 0.14);
     weaponGroup.add(breech);
 
-    // 3. Wooden pistol grip wrapped in black tape
-    const grip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.035, 0.16, 0.065),
-      tapeMat
+    const pipeBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.024, 0.44, 12).rotateX(Math.PI / 2),
+      steelMat
     );
-    grip.rotation.x = -0.35;
-    grip.position.set(0, -0.07, -0.02);
+    pipeBarrel.position.set(0, 0.03, 0.42);
+    weaponGroup.add(pipeBarrel);
+    return;
+  }
+
+  if (toolId === 'pistol_9mm') {
+    // 9mm Type-54 / Beretta Semi-Auto Pistol (৯মিমি পিস্তল)
+    const grip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.036, 0.14, 0.055),
+      gunmetalMat
+    );
+    grip.position.set(0, -0.06, 0.06);
+    grip.rotation.x = 0.25;
     weaponGroup.add(grip);
 
-    // 4. Exposed spring hammer
-    const hammer = new THREE.Mesh(
-      new THREE.BoxGeometry(0.016, 0.04, 0.03),
-      brassMat
-    );
-    hammer.position.set(0, 0.05, -0.04);
-    weaponGroup.add(hammer);
-
-    addMuzzle(0, 0.02, 0.59);
-  } else if (toolId === 'shutter_pistol') {
-    // Authentic Shutter Gun (শাটার রিভলভার - Local 6-Shooter Revolver)
-    // 1. 6-chamber cylinder
-    const cylinder = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.042, 0.042, 0.08, 14).rotateX(Math.PI / 2),
-      metalMat
-    );
-    cylinder.position.set(0, 0.02, 0.08);
-    weaponGroup.add(cylinder);
-
-    // Flutes on cylinder
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
-      const flute = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.009, 0.009, 0.07, 8).rotateX(Math.PI / 2),
-        darkSteelMat
-      );
-      flute.position.set(Math.cos(angle) * 0.034, 0.02 + Math.sin(angle) * 0.034, 0.08);
-      weaponGroup.add(flute);
-    }
-
-    // 2. Heavy 4-inch blued barrel
-    const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.022, 0.024, 0.42, 12).rotateX(Math.PI / 2),
-      metalMat
-    );
-    barrel.position.set(0, 0.025, 0.32);
-    weaponGroup.add(barrel);
-
-    // Top ventilated rib
-    const rib = new THREE.Mesh(
-      new THREE.BoxGeometry(0.012, 0.018, 0.38),
-      darkSteelMat
-    );
-    rib.position.set(0, 0.052, 0.31);
-    weaponGroup.add(rib);
-
-    // Front blade sight
-    const sight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.008, 0.018, 0.02),
-      brassMat
-    );
-    sight.position.set(0, 0.065, 0.5);
-    weaponGroup.add(sight);
-
-    // 3. Frame & Wooden Grip
-    const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.032, 0.075, 0.18),
-      metalMat
-    );
-    frame.position.set(0, 0.01, 0.02);
-    weaponGroup.add(frame);
-
-    const grip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.034, 0.15, 0.065),
-      woodStockMat
-    );
-    grip.rotation.x = -0.42;
-    grip.position.set(0, -0.06, -0.04);
-    weaponGroup.add(grip);
-
-    // Trigger guard & cocked hammer
-    const guard = new THREE.Mesh(
-      new THREE.TorusGeometry(0.028, 0.005, 8, 12),
-      metalMat
-    );
-    guard.rotation.y = Math.PI / 2;
-    guard.position.set(0, -0.03, 0.05);
-    weaponGroup.add(guard);
-
-    const hammer = new THREE.Mesh(
-      new THREE.BoxGeometry(0.012, 0.032, 0.025),
-      darkSteelMat
-    );
-    hammer.position.set(0, 0.05, -0.06);
-    weaponGroup.add(hammer);
-
-    addMuzzle(0, 0.025, 0.54);
-  } else if (toolId === 'tt_pistol') {
-    // Authentic 7.62mm TT Tokarev Pistol (টিটি পিস্তল - Military Grade BD Handgun)
-    // 1. Machined steel slide
     const slide = new THREE.Mesh(
-      new THREE.BoxGeometry(0.034, 0.046, 0.38),
-      darkSteelMat
+      new THREE.BoxGeometry(0.04, 0.048, 0.24),
+      steelMat
     );
-    slide.position.set(0, 0.038, 0.16);
+    slide.position.set(0, 0.025, 0.15);
     weaponGroup.add(slide);
+    return;
+  }
 
-    // Rear slide cocking serrations
-    for (let i = 0; i < 5; i++) {
-      const serration = new THREE.Mesh(
-        new THREE.BoxGeometry(0.036, 0.032, 0.008),
-        metalMat
-      );
-      serration.position.set(0, 0.038, 0.02 + i * 0.018);
-      weaponGroup.add(serration);
-    }
-
-    // Front blade sight & rear notch sight
-    const frontSight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.008, 0.016, 0.018),
-      metalMat
-    );
-    frontSight.position.set(0, 0.065, 0.33);
-    weaponGroup.add(frontSight);
-
-    const rearSight = new THREE.Mesh(
-      new THREE.BoxGeometry(0.018, 0.014, 0.014),
-      metalMat
-    );
-    rearSight.position.set(0, 0.065, -0.01);
-    weaponGroup.add(rearSight);
-
-    // 2. Steel lower frame
-    const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.032, 0.05, 0.28),
-      darkSteelMat
-    );
-    frame.position.set(0, 0.01, 0.12);
-    weaponGroup.add(frame);
-
-    // 3. Ergonomic checkered grip with five-pointed star emblem
-    const grip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.033, 0.155, 0.068),
-      tapeMat
-    );
-    grip.rotation.x = -0.32;
-    grip.position.set(0, -0.065, 0.01);
-    weaponGroup.add(grip);
-
-    // Star medallion on grip
-    [-0.018, 0.018].forEach((xOff) => {
-      const star = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.014, 0.014, 0.004, 5).rotateZ(Math.PI / 2),
-        brassMat
-      );
-      star.position.set(xOff, -0.065, 0.01);
-      weaponGroup.add(star);
-    });
-
-    // 4. Trigger guard & trigger
-    const triggerGuard = new THREE.Mesh(
-      new THREE.TorusGeometry(0.026, 0.005, 8, 12),
-      metalMat
-    );
-    triggerGuard.rotation.y = Math.PI / 2;
-    triggerGuard.position.set(0, -0.025, 0.11);
-    weaponGroup.add(triggerGuard);
-
-    // 5. Exposed spurred hammer
-    const hammer = new THREE.Mesh(
-      new THREE.BoxGeometry(0.012, 0.028, 0.024),
-      metalMat
-    );
-    hammer.position.set(0, 0.048, -0.04);
-    weaponGroup.add(hammer);
-
-    // Barrel bore & muzzle
-    const barrelBore = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, 0.03, 10).rotateX(Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: '#09090b' })
-    );
-    barrelBore.position.set(0, 0.038, 0.35);
-    weaponGroup.add(barrelBore);
-
-    addMuzzle(0, 0.038, 0.36);
-  } else if (toolId === 'katta') {
-    // Authentic Deshi Katta (দেশি কাটা রাইফেল - Sawed-Off Double Barrel Shotgun)
-    // 1. Twin side-by-side sawed-off steel barrels
-    const barrelL = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.024, 0.024, 0.52, 12).rotateX(Math.PI / 2),
-      darkSteelMat
-    );
-    barrelL.position.set(-0.022, 0.02, 0.32);
-    weaponGroup.add(barrelL);
-
-    const barrelR = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.024, 0.024, 0.52, 12).rotateX(Math.PI / 2),
-      darkSteelMat
-    );
-    barrelR.position.set(0.022, 0.02, 0.32);
-    weaponGroup.add(barrelR);
-
-    // Twin dark muzzle bores
-    [-0.022, 0.022].forEach((xOffset) => {
-      const bore = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.017, 0.017, 0.03, 10).rotateX(Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: '#09090b' })
-      );
-      bore.position.set(xOffset, 0.02, 0.58);
-      weaponGroup.add(bore);
-    });
-
-    // 2. Heavy steel break-action breech & twin exposed hammers
-    const breech = new THREE.Mesh(
-      new THREE.BoxGeometry(0.076, 0.065, 0.16),
-      metalMat
-    );
-    breech.position.set(0, 0.02, 0.04);
-    weaponGroup.add(breech);
-
-    [-0.02, 0.02].forEach((xOffset) => {
-      const ham = new THREE.Mesh(
-        new THREE.BoxGeometry(0.012, 0.034, 0.028),
-        brassMat
-      );
-      ham.position.set(xOffset, 0.06, -0.03);
-      weaponGroup.add(ham);
-    });
-
-    // 3. Sawed short wooden stock wrapped tightly with black electrical tape
+  if (toolId === 'bd08_rifle') {
+    // BD-08 / Type-81 Bangladesh Assault Rifle (বিডি-০৮ অ্যাসল্ট রাইফেল)
     const stock = new THREE.Mesh(
-      new THREE.BoxGeometry(0.055, 0.11, 0.26),
-      woodStockMat
+      new THREE.BoxGeometry(0.042, 0.1, 0.26),
+      woodMat
     );
-    stock.rotation.x = -0.28;
-    stock.position.set(0, -0.05, -0.14);
+    stock.position.set(0, -0.02, -0.08);
     weaponGroup.add(stock);
 
-    // Black tape wrap bands around stock
-    [-0.08, -0.14, -0.2].forEach((zPos) => {
-      const tape = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.115, 0.04),
-        tapeMat
-      );
-      tape.rotation.x = -0.28;
-      tape.position.set(0, -0.05 + (zPos + 0.14) * 0.28, zPos);
-      weaponGroup.add(tape);
-    });
-
-    // Twin triggers
-    const triggerGuard = new THREE.Mesh(
-      new THREE.BoxGeometry(0.045, 0.045, 0.08),
-      darkSteelMat
-    );
-    triggerGuard.position.set(0, -0.03, 0.02);
-    weaponGroup.add(triggerGuard);
-
-    addMuzzle(0, 0.02, 0.59);
-  } else if (toolId === 'type56_ak') {
-    // Authentic Type-56 Kalashnikov (টাইপ-৫৬ কালাশনিকভ - BD Assault Rifle)
-    // 1. Stamped steel receiver body
     const receiver = new THREE.Mesh(
-      new THREE.BoxGeometry(0.052, 0.088, 0.38),
-      metalMat
+      new THREE.BoxGeometry(0.048, 0.075, 0.28),
+      gunmetalMat
     );
-    receiver.position.set(0, 0.02, 0.08);
+    receiver.position.set(0, 0.02, 0.18);
     weaponGroup.add(receiver);
 
-    // Ribbed receiver dust cover
-    const dustCover = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.027, 0.027, 0.34, 10).rotateX(Math.PI / 2),
-      darkSteelMat
-    );
-    dustCover.position.set(0, 0.068, 0.08);
-    weaponGroup.add(dustCover);
-
-    // 2. Wooden ribbed handguard & gas tube
-    const gasTube = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.019, 0.019, 0.28, 10).rotateX(Math.PI / 2),
-      metalMat
-    );
-    gasTube.position.set(0, 0.058, 0.38);
-    weaponGroup.add(gasTube);
-
     const handguard = new THREE.Mesh(
-      new THREE.BoxGeometry(0.054, 0.075, 0.26),
-      woodStockMat
+      new THREE.BoxGeometry(0.044, 0.058, 0.24),
+      woodMat
     );
-    handguard.position.set(0, 0.02, 0.38);
+    handguard.position.set(0, 0.02, 0.42);
     weaponGroup.add(handguard);
 
-    // 3. Barrel & slant muzzle brake
     const barrel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.016, 0.016, 0.42, 10).rotateX(Math.PI / 2),
-      darkSteelMat
+      new THREE.CylinderGeometry(0.014, 0.016, 0.36, 10).rotateX(Math.PI / 2),
+      gunmetalMat
     );
-    barrel.position.set(0, 0.025, 0.62);
+    barrel.position.set(0, 0.03, 0.66);
     weaponGroup.add(barrel);
 
-    // Hooded front sight post
-    const frontSight = new THREE.Mesh(
-      new THREE.TorusGeometry(0.025, 0.005, 6, 12),
-      metalMat
+    // Curved 30-round banana magazine
+    const mag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.034, 0.18, 0.065),
+      gunmetalMat
     );
-    frontSight.position.set(0, 0.062, 0.78);
-    weaponGroup.add(frontSight);
+    mag.position.set(0, -0.09, 0.24);
+    mag.rotation.x = -0.35;
+    weaponGroup.add(mag);
+    return;
+  }
 
-    // Slant muzzle brake
-    const brake = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.016, 0.06, 10).rotateX(Math.PI / 2),
-      darkSteelMat
-    );
-    brake.position.set(0, 0.025, 0.84);
-    weaponGroup.add(brake);
-
-    // 4. Iconic curved 30-round steel banana magazine
-    const magShape = new THREE.Shape();
-    magShape.moveTo(-0.02, 0);
-    magShape.quadraticCurveTo(-0.06, -0.16, -0.03, -0.26);
-    magShape.lineTo(0.04, -0.26);
-    magShape.quadraticCurveTo(0.01, -0.16, 0.05, 0);
-    magShape.closePath();
-
-    const magGeo = new THREE.ExtrudeGeometry(magShape, {
-      depth: 0.036,
-      bevelEnabled: true,
-      bevelThickness: 0.005,
-      bevelSize: 0.004,
-      bevelSegments: 2,
-    });
-    magGeo.rotateY(Math.PI / 2);
-    magGeo.translate(-0.018, 0, 0);
-
-    const magMesh = new THREE.Mesh(magGeo, darkSteelMat);
-    magMesh.position.set(0, -0.02, 0.18);
-    weaponGroup.add(magMesh);
-
-    // 5. Wooden pistol grip & wooden shoulder stock
-    const grip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.036, 0.16, 0.058),
-      woodStockMat
-    );
-    grip.rotation.x = -0.38;
-    grip.position.set(0, -0.07, -0.04);
-    weaponGroup.add(grip);
-
+  if (toolId === 'police_shotgun') {
+    // 12-Gauge Tactical Pump Shotgun (১২-গেজ শটগান)
     const stock = new THREE.Mesh(
-      new THREE.BoxGeometry(0.048, 0.12, 0.36),
-      woodStockMat
+      new THREE.BoxGeometry(0.044, 0.11, 0.26),
+      gunmetalMat
     );
-    stock.position.set(0, -0.01, -0.28);
+    stock.position.set(0, -0.02, -0.06);
     weaponGroup.add(stock);
 
-    addMuzzle(0, 0.025, 0.88);
+    const receiver = new THREE.Mesh(
+      new THREE.BoxGeometry(0.05, 0.075, 0.26),
+      steelMat
+    );
+    receiver.position.set(0, 0.02, 0.18);
+    weaponGroup.add(receiver);
+
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 0.56, 12).rotateX(Math.PI / 2),
+      gunmetalMat
+    );
+    barrel.position.set(0, 0.04, 0.56);
+    weaponGroup.add(barrel);
+
+    const pump = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, 0.2, 10).rotateX(Math.PI / 2),
+      woodMat
+    );
+    pump.position.set(0, 0.0, 0.46);
+    weaponGroup.add(pump);
+    return;
+  }
+
+  if (toolId === 'smg_uzi') {
+    // Compact Micro-SMG (মাইক্রো এসএমজি)
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.052, 0.085, 0.28),
+      gunmetalMat
+    );
+    body.position.set(0, 0.03, 0.16);
+    weaponGroup.add(body);
+
+    const mag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.032, 0.22, 0.048),
+      gunmetalMat
+    );
+    mag.position.set(0, -0.1, 0.14);
+    weaponGroup.add(mag);
+
+    const suppressor = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.022, 0.18, 12).rotateX(Math.PI / 2),
+      steelMat
+    );
+    suppressor.position.set(0, 0.03, 0.38);
+    weaponGroup.add(suppressor);
   }
 }
 
@@ -2921,54 +3194,6 @@ export function createSketchfabAssetPropMesh(
     caseMesh.castShadow = true;
     group.add(caseMesh);
     return group;
-  }
-
-  if (spawnType === 'dhaka_landmark_building') {
-    const buildingGroup = new THREE.Group();
-    const bw = 24;
-    const bh = 22;
-    const bd = 18;
-
-    // Side & rear walls
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: '#cbd5e1',
-      roughness: 0.65,
-      bumpMap: loadRealTexture('/textures/brick_bump.jpg', 2, 2, false),
-      bumpScale: 0.05,
-    });
-    const mainBody = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), wallMat);
-    mainBody.position.y = bh / 2;
-    mainBody.castShadow = true;
-    mainBody.receiveShadow = true;
-    buildingGroup.add(mainBody);
-
-    // Front high-resolution photographic facade skin
-    const facadeGeo = new THREE.PlaneGeometry(bw * 0.96, bh * 0.92);
-    const facadeMat = new THREE.MeshBasicMaterial({ map: tex });
-    const frontFacade = new THREE.Mesh(facadeGeo, facadeMat);
-    frontFacade.position.set(0, bh * 0.48, bd / 2 + 0.08);
-    buildingGroup.add(frontFacade);
-
-    // Parapet roof cornice & dome
-    const roofCornice = new THREE.Mesh(
-      new THREE.BoxGeometry(bw + 1.2, 1.2, bd + 1.2),
-      new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.5 })
-    );
-    roofCornice.position.y = bh + 0.6;
-    buildingGroup.add(roofCornice);
-
-    const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(3.5, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshStandardMaterial({
-        color: '#f59e0b',
-        metalness: 0.6,
-        roughness: 0.3,
-      })
-    );
-    dome.position.set(0, bh + 1.2, 0);
-    buildingGroup.add(dome);
-
-    return buildingGroup;
   }
 
   if (spawnType === 'billboard') {

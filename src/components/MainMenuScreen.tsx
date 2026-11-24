@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { DISTRICTS } from '../data/dhakaWorldData';
 import { CHARACTER_PORTRAITS } from '../data/sketchfabGtaCatalog';
-import { resolveAssetUrl } from '../utils/assets';
 import {
   Award,
   Box,
@@ -33,10 +32,6 @@ export const MainMenuScreen: React.FC = () => {
     ambienceVolume,
     setVolumes,
     setGamePhase,
-    requestTeleport,
-    requestSpawnVehicle,
-    equipTool,
-    showBanner,
   } = useGameStore();
 
   const [subPanel, setSubPanel] = useState<
@@ -46,12 +41,7 @@ export const MainMenuScreen: React.FC = () => {
   const savedExists = hasSavedGame();
 
   return (
-    <div
-      className="fixed inset-0 z-30 flex flex-col justify-between p-5 sm:p-10 text-white select-none overflow-y-auto"
-      style={{
-        background: `linear-gradient(to right, rgba(11, 14, 19, 0.96) 0%, rgba(16, 20, 24, 0.90) 55%, rgba(11, 14, 19, 0.72) 100%), url('${resolveAssetUrl('/dhaka_locations/dhaka_rooftop_twilight.png')}') center/cover no-repeat fixed`,
-      }}
-    >
+    <div className="fixed inset-0 z-30 bg-gradient-to-r from-slate-950/95 via-slate-950/82 to-slate-950/45 backdrop-blur-[3px] flex flex-col justify-between p-5 sm:p-10 text-white select-none overflow-y-auto">
       {/* TOP BAR */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
@@ -90,19 +80,19 @@ export const MainMenuScreen: React.FC = () => {
                   ? 'Dhaka, Bangladesh • ওপেন ওয়ার্ল্ড অ্যাকশন'
                   : 'ঢাকা, বাংলাদেশ • ওপেন ওয়ার্ল্ড অ্যাকশন গেম'}
               </div>
-              <h1 className="text-4xl sm:text-6xl font-black font-display tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-br from-white via-amber-200 to-emerald-400 drop-shadow-2xl">
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-br from-white via-amber-200 to-emerald-400 drop-shadow-2xl">
                 DHAKA CITY
               </h1>
-              <p className="text-xl sm:text-2xl font-black font-display text-emerald-400 tracking-wider mt-1 uppercase">
-                MONSOON UNDERWORLD • <span className="font-sans text-amber-300">মনসুন আন্ডারওয়ার্ল্ড</span>
+              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
+                ঢাকা সিটি : রাজপথের গল্প
               </p>
             </div>
           </div>
 
           <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed font-medium">
             {language === 'en'
-              ? 'Step into the shoes of Arif Rahman across a rain-slicked AAA open-world Dhaka. Experience 16 cinematic landmark locations, tuned turbo CNG baby taxis, DMP riot interceptors, and underground street rallies amidst monsoon haze.'
-              : 'আরিফ রহমানের চরিত্রে নামুন বৃষ্টিভেজা ঢাকা শহরের রোমাঞ্চকর জগতে। ১৬টি দর্শনীয় স্থান, টিউনড সিএনজি অটোরিকশা, ডিএমপি রায়ট ভ্যান এবং গভীর রাতের স্ট্রিট রেসিংয়ের গল্প।'}
+              ? 'Step into the shoes of Arif Rahman in a realistic 3D open-world Dhaka powered by skeletal GLTF characters, photographic PBR textures, and Sketchfab GTA 3D assets. Drive caged green CNG auto-rickshaws, hand-painted cycle rickshaws, and local buses across 10 interconnected districts.'
+              : 'আরিফ রহমানের চরিত্রে রিয়েলিস্টিক থ্রিডি ঢাকা শহরে নামুন। সবুজ খাঁচার সিএনজি অটোরিকশা, রঙিন রিকশা এবং লোকাল বাস চালিয়ে পুরান ঢাকা ও সদরঘাট থেকে ফার্মগেট, হাতিরঝিল ও গুলশান জুড়ে রোমাঞ্চকর মিশন সম্পন্ন করুন।'}
           </p>
 
           {/* Primary Menu Buttons */}
@@ -274,19 +264,11 @@ export const MainMenuScreen: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                 {[
                   ['WASD / Arrows', 'Walk, Run & Drive Vehicles'],
-                  ['Left Click / J / K', 'Fire Gun / Melee Strike (Ramda, Bat)'],
-                  ['Right Click / Z', 'Aim Down Sights (ADS Precision Mode)'],
-                  ['1 – 0', 'Direct Weapon Select (AK, Katta, TT, Ramda)'],
-                  ['Spacebar', 'Jump / Evade Roll (in ADS) / Drift (Car)'],
-                  ['Shift', 'Sprint on Foot / Nitro Boost (in Vehicle)'],
-                  ['Q / X / Wheel', 'Cycle Equipped Weapons'],
-                  ['R', 'Reload Firearm (On Foot) / Radio (In Car)'],
-                  ['F or E', 'Enter/Exit CNG, Car, Rickshaw & Stalls'],
+                  ['F or E', 'Enter/Exit CNG, Rickshaw, Bus & Stalls'],
                   ['H', 'Honk Horn / Ring Rickshaw Bell'],
-                  ['C', 'Toggle Crouch / Stealth Mode'],
-                  ['T', 'Talk to Street NPCs / Story Contacts'],
-                  ['V', 'Cycle Camera (Third, Far Chase, Cockpit)'],
-                  ['M / ESC', 'Full Dhaka GPS Map & Armory'],
+                  ['Shift / Space', 'Sprint / Jump / Drift Brake'],
+                  ['T / J', 'Talk to NPCs / Melee Attack'],
+                  ['M / ESC', 'Full Dhaka GPS Map & Missions'],
                 ].map(([k, v]) => (
                   <div
                     key={k}
@@ -330,281 +312,101 @@ export const MainMenuScreen: React.FC = () => {
           {subPanel === 'none' && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-slate-950/88 border border-emerald-500/40 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start tactical-chamfer">
+                <div className="bg-slate-950/88 border border-slate-800/90 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start">
                   <img
-                    src={resolveAssetUrl('/dhaka_locations/tuned_cng_auto_rickshaw.png')}
-                    alt="Tuned Green CNG Auto-Rickshaw"
-                    className="w-20 h-16 rounded-xl object-cover border border-emerald-400/60 shrink-0"
+                    src="/dhaka_photos/cng_real.jpg"
+                    alt="Real Dhaka Green CNG"
+                    className="w-16 h-16 rounded-xl object-cover border border-emerald-500/40 shrink-0"
                   />
                   <div>
-                    <h4 className="text-sm font-black font-display text-white">
-                      Tuned Green CNG Auto-Rickshaw
+                    <h4 className="text-sm font-black text-white">
+                      Actual Dhaka Photo-Textured Vehicles
                     </h4>
-                    <p className="text-xs text-slate-300 mt-1 leading-snug">
-                      Dholaikhal custom-fabricated roll cage, nitrous injection, and high-performance engine for agile Dhaka alley escapes.
+                    <p className="text-xs text-slate-400 mt-1">
+                      Real Dhaka green caged CNG auto-rickshaws, Old Dhaka
+                      painted cycle rickshaws, local buses & GLTF 3D trucks.
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-950/88 border border-rose-500/40 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start tactical-chamfer">
+                <div className="bg-slate-950/88 border border-slate-800/90 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start">
                   <img
-                    src={resolveAssetUrl('/dhaka_locations/dmp_riot_interceptor.png')}
-                    alt="DMP Riot Interceptor"
-                    className="w-20 h-16 rounded-xl object-cover border border-rose-400/60 shrink-0"
+                    src="/sketchfab/gta_model_0.jpg"
+                    alt="Sketchfab GTA 3D Assets"
+                    className="w-16 h-16 rounded-xl object-cover border border-amber-500/40 shrink-0"
                   />
                   <div>
-                    <h4 className="text-sm font-black font-display text-white">
-                      DMP Tactical Riot Interceptor
+                    <h4 className="text-sm font-black text-white">
+                      Sketchfab GTA 3D Assets & .GLB
                     </h4>
-                    <p className="text-xs text-slate-300 mt-1 leading-snug">
-                      Heavy armored police pickup with reinforced bull bars, emergency strobe lights, and tactical ramming power.
+                    <p className="text-xs text-slate-400 mt-1">
+                      Synced with top-liked Sketchfab GTA models—spawn Asian
+                      shops, billboards, cash stacks & custom .GLB models!
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-950/88 border border-amber-500/40 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start tactical-chamfer">
+                <div className="bg-slate-950/88 border border-slate-800/90 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start">
                   <img
-                    src={resolveAssetUrl('/dhaka_locations/chawkbazar.png')}
-                    alt="Chawkbazar Mughal Alleys"
-                    className="w-20 h-16 rounded-xl object-cover border border-amber-400/60 shrink-0"
+                    src={CHARACTER_PORTRAITS.nadia}
+                    alt="Nadia Hasan"
+                    className="w-16 h-16 rounded-xl object-cover border border-pink-500/40 shrink-0"
                   />
                   <div>
-                    <h4 className="text-sm font-black font-display text-white">
-                      Historic Mughal Spice Alleys
+                    <h4 className="text-sm font-black text-white">
+                      Rigged 3D Characters & Portraits
                     </h4>
-                    <p className="text-xs text-slate-300 mt-1 leading-snug">
-                      Chawkbazar, Lalbagh Fort & Shankharia Bazar artisan quarters rendered in atmospheric nocturnal detail.
+                    <p className="text-xs text-slate-400 mt-1">
+                      Skeletal-animated 3D GLTF humans (`Idle`, `Walk`, `Run`) +
+                      photorealistic character portraits in dialogues.
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-950/88 border border-cyan-500/40 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start tactical-chamfer">
+                <div className="bg-slate-950/88 border border-slate-800/90 rounded-2xl p-3.5 shadow-xl flex gap-3 items-start">
                   <img
-                    src={resolveAssetUrl('/dhaka_locations/hatirjheel.png')}
-                    alt="Hatirjheel Rainbow Expressway"
-                    className="w-20 h-16 rounded-xl object-cover border border-cyan-400/60 shrink-0"
+                    src="/dhaka_photos/sadarghat_real.jpg"
+                    alt="Sadarghat Buriganga River"
+                    className="w-16 h-16 rounded-xl object-cover border border-cyan-500/40 shrink-0"
                   />
                   <div>
-                    <h4 className="text-sm font-black font-display text-white">
-                      Hatirjheel & Sadarghat Ports
+                    <h4 className="text-sm font-black text-white">
+                      Real Dhaka Landmarks & Districts
                     </h4>
-                    <p className="text-xs text-slate-300 mt-1 leading-snug">
-                      LED-illuminated parabolic rainbow arch bridges, Buriganga ferry steamers, and midnight racing circuits.
+                    <p className="text-xs text-slate-400 mt-1">
+                      Real photographs of Sadarghat, Hatirjheel Bridge,
+                      Motijheel Shapla Chattar, Farmgate & Gulshan Avenue.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Interactive Real Dhaka Location Fast Deployer Strip */}
-              <div className="bg-slate-950/90 border border-emerald-500/40 rounded-2xl p-4 shadow-2xl glow-cng">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div>
-                    <p className="text-xs font-mono font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      {language === 'en'
-                        ? 'CLICK ANY DHAKA LANDMARK TO SPAWN INSTANTLY'
-                        : 'যেকোনো লোকেশনে ক্লিক করে সরাসরি খেলা শুরু করুন'}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {language === 'en'
-                        ? '16 Real Dhaka Location Concept Skins • Instant Teleport & Action'
-                        : 'ঢাকার ১৬টি বাস্তব লোকেশন স্কিন • সরাসরি অবতরণ'}
-                    </p>
-                  </div>
-                  <span className="bg-emerald-950/90 text-emerald-400 border border-emerald-500/50 text-[10px] font-mono font-extrabold px-2.5 py-1 rounded-md">
-                    MONSOON UNDERWORLD
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+              {/* Real Dhaka Photo Strip */}
+              <div className="bg-slate-950/88 border border-slate-800/90 rounded-2xl p-3 shadow-xl">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 mb-2">
+                  Actual Dhaka Photographs Integrated Across 10 Districts & 3D
+                  Subjects
+                </p>
+                <div className="grid grid-cols-6 gap-2">
                   {[
-                    {
-                      nameEn: 'Ahsan Manzil',
-                      nameBn: 'আহসান মঞ্জিল',
-                      src: '/dhaka_locations/ahsan_manzil.png',
-                      x: -65,
-                      z: 120,
-                      vibe: 'Puran Dhaka Pink Palace',
-                    },
-                    {
-                      nameEn: 'Chawkbazar',
-                      nameBn: 'চকবাজার',
-                      src: '/dhaka_locations/chawkbazar.png',
-                      x: -25,
-                      z: 24,
-                      vibe: 'Iftar Alleys & Street Food',
-                    },
-                    {
-                      nameEn: 'Hatirjheel',
-                      nameBn: 'হাতিরঝিল',
-                      src: '/dhaka_locations/hatirjheel.png',
-                      x: 202,
-                      z: -40,
-                      vibe: 'Rainbow Arch Lake Drive',
-                    },
-                    {
-                      nameEn: 'Curzon Hall',
-                      nameBn: 'কার্জন হল',
-                      src: '/dhaka_locations/curzon_hall.png',
-                      x: -180,
-                      z: 25,
-                      vibe: 'Red Brick Mughal Campus',
-                    },
-                    {
-                      nameEn: 'Motijheel',
-                      nameBn: 'মতিঝিল',
-                      src: '/dhaka_locations/motijheel.png',
-                      x: 202,
-                      z: 158,
-                      vibe: 'Shapla Chattar Financial Hub',
-                    },
-                    {
-                      nameEn: 'Sadarghat',
-                      nameBn: 'সদরঘাট',
-                      src: '/dhaka_locations/sadarghat.png',
-                      x: 12,
-                      z: 275,
-                      vibe: 'Buriganga Riverfront Launch',
-                    },
-                    {
-                      nameEn: 'Gulshan 2',
-                      nameBn: 'গুলশান-২',
-                      src: '/dhaka_locations/gulshan_2.png',
-                      x: 202,
-                      z: -158,
-                      vibe: 'Diplomatic Highrises',
-                    },
-                    {
-                      nameEn: 'Lalbagh Fort',
-                      nameBn: 'লালবাগ কেল্লা',
-                      src: '/dhaka_locations/lalbagh_fort.png',
-                      x: -95,
-                      z: 195,
-                      vibe: '17th-Century Mughal Fort',
-                    },
-                    {
-                      nameEn: 'Kawran Bazar',
-                      nameBn: 'কাওরান বাজার',
-                      src: '/dhaka_locations/kawran_bazar.png',
-                      x: 24,
-                      z: -22,
-                      vibe: 'Wholesale Trade & Tong Cha',
-                    },
-                    {
-                      nameEn: 'Shakhari Bazar',
-                      nameBn: 'শাঁখারীবাজার',
-                      src: '/dhaka_locations/shakhari_bazar.png',
-                      x: -45,
-                      z: 245,
-                      vibe: 'Historic Conch Artisans Lane',
-                    },
-                    {
-                      nameEn: 'Gabtoli Terminal',
-                      nameBn: 'গাবতলী টার্মিনাল',
-                      src: '/dhaka_locations/gabtoli.png',
-                      x: -245,
-                      z: -220,
-                      vibe: 'Highway Bus Express',
-                    },
-                    {
-                      nameEn: 'Tejgaon Industrial',
-                      nameBn: 'তেজগাঁও',
-                      src: '/dhaka_locations/tejgaon.png',
-                      x: 85,
-                      z: -160,
-                      vibe: 'Speed Corridor & Garages',
-                    },
-                  ].map((loc) => (
-                    <button
-                      key={loc.src}
-                      onClick={() => {
-                        requestTeleport(loc.x, loc.z);
-                        showBanner({
-                          titleEn: `DEPLOYED TO ${loc.nameEn.toUpperCase()}`,
-                          titleBn: `${loc.nameBn}-এ সফলভাবে অবতরণ করেছেন!`,
-                          subtitleEn: loc.vibe,
-                          subtitleBn: 'ঢাকা শহরের বাস্তব মানচিত্রে স্বাগতম।',
-                          tone: 'gold',
-                        });
-                      }}
-                      className="relative group overflow-hidden rounded-xl border border-slate-700/80 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50 h-24 transition-all text-left flex flex-col justify-end p-2 cursor-pointer active:scale-95"
-                      title={`Spawn in ${loc.nameEn} (${loc.nameBn})`}
-                    >
+                    ['/dhaka_photos/old_dhaka_real.jpg', 'Old Dhaka'],
+                    ['/dhaka_photos/hatirjheel_real.jpg', 'Hatirjheel'],
+                    ['/dhaka_photos/motijheel_real.jpg', 'Motijheel'],
+                    ['/dhaka_photos/farmgate_real.jpg', 'Farmgate'],
+                    ['/dhaka_photos/gulshan_real.jpg', 'Gulshan'],
+                    ['/dhaka_photos/bus_real.jpg', 'Dhaka Bus'],
+                  ].map(([src, label]) => (
+                    <div key={src} className="relative group overflow-hidden rounded-lg border border-slate-700 h-14">
                       <img
-                        src={resolveAssetUrl(loc.src)}
-                        alt={loc.nameEn}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        src={src}
+                        alt={label}
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                      <div className="relative z-10">
-                        <span className="block text-[11px] font-black text-white font-display uppercase tracking-wide truncate group-hover:text-amber-300">
-                          {language === 'en' ? loc.nameEn : loc.nameBn}
-                        </span>
-                        <span className="block text-[8px] font-mono text-emerald-400 font-semibold truncate">
-                          {loc.vibe}
-                        </span>
-                      </div>
-                    </button>
+                      <span className="absolute inset-x-0 bottom-0 bg-slate-950/85 text-[9px] font-bold text-center text-slate-200 py-0.5 truncate">
+                        {label}
+                      </span>
+                    </div>
                   ))}
-                </div>
-
-                {/* Quick Vehicle / Loadout Spawn Shortcuts */}
-                <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-mono text-slate-300 font-bold">
-                    {language === 'en'
-                      ? '⚡ QUICK VEHICLE DEPLOY:'
-                      : '⚡ দ্রুত গাড়ি নিয়ে নামুন:'}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        requestSpawnVehicle('cng');
-                        equipTool('type56_ak');
-                        showBanner({
-                          titleEn: 'TUNED BAJAJ CNG & TYPE-56 AK READY',
-                          titleBn: 'টিউনড সিএনজি ও টাইপ-৫৬ একে প্রস্তুত!',
-                          subtitleEn: 'Vehicle delivered directly to Arif.',
-                          subtitleBn: 'আপনার সামনে গাড়ি প্রস্তুত করা হয়েছে।',
-                          tone: 'green',
-                        });
-                      }}
-                      className="bg-emerald-700/80 hover:bg-emerald-600 text-white text-[10px] font-black font-mono px-2.5 py-1 rounded-md border border-emerald-400/60 shadow transition-transform active:scale-95"
-                    >
-                      🛺 TUNED CNG + AK-47
-                    </button>
-                    <button
-                      onClick={() => {
-                        requestSpawnVehicle('police');
-                        equipTool('katta');
-                        showBanner({
-                          titleEn: 'DMP RIOT INTERCEPTOR & KATTA READY',
-                          titleBn: 'ডিএমপি পুলিশ কার ও দেশি কাট্টা প্রস্তুত!',
-                          subtitleEn: 'Police cruiser commandeered.',
-                          subtitleBn: 'পুলিশ গাড়ি দখল করা হয়েছে।',
-                          tone: 'blue',
-                        });
-                      }}
-                      className="bg-blue-700/80 hover:bg-blue-600 text-white text-[10px] font-black font-mono px-2.5 py-1 rounded-md border border-blue-400/60 shadow transition-transform active:scale-95"
-                    >
-                      🚓 DMP POLICE CRUISER
-                    </button>
-                    <button
-                      onClick={() => {
-                        requestSpawnVehicle('motorcycle');
-                        equipTool('shutter_pistol');
-                        showBanner({
-                          titleEn: 'SPORTS MOTORCYCLE & REVOLVER READY',
-                          titleBn: 'স্পোর্টস মোটরবাইক ও রিভলভার প্রস্তুত!',
-                          subtitleEn: 'Midnight street racer ready.',
-                          subtitleBn: 'রেসিং বাইক প্রস্তুত।',
-                          tone: 'gold',
-                        });
-                      }}
-                      className="bg-amber-600/80 hover:bg-amber-500 text-white text-[10px] font-black font-mono px-2.5 py-1 rounded-md border border-amber-400/60 shadow transition-transform active:scale-95"
-                    >
-                      🏍️ SPORTS BIKE
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>

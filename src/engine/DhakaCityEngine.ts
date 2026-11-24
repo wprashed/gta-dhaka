@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import {
-  DHAKA_GAME_LOCATIONS,
   DISTRICTS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
@@ -64,12 +63,9 @@ export class DhakaCityEngine {
   private headlightSpot!: THREE.SpotLight;
   private headlightTarget!: THREE.Object3D;
   private skyDomeMesh!: THREE.Mesh;
-  private horizonMesh!: THREE.Mesh;
   private waterNormalTex!: THREE.Texture;
-  private groundMat!: THREE.MeshStandardMaterial;
   private rainSystem: THREE.Points | null = null;
   private hatirjheelLights: THREE.PointLight[] = [];
-  private streetlampLights: THREE.PointLight[] = [];
   private lastGraphicsQuality: 'high' | 'low' = 'high';
 
   // World Collision Boxes, Pickups & Live Dhaka Metro Train
@@ -79,44 +75,41 @@ export class DhakaCityEngine {
 
   // Player Character State
   private playerLimbs!: CharacterLimbs;
-  private playerPos = new THREE.Vector3(6, 0, 8);
+  private playerPos = new THREE.Vector3(6, 0, 16);
   private playerVelY = 0;
-  private playerRotation = 0;
+  private playerRotation = Math.PI;
   private playerStamina = 100;
   private isGrounded = true;
   private isCrouching = false;
   private attackAnimTimer = 0;
   private walkAnimPhase = 0;
-  private lastStepTime = 0;
   private lastEquippedOutfit = '';
   private lastEquippedTool = '';
-  private virtualMoveForward = 0;
-  private virtualMoveRight = 0;
-  private virtualSprint = false;
-
-  // Combat, Firearms & Particle FX
-  private muzzleFlashLight!: THREE.PointLight;
-  private taillightPointLight!: THREE.PointLight;
-  private muzzleFlashTimer = 0;
-  private bulletTracers: Array<{ line: THREE.Line; life: number; maxLife: number }> = [];
-  private impactSparks: Array<{ mesh: THREE.Mesh; vel: THREE.Vector3; life: number; maxLife: number }> = [];
-  private shellCasings: Array<{ mesh: THREE.Mesh; vel: THREE.Vector3; life: number }> = [];
-  private skidMarks: Array<{ mesh: THREE.Mesh; life: number }> = [];
-  public isAimingDownSights = false;
-  private nitroActive = false;
-  private lastNitroState = false;
-  private exhaustTimer = 0;
-  private policeSirenTimer = 0;
-  private ambientSoundTimer = 0;
 
   // Camera State
   private cameraYaw = 0;
-  private cameraPitch = 0.32;
+  private cameraPitch = 0.25;
   private isPointerDragging = false;
+  private pointerDragDist = 0;
   private lastPointerX = 0;
   private lastPointerY = 0;
-  private pointerDownStartX = 0;
-  private pointerDownStartY = 0;
+
+  // 3D Firearm Ballistics, Muzzle Flash & Explosion FX
+  private fireCooldown = 0;
+  private bulletTracers: Array<{
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    life: number;
+    damage: number;
+  }> = [];
+  private hitSparks: Array<{
+    mesh: THREE.Mesh;
+    life: number;
+  }> = [];
+  private muzzleLight: THREE.PointLight | null = null;
+  private muzzleLightTimer = 0;
 
   // Vehicles
   public vehicles: VehicleEntity[] = [];
@@ -140,8 +133,8 @@ export class DhakaCityEngine {
   constructor(container: HTMLElement) {
     this.container = container;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#1e293b');
-    this.scene.fog = new THREE.FogExp2('#1e293b', 0.0022);
+    this.scene.background = new THREE.Color('#38bdf8');
+    this.scene.fog = new THREE.FogExp2('#38bdf8', 0.0018);
 
     this.camera = new THREE.PerspectiveCamera(
       60,
@@ -212,63 +205,61 @@ export class DhakaCityEngine {
     this.headlightSpot.target = this.headlightTarget;
     this.scene.add(this.headlightSpot);
 
-    // Dynamic Muzzle Flash Point Light
-    this.muzzleFlashLight = new THREE.PointLight('#ffea75', 0, 16);
-    this.scene.add(this.muzzleFlashLight);
-
-    // Dynamic Vehicle Taillight & Brake Point Light
-    this.taillightPointLight = new THREE.PointLight('#ef4444', 0, 8);
-    this.scene.add(this.taillightPointLight);
-
-    // 360° Realistic Dhaka Sunset Sky Dome
+    // 360° Realistic Dhaka Sunset Sky Dome + Real-Time PBR Environment Reflections
     const skyTex = loadRealTexture('/textures/dhaka_sky_sunset.jpg', 1, 1, true);
+    skyTex.mapping = THREE.EquirectangularReflectionMapping;
+    this.scene.environment = skyTex;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.18;
+
     const skyGeo = new THREE.SphereGeometry(490, 32, 20);
     const skyMat = new THREE.MeshBasicMaterial({
       map: skyTex,
       side: THREE.BackSide,
-       fog: false,
+      fog: false,
     });
     this.skyDomeMesh = new THREE.Mesh(skyGeo, skyMat);
     this.scene.add(this.skyDomeMesh);
-
-    // 360° Photorealistic Dhaka Rooftop Twilight Skyline Horizon Cylinder
-    const horizonTex = loadRealTexture(
-      '/dhaka_locations/dhaka_rooftop_twilight.png',
-      4,
-      1,
-      true
-    );
-    const horizonGeo = new THREE.CylinderGeometry(475, 475, 180, 32, 1, true);
-    const horizonMat = new THREE.MeshBasicMaterial({
-      map: horizonTex,
-      side: THREE.BackSide,
-      transparent: true,
-      opacity: 0.88,
-      fog: false,
-    });
-    this.horizonMesh = new THREE.Mesh(horizonGeo, horizonMat);
-    this.horizonMesh.position.y = 55;
-    this.scene.add(this.horizonMesh);
   }
 
   private buildDhakaWorld() {
-    // 1. Realistic Textured Urban Ground Plane
-    const asphaltBaseTex = loadRealTexture(
-      '/textures/dhaka_asphalt.jpg',
-      65,
-      65,
+    // 1. Authentic Dhaka Interlocking Terracotta & Concrete Footpath Plaza Ground Skin
+    const dhakaSidewalkBaseTex = loadRealTexture(
+      '/textures/dhaka_ground_sidewalk.jpg',
+      110,
+      110,
       true
     );
     const groundGeo = new THREE.PlaneGeometry(920, 920);
     groundGeo.rotateX(-Math.PI / 2);
-    this.groundMat = new THREE.MeshStandardMaterial({
-      map: asphaltBaseTex,
-      color: '#475569',
-      roughness: 0.88,
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: dhakaSidewalkBaseTex,
+      color: '#e2e8f0',
+      roughness: 0.84,
     });
-    const ground = new THREE.Mesh(groundGeo, this.groundMat);
+    const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.receiveShadow = true;
     this.scene.add(ground);
+
+    // Lush Green Dhaka Urban Parks (Ramna Park, Suhrawardy Udyan, Chandrima Udyan & Dhanmondi Park)
+    const parkGrassMat = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      roughness: 0.9,
+    });
+    [
+      { x: -115, z: -45, w: 68, d: 56 }, // Chandrima Udyan / Parliament Green Lawn
+      { x: -75, z: 120, w: 54, d: 48 }, // Suhrawardy Udyan / Shahbagh Green
+      { x: 115, z: 45, w: 58, d: 52 }, // Ramna Park Green Lawn
+      { x: -185, z: 25, w: 36, d: 95 }, // Dhanmondi Lake Park Promenade
+    ].forEach((pk) => {
+      const lawn = new THREE.Mesh(
+        new THREE.BoxGeometry(pk.w, 0.12, pk.d),
+        parkGrassMat
+      );
+      lawn.position.set(pk.x, 0.06, pk.z);
+      lawn.receiveShadow = true;
+      this.scene.add(lawn);
+    });
 
     // 2. Normal-Mapped Realistic Waterways (Buriganga River, Hatirjheel Lake, Dhanmondi Lake)
     this.waterNormalTex = loadRealTexture(
@@ -370,50 +361,17 @@ export class DhakaCityEngine {
       divider.position.set(x, 0.095, z);
       this.scene.add(divider);
 
-      // BRTA Standard Dashed White Lane Lines
-      const laneOffset = isNorthSouth ? width * 0.26 : length * 0.26;
-      [-laneOffset, laneOffset].forEach((lOff) => {
-        const span = isNorthSouth ? length : width;
-        const dashCount = Math.floor(span / 6.5);
-        for (let d = 0; d < dashCount; d++) {
-          const dash = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              isNorthSouth ? 0.24 : 2.4,
-              isNorthSouth ? 2.4 : 0.24
-            ),
-            new THREE.MeshBasicMaterial({
-              color: '#f8fafc',
-              side: THREE.DoubleSide,
-            })
-          );
-          dash.rotation.x = -Math.PI / 2;
-          const pos = d * 6.5 - span / 2 + 3.2;
-          dash.position.set(
-            isNorthSouth ? x + lOff : x + pos,
-            0.092,
-            isNorthSouth ? z + pos : z + lOff
-          );
-          this.scene.add(dash);
-        }
-      });
-
       if (isNorthSouth) {
         [-width / 2 - 0.6, width / 2 + 0.6].forEach((offsetX) => {
-          const curb = new THREE.Mesh(
-            new THREE.BoxGeometry(1.2, 0.22, length),
-            curbMat
+          this.scene.add(
+            this.sharedBox(1.2, 0.22, length, curbMat, x + offsetX, 0.11, z)
           );
-          curb.position.set(x + offsetX, 0.11, z);
-          this.scene.add(curb);
         });
       } else {
         [-length / 2 - 0.6, length / 2 + 0.6].forEach((offsetZ) => {
-          const curb = new THREE.Mesh(
-            new THREE.BoxGeometry(width, 0.22, 1.2),
-            curbMat
+          this.scene.add(
+            this.sharedBox(width, 0.22, 1.2, curbMat, x, 0.11, z + offsetZ)
           );
-          curb.position.set(x, 0.11, z + offsetZ);
-          this.scene.add(curb);
         });
       }
     };
@@ -438,67 +396,165 @@ export class DhakaCityEngine {
     this.buildPointsOfInterestMeshes();
     this.buildCityDistrictBuildings();
     this.buildSketchfabGtaLandmarks();
-    this.buildDhakaStreetAtmosphere();
-    this.buildDhakaUrbanMicroDetails();
   }
 
   private buildSketchfabGtaLandmarks() {
-    // Place giant illuminated billboards using the authentic Dhaka location concept arts from stitch_dhaka_city_game_ui
+    // 1. Giant Illuminated Dhaka Bangla Commercial Billboards (Replacing generic GTA thumbnails)
     const billboardLocations = [
-      { x: 24, z: -22, tex: '/dhaka_locations/kawran_bazar.png', rot: -0.4 },
-      { x: -25, z: 24, tex: '/dhaka_locations/chawkbazar.png', rot: 0.5 },
-      { x: 202, z: -158, tex: '/dhaka_locations/gulshan_2.png', rot: -0.3 },
-      { x: 202, z: 158, tex: '/dhaka_locations/motijheel.png', rot: 0.3 },
-      { x: 202, z: -40, tex: '/dhaka_locations/hatirjheel.png', rot: 0.2 },
-      { x: 12, z: 275, tex: '/dhaka_locations/sadarghat.png', rot: 0.0 },
-      { x: -65, z: 120, tex: '/dhaka_locations/ahsan_manzil.png', rot: 0.4 },
-      { x: -180, z: 25, tex: '/dhaka_locations/curzon_hall.png', rot: -0.5 },
-      { x: 110, z: -280, tex: '/dhaka_locations/dhaka_rooftop_twilight.png', rot: 0.8 },
-      { x: -95, z: 195, tex: '/dhaka_locations/lalbagh_fort.png', rot: -0.2 },
-      { x: -245, z: -220, tex: '/dhaka_locations/gabtoli.png', rot: 0.6 },
-      { x: -45, z: 245, tex: '/dhaka_locations/shakhari_bazar.png', rot: 0.2 },
-      { x: 85, z: -160, tex: '/dhaka_locations/tejgaon.png', rot: -0.6 },
-      { x: -210, z: -85, tex: '/dhaka_locations/tuned_cng_auto_rickshaw.png', rot: 0.9 },
-      { x: 145, z: 65, tex: '/dhaka_locations/dmp_riot_interceptor.png', rot: -0.1 },
-      { x: 260, z: -250, tex: '/dhaka_locations/midnight_street_rally.png', rot: -0.8 },
+      { x: 24, z: -22, signIdx: 0, rot: -0.4 },
+      { x: -25, z: 24, signIdx: 3, rot: 0.5 },
+      { x: 202, z: -158, signIdx: 5, rot: -0.3 },
+      { x: 202, z: 158, signIdx: 7, rot: 0.3 },
     ];
 
     billboardLocations.forEach((b) => {
-      const mesh = createSketchfabAssetPropMesh('billboard', b.tex);
-      mesh.position.set(b.x, 0, b.z);
-      mesh.rotation.y = b.rot;
-      this.scene.add(mesh);
-    });
+      const poleGroup = new THREE.Group();
+      poleGroup.position.set(b.x, 0, b.z);
+      poleGroup.rotation.y = b.rot;
 
-    // Spawn 3D Photorealistic Dhaka Landmark Pavilions for authentic architectural locations
-    DHAKA_GAME_LOCATIONS.forEach((loc) => {
-      // Exclude highway transit lines, water basins, and road race loops from having giant rectangular blocks
-      if (
-        loc.category === 'transit' ||
-        loc.id === 'hatirjheel' ||
-        loc.id === 'street_rally' ||
-        loc.id === 'sadarghat' ||
-        loc.id === 'farmgate'
-      ) {
-        return;
-      }
-
-      const mesh = createSketchfabAssetPropMesh(
-        'dhaka_landmark_building',
-        loc.image
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.36, 9.2, 12),
+        new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.75 })
       );
-      // Orient landmark to face towards the nearest roadway
-      const rot = Math.atan2(-loc.x, -loc.z) * 0.35;
-      mesh.position.set(loc.x, 0, loc.z);
-      mesh.rotation.y = rot;
-      this.scene.add(mesh);
-      this.buildingColliders.push({
-        minX: loc.x - 11.5,
-        maxX: loc.x + 11.5,
-        minZ: loc.z - 8.5,
-        maxZ: loc.z + 8.5,
-      });
+      pole.position.y = 4.6;
+      poleGroup.add(pole);
+
+      const board = new THREE.Mesh(
+        new THREE.BoxGeometry(9.6, 4.4, 0.42),
+        new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(b.signIdx) })
+      );
+      board.position.y = 9.4;
+      poleGroup.add(board);
+
+      this.scene.add(poleGroup);
     });
+
+    // 2. Iconic Karwan Bazar SAARC Fountain (সার্ক ফোয়ারা - কারওয়ান বাজার মোড়)
+    const saarcFountain = new THREE.Group();
+    saarcFountain.position.set(0, 0, -28);
+
+    const brickTex = loadRealTexture('/textures/brick_diffuse.jpg', 3, 1, true);
+    const fountainPool = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.8, 4.1, 0.75, 24),
+      new THREE.MeshStandardMaterial({ map: brickTex, color: '#b91c1c', roughness: 0.7 })
+    );
+    fountainPool.position.y = 0.38;
+    saarcFountain.add(fountainPool);
+
+    const poolWater = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.4, 3.4, 0.78, 24),
+      new THREE.MeshStandardMaterial({
+        color: '#0284c7',
+        roughness: 0.12,
+        metalness: 0.65,
+      })
+    );
+    poolWater.position.y = 0.4;
+    saarcFountain.add(poolWater);
+
+    // Steel SAARC Fountain Crown Rings & Water Jets
+    const steelMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.9,
+      roughness: 0.15,
+    });
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI) / 4;
+      const arch = new THREE.Mesh(
+        new THREE.TorusGeometry(2.1, 0.08, 10, 24, Math.PI),
+        steelMat
+      );
+      arch.position.set(Math.cos(angle) * 0.8, 0.75, Math.sin(angle) * 0.8);
+      arch.rotation.y = angle;
+      saarcFountain.add(arch);
+    }
+    const centerSpire = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.45, 4.6, 16),
+      steelMat
+    );
+    centerSpire.position.y = 2.6;
+    saarcFountain.add(centerSpire);
+    this.scene.add(saarcFountain);
+
+    // 3. Elevated Farmgate Metro Rail Station (ফার্মগেট মেট্রোরেল স্টেশন - MRT Line-6) right at Spawn!
+    const farmgateStation = new THREE.Group();
+    farmgateStation.position.set(0, 0, 28);
+
+    const concourseSlab = new THREE.Mesh(
+      new THREE.BoxGeometry(15.5, 1.1, 34),
+      new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.6 })
+    );
+    concourseSlab.position.y = 6.8;
+    concourseSlab.castShadow = true;
+    farmgateStation.add(concourseSlab);
+
+    // Iconic Curved Green-and-White Dhaka Metro Station Vaulted Canopy Roof
+    const stationRoof = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        8.4,
+        8.4,
+        36,
+        24,
+        1,
+        false,
+        -Math.PI / 2.3,
+        (Math.PI * 2) / 2.3
+      )
+        .rotateZ(Math.PI / 2)
+        .rotateY(Math.PI / 2),
+      new THREE.MeshStandardMaterial({
+        color: '#047857',
+        metalness: 0.45,
+        roughness: 0.3,
+        side: THREE.DoubleSide,
+      })
+    );
+    stationRoof.scale.set(1, 0.42, 1);
+    stationRoof.position.y = 10.6;
+    stationRoof.castShadow = true;
+    farmgateStation.add(stationRoof);
+
+    // Farmgate Station Name Boards on both North and South ends
+    [-17.2, 17.2].forEach((sz) => {
+      const stSign = new THREE.Mesh(
+        new THREE.BoxGeometry(11.5, 1.35, 0.25),
+        new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(3) })
+      );
+      stSign.position.set(0, 9.8, sz);
+      farmgateStation.add(stSign);
+    });
+    this.scene.add(farmgateStation);
+
+    // 4. Baitul Mukarram National Mosque (বায়তুল মোকাররম জাতীয় মসজিদ) in Paltan/Motijheel West
+    const baitulMukarram = new THREE.Group();
+    baitulMukarram.position.set(78, 0, 82);
+    const whiteMarble = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.35,
+    });
+    const podium = new THREE.Mesh(
+      new THREE.BoxGeometry(28, 3.2, 28),
+      new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6 })
+    );
+    podium.position.y = 1.6;
+    baitulMukarram.add(podium);
+
+    // Iconic Cube-shaped (Kaaba-inspired) main prayer hall with vertical recessed arches
+    const cubeHall = new THREE.Mesh(
+      new THREE.BoxGeometry(20, 19, 20),
+      whiteMarble
+    );
+    cubeHall.position.y = 12.7;
+    cubeHall.castShadow = true;
+    baitulMukarram.add(cubeHall);
+
+    const blackTrim = new THREE.Mesh(
+      new THREE.BoxGeometry(20.3, 1.6, 20.3),
+      new THREE.MeshStandardMaterial({ color: '#0f172a' })
+    );
+    blackTrim.position.y = 20.2;
+    baitulMukarram.add(blackTrim);
+    this.scene.add(baitulMukarram);
 
     // Spawn an initial collectible Cash Stack Drop near Karwan Bazar alley
     this.spawnCashDrop(22, 8, 2500);
@@ -521,392 +577,6 @@ export class DhakaCityEngine {
 
     this.scene.add(mesh);
     this.cashDrops.push({ mesh, x, z, amount });
-  }
-
-  private buildDhakaStreetAtmosphere() {
-    const concreteMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.85,
-    });
-    const cableMat = new THREE.MeshBasicMaterial({ color: '#09090b' });
-    const dividerMat = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.65,
-    });
-    const stripeMat = new THREE.MeshBasicMaterial({ color: '#09090b' });
-    const greenFenceMat = new THREE.MeshStandardMaterial({
-      color: '#15803d',
-      wireframe: true,
-    });
-
-    // 1. Concrete Utility Poles with Tangled Overhead Cables (Dhaka signature streetscape)
-    const poleZList = [-260, -195, -130, -65, 25, 95, 165, 235];
-    const polePositions: THREE.Vector3[] = [];
-
-    poleZList.forEach((pz) => {
-      [-10.2, 10.2].forEach((px) => {
-        const pole = new THREE.Group();
-        pole.position.set(px, 0, pz);
-
-        // Concrete pole mast
-        const mast = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.18, 0.24, 8.5, 8),
-          concreteMat
-        );
-        mast.position.y = 4.25;
-        mast.castShadow = true;
-        pole.add(mast);
-
-        // Crossarms
-        const crossarm = new THREE.Mesh(
-          new THREE.BoxGeometry(1.8, 0.12, 0.12),
-          concreteMat
-        );
-        crossarm.position.set(0, 7.8, 0);
-        pole.add(crossarm);
-
-        // Streetlamp extending over avenue
-        const armDir = px > 0 ? -1 : 1;
-        const lampArm = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8).rotateZ(
-            (Math.PI / 3) * armDir
-          ),
-          concreteMat
-        );
-        lampArm.position.set(armDir * 0.7, 7.3, 0);
-        pole.add(lampArm);
-
-        const lampCone = new THREE.Mesh(
-          new THREE.ConeGeometry(0.32, 0.22, 10),
-          new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.85 })
-        );
-        lampCone.position.set(armDir * 1.35, 6.8, 0);
-        pole.add(lampCone);
-
-        const bulb = new THREE.Mesh(
-          new THREE.SphereGeometry(0.12, 8, 8),
-          new THREE.MeshBasicMaterial({ color: '#fef08a' })
-        );
-        bulb.position.set(armDir * 1.35, 6.68, 0);
-        pole.add(bulb);
-
-        const lampLight = new THREE.PointLight('#fef08a', 0.85, 22);
-        lampLight.position.set(px + armDir * 1.35, 6.6, pz);
-        this.scene.add(lampLight);
-        this.streetlampLights.push(lampLight);
-
-        // Transformer box on some poles
-        if (Math.abs(pz) % 3 === 0) {
-          const trans = new THREE.Mesh(
-            new THREE.BoxGeometry(0.7, 0.9, 0.6),
-            new THREE.MeshStandardMaterial({ color: '#475569', metalness: 0.8 })
-          );
-          trans.position.set(0.35, 5.2, 0);
-          pole.add(trans);
-        }
-
-        this.scene.add(pole);
-        polePositions.push(new THREE.Vector3(px, 7.8, pz));
-      });
-    });
-
-    // String tangled drooping electrical cables between poles
-    for (let i = 0; i < polePositions.length - 2; i += 2) {
-      // Along left side
-      this.createDroopingCable(
-        polePositions[i],
-        polePositions[i + 2],
-        cableMat,
-        0.85
-      );
-      // Along right side
-      this.createDroopingCable(
-        polePositions[i + 1],
-        polePositions[i + 3],
-        cableMat,
-        0.9
-      );
-      // Cross-street tangled cables
-      if (i % 4 === 0) {
-        this.createDroopingCable(
-          polePositions[i],
-          polePositions[i + 3],
-          cableMat,
-          1.4
-        );
-      }
-    }
-
-    // 2. Concrete Road Dividers with Hazard Stripes & Green Median Mesh along Main Avenue
-    const dividerSegments = [
-      { startZ: -290, endZ: -185 },
-      { startZ: -160, endZ: -15 },
-      { startZ: 15, endZ: 160 },
-      { startZ: 190, endZ: 275 },
-    ];
-
-    dividerSegments.forEach((seg) => {
-      const len = seg.endZ - seg.startZ;
-      const centerZ = (seg.startZ + seg.endZ) / 2;
-
-      // Concrete median kerb
-      const kerb = new THREE.Mesh(
-        new THREE.BoxGeometry(0.75, 0.45, len),
-        dividerMat
-      );
-      kerb.position.set(0, 0.22, centerZ);
-      this.scene.add(kerb);
-
-      // Black chevron stripes at intervals
-      const stripeCount = Math.floor(len / 4);
-      for (let s = 0; s < stripeCount; s++) {
-        const stripe = new THREE.Mesh(
-          new THREE.BoxGeometry(0.78, 0.46, 0.4),
-          stripeMat
-        );
-        stripe.position.set(0, 0.22, seg.startZ + s * 4 + 2);
-        this.scene.add(stripe);
-      }
-
-      // Green anti-glare mesh fence on median
-      const fence = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.85, len),
-        greenFenceMat
-      );
-      fence.position.set(0, 0.85, centerZ);
-      this.scene.add(fence);
-    });
-
-    // 3. Authentic BRTA White Zebra Crossings at Intersections
-    [-175, 0, 175].forEach((crossZ) => {
-      for (let x = -8; x <= 8; x += 1.4) {
-        const stripe = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.75, 5.2),
-          new THREE.MeshBasicMaterial({
-            color: '#f8fafc',
-            side: THREE.DoubleSide,
-          })
-        );
-        stripe.rotation.x = -Math.PI / 2;
-        stripe.position.set(x, 0.04, crossZ);
-        this.scene.add(stripe);
-      }
-    });
-  }
-
-  private buildDhakaUrbanMicroDetails() {
-    // 1. Cast-Iron DWASA Manhole Covers (ঢাকা ওয়াসা ম্যানহোল)
-    const manholeMat = new THREE.MeshStandardMaterial({
-      color: '#334155',
-      metalness: 0.88,
-      roughness: 0.45,
-    });
-    const manholeRimMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.85,
-    });
-
-    const manholePositions: Array<[number, number]> = [
-      [3.2, -80],
-      [-3.2, -45],
-      [4.5, 30],
-      [-4.2, 95],
-      [3.8, 150],
-      [-166, -60],
-      [-173, 40],
-      [216, -110],
-      [223, 75],
-    ];
-
-    manholePositions.forEach(([mx, mz]) => {
-      const rim = new THREE.Mesh(
-        new THREE.RingGeometry(0.52, 0.62, 16).rotateX(-Math.PI / 2),
-        manholeRimMat
-      );
-      rim.position.set(mx, 0.086, mz);
-      this.scene.add(rim);
-
-      const cover = new THREE.Mesh(
-        new THREE.CircleGeometry(0.5, 16).rotateX(-Math.PI / 2),
-        manholeMat
-      );
-      cover.position.set(mx, 0.088, mz);
-      this.scene.add(cover);
-    });
-
-    // 2. Yellow Box Junctions at Major Intersections (Farmgate z: 0, Motijheel z: 175)
-    const yellowLineMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
-    [0, 175, -175].forEach((jz) => {
-      const boxW = 18;
-      const boxH = 18;
-      const border = new THREE.LineSegments(
-        new THREE.EdgesGeometry(
-          new THREE.PlaneGeometry(boxW, boxH).rotateX(-Math.PI / 2)
-        ),
-        new THREE.LineBasicMaterial({ color: '#facc15', linewidth: 3 })
-      );
-      border.position.set(0, 0.085, jz);
-      this.scene.add(border);
-
-      for (let i = -7; i <= 7; i += 3.5) {
-        const diag1 = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.24, 22)
-            .rotateX(-Math.PI / 2)
-            .rotateY(Math.PI / 4),
-          yellowLineMat
-        );
-        diag1.position.set(i * 0.7, 0.086, jz);
-        this.scene.add(diag1);
-
-        const diag2 = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.24, 22)
-            .rotateX(-Math.PI / 2)
-            .rotateY(-Math.PI / 4),
-          yellowLineMat
-        );
-        diag2.position.set(i * 0.7, 0.086, jz);
-        this.scene.add(diag2);
-      }
-    });
-
-    // 3. Black-and-Yellow Striped Dhaka Speedbreakers (স্পিড ব্রেকার)
-    const speedbumpMatYellow = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.6,
-    });
-    const speedbumpMatBlack = new THREE.MeshStandardMaterial({
-      color: '#09090b',
-      roughness: 0.8,
-    });
-
-    [-115, -45, 65, 135].forEach((bumpZ) => {
-      const bumpW = 16.5;
-      const segments = Math.floor(bumpW / 1.2);
-      for (let s = 0; s < segments; s++) {
-        const segX = -bumpW / 2 + s * 1.2 + 0.6;
-        const bump = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.18, 0.18, 1.15, 8).rotateZ(Math.PI / 2),
-          s % 2 === 0 ? speedbumpMatYellow : speedbumpMatBlack
-        );
-        bump.scale.set(1, 0.45, 1);
-        bump.position.set(segX, 0.11, bumpZ);
-        this.scene.add(bump);
-      }
-    });
-
-    // 4. Reflective Monsoon Water Puddles on Road Gutters
-    const puddleMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      roughness: 0.06,
-      metalness: 0.92,
-      transparent: true,
-      opacity: 0.68,
-    });
-
-    const puddlePositions: Array<[number, number, number, number]> = [
-      [7.5, -35, 3.2, 1.8],
-      [-7.8, -95, 2.8, 2.2],
-      [7.2, 55, 3.5, 2.4],
-      [-7.5, 115, 4.0, 1.9],
-      [-162, 15, 3.0, 2.5],
-      [227, -25, 3.2, 2.0],
-    ];
-
-    puddlePositions.forEach(([px, pz, pw, ph]) => {
-      const puddle = new THREE.Mesh(
-        new THREE.PlaneGeometry(pw, ph).rotateX(-Math.PI / 2),
-        puddleMat
-      );
-      puddle.position.set(px, 0.088, pz);
-      this.scene.add(puddle);
-    });
-
-    // 5. DMP Police Checkpost Barricades (ডিএমপি পুলিশ চেকপোস্ট ব্যারিকেড)
-    const barricadeWhiteMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.5,
-    });
-    const barricadeRedMat = new THREE.MeshStandardMaterial({
-      color: '#dc2626',
-      roughness: 0.4,
-    });
-    const ironLegMat = new THREE.MeshStandardMaterial({
-      color: '#0f172a',
-      metalness: 0.85,
-      roughness: 0.3,
-    });
-
-    const checkpostCoords: Array<[number, number, number]> = [
-      [5.5, -145, 0.1],
-      [-5.5, -145, -0.1],
-      [6.5, 205, -0.15],
-      [-6.5, 205, 0.15],
-      [215, -65, Math.PI / 2],
-    ];
-
-    checkpostCoords.forEach(([bx, bz, brot]) => {
-      const barricade = new THREE.Group();
-      barricade.position.set(bx, 0, bz);
-      barricade.rotation.y = brot;
-
-      [-1.4, 1.4].forEach((lx) => {
-        const leg = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.04, 0.04, 1.25, 8),
-          ironLegMat
-        );
-        leg.position.set(lx, 0.6, 0);
-        barricade.add(leg);
-
-        const foot = new THREE.Mesh(
-          new THREE.BoxGeometry(0.08, 0.04, 0.72),
-          ironLegMat
-        );
-        foot.position.set(lx, 0.02, 0);
-        barricade.add(foot);
-      });
-
-      [0.55, 0.95].forEach((plankY, pIdx) => {
-        const plank = new THREE.Mesh(
-          new THREE.BoxGeometry(3.1, 0.22, 0.06),
-          pIdx === 0 ? barricadeRedMat : barricadeWhiteMat
-        );
-        plank.position.set(0, plankY, 0);
-        barricade.add(plank);
-
-        for (let c = -1.2; c <= 1.2; c += 0.5) {
-          const chev = new THREE.Mesh(
-            new THREE.BoxGeometry(0.2, 0.23, 0.07),
-            pIdx === 0 ? barricadeWhiteMat : barricadeRedMat
-          );
-          chev.position.set(c, plankY, 0);
-          barricade.add(chev);
-        }
-      });
-
-      this.scene.add(barricade);
-      this.buildingColliders.push({
-        minX: bx - 1.6,
-        maxX: bx + 1.6,
-        minZ: bz - 0.5,
-        maxZ: bz + 0.5,
-      });
-    });
-  }
-
-  private createDroopingCable(
-    p1: THREE.Vector3,
-    p2: THREE.Vector3,
-    mat: THREE.Material,
-    droopAmount = 0.8
-  ) {
-    const mid = p1.clone().add(p2).multiplyScalar(0.5);
-    mid.y -= droopAmount;
-
-    const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2);
-    const points = curve.getPoints(12);
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(geo, mat);
-    this.scene.add(line);
   }
 
   private buildHatirjheelBridge() {
@@ -1492,8 +1162,106 @@ export class DhakaCityEngine {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // Shared resource caches. The city has thousands of small props; creating a
+  // fresh material + geometry for each one pushed the scene to ~1900 materials
+  // and 2500 geometries (1079 draw calls per frame). Reusing one geometry per
+  // distinct size and one material per look lets three.js batch far more work
+  // and cuts memory churn during loading.
+  // -------------------------------------------------------------------------
+  private geoCache = new Map<string, THREE.BufferGeometry>();
+  private tracerGeo = new THREE.BoxGeometry(0.05, 0.05, 0.95);
+  private tracerMatSingle = new THREE.MeshBasicMaterial({ color: '#fde047' });
+  private tracerMatSpread = new THREE.MeshBasicMaterial({ color: '#fb923c' });
+  private coilGeo: THREE.BufferGeometry = new THREE.TorusGeometry(0.36, 0.055, 8, 16);
+  private matCache = new Map<string, THREE.Material>();
+
+  /** Box geometry cache keyed by rounded dimensions. */
+  private boxCache(w: number, h: number, d: number): THREE.BufferGeometry {
+    const key = `box|${w.toFixed(2)}|${h.toFixed(2)}|${d.toFixed(2)}`;
+    let g = this.geoCache.get(key);
+    if (!g) {
+      g = new THREE.BoxGeometry(w, h, d);
+      this.geoCache.set(key, g);
+    }
+    return g;
+  }
+
+  /** Cylinder geometry cache keyed by radius/height/segments. */
+  private cylCache(
+    rt: number,
+    rb: number,
+    h: number,
+    seg = 12
+  ): THREE.BufferGeometry {
+    const key = `cyl|${rt.toFixed(2)}|${rb.toFixed(2)}|${h.toFixed(2)}|${seg}`;
+    let g = this.geoCache.get(key);
+    if (!g) {
+      g = new THREE.CylinderGeometry(rt, rb, h, seg);
+      this.geoCache.set(key, g);
+    }
+    return g;
+  }
+
+  /**
+   * Adds many copies of one geometry+material as a single InstancedMesh, so a
+   * hundred identical bollards, railing posts or zebra stripes cost one draw
+   * call instead of a hundred.
+   */
+  private addInstances(
+    geo: THREE.BufferGeometry,
+    mat: THREE.Material,
+    transforms: Array<{ x: number; y: number; z: number; ry?: number }>,
+    castShadow = false
+  ): THREE.InstancedMesh | null {
+    if (transforms.length === 0) return null;
+    const inst = new THREE.InstancedMesh(geo, mat, transforms.length);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3(1, 1, 1);
+    transforms.forEach((t, i) => {
+      pos.set(t.x, t.y, t.z);
+      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, t.ry ?? 0);
+      m.compose(pos, q, scale);
+      inst.setMatrixAt(i, m);
+    });
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = castShadow;
+    inst.receiveShadow = false;
+    this.scene.add(inst);
+    return inst;
+  }
+
+  /** Convenience: a mesh using cached geometry, positioned in world space. */
+  private sharedBox(
+    w: number,
+    h: number,
+    d: number,
+    mat: THREE.Material,
+    x: number,
+    y: number,
+    z: number
+  ): THREE.Mesh {
+    const m = new THREE.Mesh(this.boxCache(w, h, d), mat);
+    m.position.set(x, y, z);
+    return m;
+  }
+
   private buildCityDistrictBuildings() {
     const brickBump = loadRealTexture('/textures/brick_bump.jpg', 2, 3, false);
+    const dhakaRealFacadeTex = loadRealTexture(
+      '/textures/dhaka_facade_realistic.jpg',
+      2,
+      3,
+      true
+    );
+    const dhakaBrickTex = loadRealTexture(
+      '/textures/brick_diffuse.jpg',
+      3,
+      4,
+      true
+    );
 
     const buildingBlocks: Array<{
       x: number;
@@ -1505,13 +1273,25 @@ export class DhakaCityEngine {
       color: string;
       signIndex?: number;
     }> = [
-      // Farmgate & Karwan Bazar Commercial Blocks
-      { x: 34, z: 32, w: 18, d: 18, h: 24, style: 'commercial', color: '#cbd5e1', signIndex: 0 },
-      { x: -38, z: 34, w: 20, d: 16, h: 20, style: 'commercial', color: '#fde68a', signIndex: 1 },
-      { x: -38, z: -32, w: 18, d: 18, h: 22, style: 'residential', color: '#e2e8f0', signIndex: 2 },
-      { x: 42, z: -36, w: 22, d: 18, h: 30, style: 'modern_glass', color: '#0ea5e9', signIndex: 3 },
-      { x: 85, z: 35, w: 20, d: 20, h: 26, style: 'commercial', color: '#cbd5e1', signIndex: 4 },
-      { x: -85, z: -38, w: 22, d: 18, h: 21, style: 'residential', color: '#fed7aa', signIndex: 5 },
+      // Farmgate & Karwan Bazar Dense Street-Lining Blocks (Right around Spawn!)
+      { x: 26, z: 24, w: 18, d: 18, h: 26, style: 'commercial', color: '#f8fafc', signIndex: 0 },
+      { x: -26, z: 24, w: 18, d: 16, h: 22, style: 'commercial', color: '#fef3c7', signIndex: 1 },
+      { x: -26, z: -24, w: 18, d: 18, h: 24, style: 'residential', color: '#f1f5f9', signIndex: 2 },
+      { x: 26, z: -24, w: 20, d: 18, h: 32, style: 'modern_glass', color: '#bae6fd', signIndex: 3 },
+      { x: 26, z: 54, w: 18, d: 20, h: 24, style: 'commercial', color: '#e2e8f0', signIndex: 4 },
+      { x: -26, z: 54, w: 18, d: 20, h: 22, style: 'residential', color: '#ffedd5', signIndex: 5 },
+      { x: 26, z: -56, w: 18, d: 20, h: 28, style: 'commercial', color: '#f8fafc', signIndex: 6 },
+      { x: -26, z: -56, w: 18, d: 20, h: 25, style: 'residential', color: '#fef9c3', signIndex: 7 },
+      { x: 26, z: 84, w: 18, d: 18, h: 21, style: 'commercial', color: '#f1f5f9', signIndex: 1 },
+      { x: -26, z: 84, w: 18, d: 18, h: 20, style: 'residential', color: '#fed7aa', signIndex: 2 },
+      { x: 26, z: -88, w: 18, d: 18, h: 27, style: 'modern_glass', color: '#7dd3fc', signIndex: 3 },
+      { x: -26, z: -88, w: 18, d: 18, h: 23, style: 'commercial', color: '#e2e8f0', signIndex: 4 },
+      { x: 58, z: 24, w: 20, d: 18, h: 26, style: 'commercial', color: '#cbd5e1', signIndex: 4 },
+      { x: -58, z: -24, w: 20, d: 18, h: 22, style: 'residential', color: '#fed7aa', signIndex: 5 },
+      { x: 58, z: -24, w: 20, d: 18, h: 29, style: 'modern_glass', color: '#93c5fd', signIndex: 7 },
+      { x: -58, z: 24, w: 20, d: 18, h: 23, style: 'commercial', color: '#fde68a', signIndex: 0 },
+      { x: 92, z: 26, w: 20, d: 20, h: 26, style: 'commercial', color: '#cbd5e1', signIndex: 4 },
+      { x: -92, z: -28, w: 22, d: 18, h: 21, style: 'residential', color: '#fed7aa', signIndex: 5 },
 
       // Old Dhaka (Puran Dhaka) Dense Heritage Blocks
       { x: -42, z: 125, w: 15, d: 15, h: 14, style: 'old_dhaka', color: '#fca5a5', signIndex: 0 },
@@ -1556,36 +1336,220 @@ export class DhakaCityEngine {
       { x: 165, z: -355, w: 32, d: 22, h: 28, style: 'modern_glass', color: '#1d4ed8', signIndex: 3 },
     ];
 
-    buildingBlocks.forEach((b) => {
-      const facadeTex = createBuildingFacadeTexture(b.style, b.color);
-      const mat = new THREE.MeshStandardMaterial({
-        map: facadeTex,
-        bumpMap: b.style === 'old_dhaka' ? brickBump : null,
-        bumpScale: 0.08,
-        roughness: b.style === 'modern_glass' ? 0.2 : 0.65,
-        metalness: b.style === 'modern_glass' ? 0.65 : 0.15,
-      });
+    const balconyMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      roughness: 0.65,
+      metalness: 0.3,
+    });
 
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), mat);
+    // Load Orthographic 3D Dhaka Architectural, Shopfront, Sidewalk & Skyline Skins
+    const dhakaShopfrontTex = loadRealTexture(
+      '/textures/dhaka_shopfront_arcade.jpg',
+      1,
+      1,
+      true
+    );
+    const dhakaCommercialTex = loadRealTexture(
+      '/textures/dhaka_commercial_tower.jpg',
+      1,
+      2,
+      true
+    );
+    const dhakaOldCityTex = loadRealTexture(
+      '/textures/dhaka_old_city_facade.jpg',
+      1,
+      2,
+      true
+    );
+    const dhakaSidewalkTileTex = loadRealTexture(
+      '/textures/dhaka_ground_sidewalk.jpg',
+      6,
+      6,
+      true
+    );
+    const dhakaPanoramaTex = loadRealTexture(
+      '/textures/dhaka_skyline_panorama.jpg',
+      4,
+      1,
+      true
+    );
+
+    // Shared per-style materials (one instance, reused by every building).
+    const shopArcadeMat = new THREE.MeshStandardMaterial({
+      map: dhakaShopfrontTex,
+      roughness: 0.48,
+      metalness: 0.12,
+    });
+    const oldArcadeMat = new THREE.MeshStandardMaterial({
+      map: dhakaOldCityTex,
+      roughness: 0.62,
+      metalness: 0.06,
+    });
+    const sidewalkPlinthMat = new THREE.MeshStandardMaterial({
+      map: dhakaSidewalkTileTex,
+      roughness: 0.8,
+    });
+    const tankBlueMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      roughness: 0.4,
+    });
+    const tankSlateMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      roughness: 0.45,
+    });
+    const tankDarkMat = new THREE.MeshStandardMaterial({
+      color: '#0369a1',
+      roughness: 0.45,
+    });
+
+    // 360-Degree Panoramic Actual Dhaka City Skyline Horizon Ring
+    const horizonGeo = new THREE.CylinderGeometry(468, 468, 125, 48, 1, true);
+    horizonGeo.scale(-1, 1, 1);
+    const horizonMat = new THREE.MeshBasicMaterial({
+      map: dhakaPanoramaTex,
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false,
+      fog: false,
+    });
+    const horizonRing = new THREE.Mesh(horizonGeo, horizonMat);
+    horizonRing.position.set(0, 52, 0);
+    this.scene.add(horizonRing);
+
+    // White Dhaka Zebra Crossings (জেব্রা ক্রসিং) at Major Intersections
+    const zebraIntersections = [
+      { x: 0, z: 18 },
+      { x: 0, z: -28 },
+      { x: 0, z: 75 },
+      { x: 0, z: 155 },
+      { x: 80, z: 0 },
+      { x: -80, z: 0 },
+      { x: 200, z: 155 },
+      { x: 200, z: -155 },
+    ];
+    const zebraStripeMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.7,
+    });
+    const zebraPositions: Array<{ x: number; y: number; z: number }> = [];
+    zebraIntersections.forEach((zi) => {
+      for (let st = -6; st <= 6; st += 2.2) {
+        zebraPositions.push({ x: zi.x + st, y: 0.09, z: zi.z });
+      }
+    });
+    this.addInstances(
+      this.boxCache(1.1, 0.05, 4.2),
+      zebraStripeMat,
+      zebraPositions
+    );
+
+    const balconyPositions = new Map<
+      string,
+      Array<{ x: number; y: number; z: number }>
+    >();
+    buildingBlocks.forEach((b) => {
+      // Select authentic orthographic 3D Dhaka architectural facade texture by district style
+      const facadeTex =
+        b.style === 'old_dhaka'
+          ? dhakaOldCityTex
+          : b.style === 'commercial'
+          ? dhakaCommercialTex
+          : b.style === 'residential'
+          ? dhakaRealFacadeTex
+          : createBuildingFacadeTexture(b.style, b.color);
+
+      const tint =
+        b.style === 'modern_glass' ||
+        b.style === 'commercial' ||
+        b.style === 'old_dhaka'
+          ? '#ffffff'
+          : b.color;
+      const facadeKey = `facade|${b.style}|${tint}|${facadeTex.uuid}`;
+      let mat = this.matCache.get(facadeKey) as THREE.MeshStandardMaterial | undefined;
+      if (!mat) {
+        mat = new THREE.MeshStandardMaterial({
+          map: facadeTex,
+          color: tint,
+          bumpMap: brickBump,
+          bumpScale: b.style === 'modern_glass' ? 0.02 : 0.07,
+          roughness: b.style === 'modern_glass' ? 0.14 : 0.54,
+          metalness: b.style === 'modern_glass' ? 0.76 : 0.16,
+        });
+        this.matCache.set(facadeKey, mat);
+      }
+
+      const mesh = new THREE.Mesh(this.boxCache(b.w, b.h, b.d), mat);
       mesh.position.set(b.x, b.h / 2, b.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
 
+      // Ground-Floor Authentic Dhaka Shopfront Arcade Skin (বিরিয়ানি হাউস | ড্রাগ ফার্মেসী)
+      // Shared materials: one instance per style instead of one per building.
+      const arcadeMat =
+        b.style === 'old_dhaka' ? oldArcadeMat : shopArcadeMat;
+      const groundArcade = this.sharedBox(
+        b.w + 0.24,
+        4.1,
+        b.d + 0.24,
+        arcadeMat,
+        b.x,
+        2.05,
+        b.z
+      );
+      this.scene.add(groundArcade);
+
+      // Paved Dhaka Sidewalk Plinth around Building (ফুটপাতের টাইলস)
+      const sidewalkPlinth = this.sharedBox(
+        b.w + 3.6,
+        0.24,
+        b.d + 3.6,
+        sidewalkPlinthMat,
+        b.x,
+        0.12,
+        b.z
+      );
+      sidewalkPlinth.receiveShadow = true;
+      this.scene.add(sidewalkPlinth);
+
+      // Rooftop Parapet Wall Ledge (ছাদের রেলিং)
+      const parapet = this.sharedBox(
+        b.w + 0.4,
+        0.9,
+        b.d + 0.4,
+        balconyMat,
+        b.x,
+        b.h + 0.45,
+        b.z
+      );
+      this.scene.add(parapet);
+
+      // 3D Protruding Dhaka Apartment Balconies (বারান্দা) on upper floors.
+      // Deferred: collected per building width and instanced after the loop.
+      if (b.style !== 'modern_glass') {
+        for (let fy = 7.5; fy < b.h - 2.5; fy += 3.8) {
+          const key = (b.w * 0.72).toFixed(2);
+          if (!balconyPositions.has(key)) balconyPositions.set(key, []);
+          balconyPositions.get(key)!.push({
+            x: b.x,
+            y: fy,
+            z: b.z + (b.z > 0 ? -b.d / 2 - 0.3 : b.d / 2 + 0.3),
+          });
+        }
+      }
+
+      // Rooftop Gazi water tanks — shared geometry, two shared materials.
       const tank = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.3, 1.3, 2.3, 12),
-        new THREE.MeshStandardMaterial({
-          color: b.x % 2 === 0 ? '#0284c7' : '#1e293b',
-          roughness: 0.4,
-        })
+        this.boxCache(2.6, 2.3, 2.6),
+        b.x % 2 === 0 ? tankBlueMat : tankSlateMat
       );
       tank.position.set(b.x + b.w * 0.22, b.h + 1.15, b.z - b.d * 0.22);
       this.scene.add(tank);
 
-      // Second rooftop Gazi water tank + parapet wall for authentic Dhaka skyline
+      // Second rooftop tank for the authentic Dhaka skyline
       const tank2 = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.0, 1.0, 1.9, 12),
-        new THREE.MeshStandardMaterial({ color: '#0369a1', roughness: 0.45 })
+        this.boxCache(2.0, 1.9, 2.0),
+        tankDarkMat
       );
       tank2.position.set(b.x - b.w * 0.22, b.h + 0.95, b.z + b.d * 0.18);
       this.scene.add(tank2);
@@ -1595,29 +1559,47 @@ export class DhakaCityEngine {
         const signW = Math.min(b.w * 0.86, 12.5);
         [0, 1, 2].forEach((tier) => {
           if (tier === 2 && b.h < 18) return;
-          const signTex = createBanglaSignTexture((b.signIndex! + tier * 3) % 8);
-          const signMat = new THREE.MeshBasicMaterial({ map: signTex });
+          const signTexIdx = (b.signIndex! + tier * 3) % 8;
+          // One material per sign artwork, reused by every board showing it.
+          const signKey = `sign|${signTexIdx}`;
+          let signMat = this.matCache.get(signKey) as THREE.MeshBasicMaterial | undefined;
+          if (!signMat) {
+            signMat = new THREE.MeshBasicMaterial({
+              map: createBanglaSignTexture(signTexIdx),
+            });
+            this.matCache.set(signKey, signMat);
+          }
           const signY = 4.0 + tier * 3.4;
 
           // Front-facing Bangla Signboard
-          const frontSign = new THREE.Mesh(
-            new THREE.BoxGeometry(signW, 2.2, 0.32),
-            signMat
+          this.scene.add(
+            this.sharedBox(
+              signW,
+              2.2,
+              0.32,
+              signMat,
+              b.x,
+              signY,
+              b.z + b.d / 2 + 0.22
+            )
           );
-          frontSign.position.set(b.x, signY, b.z + b.d / 2 + 0.22);
-          this.scene.add(frontSign);
 
           // Back-facing Bangla Signboard
-          const backSign = new THREE.Mesh(
-            new THREE.BoxGeometry(signW, 2.2, 0.32),
-            signMat
+          this.scene.add(
+            this.sharedBox(
+              signW,
+              2.2,
+              0.32,
+              signMat,
+              b.x,
+              signY,
+              b.z - b.d / 2 - 0.22
+            )
           );
-          backSign.position.set(b.x, signY, b.z - b.d / 2 - 0.22);
-          this.scene.add(backSign);
 
           // Street-facing Side Bangla Signboard
           const sideSign = new THREE.Mesh(
-            new THREE.BoxGeometry(0.32, 2.2, Math.min(b.d * 0.82, 11.5)),
+            this.boxCache(0.32, 2.2, Math.min(b.d * 0.82, 11.5)),
             signMat
           );
           sideSign.position.set(
@@ -1637,9 +1619,19 @@ export class DhakaCityEngine {
       });
     });
 
+    // Emit the deferred balconies as one instanced draw call per width class.
+    balconyPositions.forEach((positions, widthKey) => {
+      this.addInstances(
+        this.boxCache(parseFloat(widthKey), 0.95, 1.15),
+        balconyMat,
+        positions
+      );
+    });
+
     // Authentic Dhaka Street Details: Black-and-White Striped Road Medians, Iron Divider Grilles,
     // Overhead Tangled Black Electric/Internet Cables with Pole Transformers, DMP Police Boxes & Biriyani Cauldrons
     this.buildAuthenticDhakaStreetInfrastructure();
+    this.buildDhakaDistrictScenes();
 
     // Multi-layered Tropical Krishnachura & Banyan Trees
     const trunkMat = new THREE.MeshStandardMaterial({
@@ -1690,6 +1682,185 @@ export class DhakaCityEngine {
     });
   }
 
+  /**
+   * District-level set dressing that makes each Dhaka neighbourhood legible at
+   * a glance: the Karwan Bazar wholesale market, rows of waiting cycle
+   * rickshaws, CNG queues, and the aerials and rooftop hoardings of Old Dhaka.
+   */
+  private buildDhakaDistrictScenes() {
+    const awningMats = ['#0e7490', '#b91c1c', '#15803d', '#b45309'].map(
+      (c) =>
+        new THREE.MeshStandardMaterial({
+          color: c,
+          roughness: 0.82,
+          side: THREE.DoubleSide,
+        })
+    );
+    const stallWoodMat = new THREE.MeshStandardMaterial({
+      color: '#8a5a2b',
+      roughness: 0.88,
+    });
+    const crateMat = new THREE.MeshStandardMaterial({
+      color: '#a16207',
+      roughness: 0.75,
+    });
+    const rickshawBodyMat = new THREE.MeshStandardMaterial({
+      color: '#0f766e',
+      metalness: 0.3,
+      roughness: 0.5,
+    });
+    const rickshawHoodMat = new THREE.MeshStandardMaterial({
+      color: '#111827',
+      roughness: 0.7,
+    });
+    const rickshawArtMat = new THREE.MeshStandardMaterial({
+      color: '#e11d48',
+      roughness: 0.6,
+    });
+
+    const terracottaMat = new THREE.MeshStandardMaterial({
+      color: '#b45309',
+      roughness: 0.85,
+    });
+
+    // --- 1. Karwan Bazar wholesale market: tarpaulin awnings over produce ---
+    for (let i = 0; i < 9; i++) {
+      const mx = -34 + (i % 3) * 7.5;
+      const mz = 46 + Math.floor(i / 3) * 8;
+      const stall = new THREE.Group();
+      stall.position.set(mx, 0, mz);
+
+      const counter = new THREE.Mesh(this.boxCache(3.2, 0.9, 2.2), stallWoodMat);
+      counter.position.y = 0.45;
+      counter.castShadow = true;
+      stall.add(counter);
+
+      // Sloped corrugated/tarpaulin canopy on four thin legs
+      [[-1.4, -0.9], [1.4, -0.9], [-1.4, 0.9], [1.4, 0.9]].forEach(([px, pz]) => {
+        const leg = new THREE.Mesh(this.boxCache(0.07, 2.4, 0.07), stallWoodMat);
+        leg.position.set(px, 1.2, pz);
+        stall.add(leg);
+      });
+      const awning = new THREE.Mesh(
+        this.boxCache(3.6, 0.06, 2.8),
+        awningMats[i % awningMats.length]
+      );
+      awning.position.y = 2.45;
+      awning.rotation.x = 0.12;
+      awning.castShadow = true;
+      stall.add(awning);
+
+      // Stacked produce crates on the counter
+      for (let c = 0; c < 4; c++) {
+        const crate = new THREE.Mesh(this.boxCache(0.6, 0.3, 0.45), crateMat);
+        crate.position.set(-1.05 + c * 0.7, 1.05, 0);
+        stall.add(crate);
+      }
+
+      this.scene.add(stall);
+    }
+
+    // --- 2. Cycle-rickshaw stands (রিকশা স্ট্যান্ড) waiting at kerbsides ---
+    const standSpots: Array<[number, number, number]> = [
+      [12.5, 30, 0], [12.5, 34.2, 0], [12.5, 38.4, 0],
+      [-12.5, -30, Math.PI], [-12.5, -34.2, Math.PI],
+      [-62, 172, Math.PI / 2], [-62, 176, Math.PI / 2],
+      [40, 150, 0], [44, 150, 0],
+    ];
+    standSpots.forEach(([rx, rz, ry], ri) => {
+      const r = new THREE.Group();
+      r.position.set(rx, 0, rz);
+      r.rotation.y = ry;
+
+      // Passenger hood, seat body and rear bench
+      const hood = new THREE.Mesh(
+        this.cylCache(0.72, 0.72, 1.5, 10),
+        rickshawHoodMat
+      );
+      hood.rotation.z = Math.PI / 2;
+      hood.scale.set(1, 1, 0.62);
+      hood.position.set(0, 1.45, -0.62);
+      r.add(hood);
+
+      const seat = new THREE.Mesh(this.boxCache(1.25, 0.5, 1.1), rickshawBodyMat);
+      seat.position.set(0, 0.78, -0.45);
+      r.add(seat);
+
+      const back = new THREE.Mesh(this.boxCache(1.25, 0.9, 0.16), rickshawArtMat);
+      back.position.set(0, 1.2, -1.0);
+      r.add(back);
+
+      // Three wheels: two rear, one front
+      [-0.62, 0.62].forEach((wx) => {
+        const w = new THREE.Mesh(this.cylCache(0.42, 0.42, 0.09, 12), rickshawHoodMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(wx, 0.42, -0.35);
+        r.add(w);
+      });
+      const front = new THREE.Mesh(this.cylCache(0.42, 0.42, 0.09, 12), rickshawHoodMat);
+      front.rotation.z = Math.PI / 2;
+      front.position.set(0, 0.42, 1.05);
+      r.add(front);
+
+      // Handlebar + saddle for the puller
+      const bar = new THREE.Mesh(this.boxCache(0.8, 0.07, 0.07), rickshawBodyMat);
+      bar.position.set(0, 1.05, 0.85);
+      r.add(bar);
+      const saddle = new THREE.Mesh(this.boxCache(0.34, 0.12, 0.5), rickshawHoodMat);
+      saddle.position.set(0, 0.82, 0.45);
+      r.add(saddle);
+
+      this.scene.add(r);
+    });
+
+    // --- 3. CNG auto-rickshaw queue idling by the filling stations ---
+    const cngGreen = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      metalness: 0.4,
+      roughness: 0.35,
+    });
+    const cngGlass = new THREE.MeshPhysicalMaterial({
+      color: '#0f172a',
+      transparent: true,
+      opacity: 0.45,
+      roughness: 0.08,
+      metalness: 0.2,
+    });
+    for (let i = 0; i < 4; i++) {
+      const g = new THREE.Group();
+      g.position.set(19 - i * 3.4, 0, 62);
+      const cabin = new THREE.Mesh(this.boxCache(1.5, 1.25, 2.3), cngGreen);
+      cabin.position.y = 0.95;
+      cabin.castShadow = true;
+      g.add(cabin);
+      const wind = new THREE.Mesh(this.boxCache(1.42, 0.62, 0.06), cngGlass);
+      wind.position.set(0, 1.28, 1.16);
+      g.add(wind);
+      [-0.78, 0.78].forEach((wx) => {
+        const w = new THREE.Mesh(this.cylCache(0.3, 0.3, 0.16, 10), rickshawHoodMat);
+        w.rotation.z = Math.PI / 2;
+        w.position.set(wx, 0.3, 0.8);
+        g.add(w);
+        const w2 = w.clone();
+        w2.position.z = -0.8;
+        g.add(w2);
+      });
+      this.scene.add(g);
+    }
+
+    // --- 4. Old Dhaka rooftop hoardings & clay-pot stacks on shopfronts ---
+    for (let i = 0; i < 5; i++) {
+      const px = -84 + (i % 2) * 40;
+      const pz = 128 + Math.floor(i / 2) * 42;
+      // Stacked terracotta pots outside the potters' row (shared material)
+      for (let s = 0; s < 5; s++) {
+        const pot = new THREE.Mesh(this.cylCache(0.26, 0.16, 0.34, 8), terracottaMat);
+        pot.position.set(px + (s % 3) * 0.5, 0.17 + Math.floor(s / 3) * 0.34, pz + (s % 2) * 0.45);
+        this.scene.add(pot);
+      }
+    }
+  }
+
   private buildAuthenticDhakaStreetInfrastructure() {
     const blackCurbMat = new THREE.MeshStandardMaterial({
       color: '#0f172a',
@@ -1710,17 +1881,34 @@ export class DhakaCityEngine {
       metalness: 0.35,
     });
     const wireMat = new THREE.LineBasicMaterial({ color: '#090d16' });
+    // Hoisted shared resources for the pole line (was allocated per pole).
+    const coilGeo = new THREE.TorusGeometry(0.36, 0.055, 8, 16);
+    this.coilGeo = coilGeo;
+    const coilMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      roughness: 0.8,
+    });
+    const transformerMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      metalness: 0.55,
+      roughness: 0.4,
+    });
 
     // 1. Black-and-White Striped Dhaka Road Medians & Iron Anti-Jaywalking Grilles
     const medianSegmentsZ = [-250, -210, -135, -95, -55, 55, 95, 135, 225];
     medianSegmentsZ.forEach((mz) => {
       for (let i = 0; i < 6; i++) {
-        const block = new THREE.Mesh(
-          new THREE.BoxGeometry(0.95, 0.34, 4.2),
-          i % 2 === 0 ? blackCurbMat : whiteCurbMat
+        this.scene.add(
+          this.sharedBox(
+            0.95,
+            0.34,
+            4.2,
+            i % 2 === 0 ? blackCurbMat : whiteCurbMat,
+            0,
+            0.18,
+            mz - 10 + i * 4.2
+          )
         );
-        block.position.set(0, 0.18, mz - 10 + i * 4.2);
-        this.scene.add(block);
       }
       const railTop = new THREE.Mesh(
         new THREE.BoxGeometry(0.14, 0.92, 24.5),
@@ -1760,63 +1948,68 @@ export class DhakaCityEngine {
       [-77, 225],
     ];
 
+    const cablePoints: number[] = [];
+    const crossbarPositions: Array<{ x: number; y: number; z: number }> = [];
+    const coilPositions: Array<{ x: number; y: number; z: number }> = [];
     poleCoords.forEach(([px, pz], idx) => {
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.22, 8.6, 8),
-        poleMat
-      );
+      const pole = new THREE.Mesh(this.cylCache(0.16, 0.22, 8.6, 8), poleMat);
       pole.position.set(px, 4.3, pz);
       pole.castShadow = true;
       this.scene.add(pole);
 
-      const crossbar = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 0.12, 0.14),
-        poleMat
-      );
-      crossbar.position.set(px, 7.8, pz);
-      this.scene.add(crossbar);
+      crossbarPositions.push({ x: px, y: 7.8, z: pz });
 
       // Coiled black internet/dish cable loop hanging on the pole (ডিশের তারের কুণ্ডলী)
-      const coil = new THREE.Mesh(
-        new THREE.TorusGeometry(0.36, 0.055, 8, 16),
-        new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.8 })
-      );
-      coil.position.set(px, 5.8, pz + 0.18);
-      this.scene.add(coil);
+      coilPositions.push({ x: px, y: 5.8, z: pz + 0.18 });
 
       // Cylindrical Dhaka Electric Transformer on every 3rd pole
       if (idx % 3 === 0) {
         const transformer = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.42, 0.42, 1.15, 12),
-          new THREE.MeshStandardMaterial({
-            color: '#475569',
-            metalness: 0.55,
-            roughness: 0.4,
-          })
+          this.cylCache(0.42, 0.42, 1.15, 12),
+          transformerMat
         );
         transformer.position.set(px + (px > 0 ? 0.38 : -0.38), 6.5, pz);
         this.scene.add(transformer);
       }
 
-      // Connect sagging catenary overhead black cables to the next pole in the same line
+      // Connect sagging catenary overhead black cables to the next pole in the
+      // same line. All segments across the whole street are appended to one
+      // buffer and drawn as a single LineSegments call (was 4 lines per pole).
       const next = poleCoords[idx + 1];
       if (next && Math.abs(next[0] - px) < 1 && Math.abs(next[1] - pz) < 60) {
         [-0.55, -0.18, 0.18, 0.55].forEach((offsetX, wIdx) => {
-          const pts: THREE.Vector3[] = [];
           const sag = 0.65 + (wIdx % 2) * 0.38;
-          for (let s = 0; s <= 10; s++) {
-            const t = s / 10;
-            const wx = px + offsetX;
-            const wz = pz + (next[1] - pz) * t;
-            const wy = 7.75 - Math.sin(t * Math.PI) * sag - wIdx * 0.14;
-            pts.push(new THREE.Vector3(wx, wy, wz));
+          for (let s = 0; s < 10; s++) {
+            const t0 = s / 10;
+            const t1 = (s + 1) / 10;
+            const p0 = new THREE.Vector3(
+              px + offsetX,
+              7.75 - Math.sin(t0 * Math.PI) * sag - wIdx * 0.14,
+              pz + (next[1] - pz) * t0
+            );
+            const p1 = new THREE.Vector3(
+              px + offsetX,
+              7.75 - Math.sin(t1 * Math.PI) * sag - wIdx * 0.14,
+              pz + (next[1] - pz) * t1
+            );
+            cablePoints.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
           }
-          const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-          const wire = new THREE.Line(lineGeo, wireMat);
-          this.scene.add(wire);
         });
       }
     });
+
+    this.addInstances(this.boxCache(1.6, 0.12, 0.14), poleMat, crossbarPositions);
+    this.addInstances(this.coilGeo, coilMat, coilPositions, true);
+
+    // One merged draw call for every overhead cable strand on the avenue.
+    if (cablePoints.length > 0) {
+      const cableGeo = new THREE.BufferGeometry();
+      cableGeo.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(cablePoints, 3)
+      );
+      this.scene.add(new THREE.LineSegments(cableGeo, wireMat));
+    }
 
     // 3. Old Dhaka Red-Cloth Wrapped Giant Kacchi Biriyani Cauldron Stalls (হাজী কাচ্চি বিরিয়ানির হাঁড়ি)
     [
@@ -1856,6 +2049,153 @@ export class DhakaCityEngine {
 
       this.scene.add(biriyaniStall);
     });
+
+    // 4. Dhaka Footpath Vendor Carts (ফুটপাতের হকার) — the clutter that makes a
+    //    Dhaka street read as Dhaka: fruit carts, jhalmuri tables and stacked
+    //    plastic crates hugging the kerb.
+    const cartWoodMat = new THREE.MeshStandardMaterial({
+      color: '#7c4a1e',
+      roughness: 0.85,
+    });
+    const cartFrameMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      metalness: 0.6,
+      roughness: 0.4,
+    });
+    const crateMats = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b'].map(
+      (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 })
+    );
+    const vendorSpots: Array<[number, number]> = [
+      [13, 24], [13, 52], [13, -20], [13, -64],
+      [-13, 34], [-13, -46], [-13, 74], [-13, -92],
+      [13, 96], [-66, 150], [-70, 210], [40, 130],
+      [95, 60], [-130, 40], [58, -60], [-92, -120],
+    ];
+    vendorSpots.forEach(([vx, vz], vi) => {
+      const cart = new THREE.Group();
+      cart.position.set(vx, 0, vz);
+      cart.rotation.y = (vi % 4) * (Math.PI / 2);
+
+      // Timber cart body + slatted sides
+      const body = new THREE.Mesh(
+        this.boxCache(1.5, 0.28, 2.3),
+        cartWoodMat
+      );
+      body.position.y = 0.82;
+      body.castShadow = true;
+      cart.add(body);
+
+      // Steel wheels + axle
+      [-0.85, 0.85].forEach((wx) => {
+        const wheel = new THREE.Mesh(this.cylCache(0.3, 0.3, 0.1, 12), cartFrameMat);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(wx, 0.3, 0.55);
+        cart.add(wheel);
+      });
+
+      // Stacked produce crates
+      for (let c = 0; c < 3; c++) {
+        const crate = new THREE.Mesh(
+          this.boxCache(0.55, 0.32, 0.42),
+          crateMats[(vi + c) % crateMats.length]
+        );
+        crate.position.set(-0.4 + c * 0.42, 1.12, 0.15);
+        crate.castShadow = true;
+        cart.add(crate);
+      }
+
+      // Bamboo canopy poles + tarpaulin
+      const canopyMat = new THREE.MeshStandardMaterial({
+        color: '#0e7490',
+        roughness: 0.8,
+        side: THREE.DoubleSide,
+      });
+      [[-0.6, -0.9], [0.6, -0.9]].forEach(([px, pz]) => {
+        const post = new THREE.Mesh(this.cylCache(0.03, 0.03, 1.5, 6), cartFrameMat);
+        post.position.set(px, 1.75, pz);
+        cart.add(post);
+      });
+      const canopy = new THREE.Mesh(
+        this.boxCache(1.5, 0.04, 2.2),
+        canopyMat
+      );
+      canopy.position.set(0, 2.5, 0);
+      canopy.rotation.x = 0.06;
+      cart.add(canopy);
+
+      this.scene.add(cart);
+    });
+
+    // 5. Rusted Green Dhaka Roadside Railings along the main avenue
+    const railingPostMat = new THREE.MeshStandardMaterial({
+      color: '#166534',
+      metalness: 0.55,
+      roughness: 0.45,
+    });
+    const railingPostPositions: Array<{ x: number; y: number; z: number }> = [];
+    for (const side of [-1, 1]) {
+      for (let rz = -300; rz <= 270; rz += 9) {
+        railingPostPositions.push({ x: side * 9.6, y: 0.52, z: rz });
+      }
+      // Continuous top rail
+      const rail = new THREE.Mesh(
+        this.boxCache(0.08, 0.08, 570),
+        railingPostMat
+      );
+      rail.position.set(side * 9.6, 1.02, -15);
+      this.scene.add(rail);
+    }
+    this.addInstances(
+      this.boxCache(0.1, 1.05, 0.1),
+      railingPostMat,
+      railingPostPositions
+    );
+
+    // 6. CNG Filling-Station & Tea-Canopy Clusters at district corners
+    const canopyBlueMat = new THREE.MeshStandardMaterial({
+      color: '#0369a1',
+      metalness: 0.35,
+      roughness: 0.4,
+    });
+    const canopyGreenMat = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      metalness: 0.3,
+      roughness: 0.45,
+    });
+    const stationSpots: Array<[number, number, boolean]> = [
+      [24, 64, true], [-24, -70, false], [70, 130, true],
+      [150, 92, false], [-120, 118, true], [-200, -80, false],
+    ];
+    stationSpots.forEach(([sx, sz, blue]) => {
+      const grp = new THREE.Group();
+      grp.position.set(sx, 0, sz);
+
+      // Four steel columns + flat canopy roof
+      [[-3, -2.4], [3, -2.4], [-3, 2.4], [3, 2.4]].forEach(([cx, cz]) => {
+        const col = new THREE.Mesh(this.boxCache(0.18, 4.2, 0.18), cartFrameMat);
+        col.position.set(cx, 2.1, cz);
+        grp.add(col);
+      });
+      const roof = new THREE.Mesh(
+        this.boxCache(7.4, 0.3, 6.2),
+        blue ? canopyBlueMat : canopyGreenMat
+      );
+      roof.position.y = 4.35;
+      roof.castShadow = true;
+      grp.add(roof);
+
+      // Fuel pumps
+      [-1.6, 1.6].forEach((px) => {
+        const pump = new THREE.Mesh(this.boxCache(0.7, 1.3, 0.5), cartFrameMat);
+        pump.position.set(px, 0.65, 0);
+        grp.add(pump);
+        const head = new THREE.Mesh(this.boxCache(0.75, 0.35, 0.55), canopyBlueMat);
+        head.position.set(px, 1.45, 0);
+        grp.add(head);
+      });
+
+      this.scene.add(grp);
+    });
   }
 
   private setupPlayer() {
@@ -1880,12 +2220,13 @@ export class DhakaCityEngine {
       isTraffic: boolean;
       color: string;
     }> = [
-      { type: 'cng', x: 5, z: 10, rot: -Math.PI / 2, isTraffic: false, color: '#15803d' },
-      { type: 'cng', x: -7, z: 6, rot: 0, isTraffic: false, color: '#15803d' },
-      { type: 'rickshaw', x: 12, z: 4, rot: Math.PI, isTraffic: false, color: '#ec4899' },
-      { type: 'motorcycle', x: -12, z: -6, rot: Math.PI / 2, isTraffic: false, color: '#e11d48' },
-      { type: 'car', x: 14, z: -10, rot: -Math.PI / 2, isTraffic: false, color: '#f8fafc' },
-      { type: 'bus', x: -5, z: 32, rot: Math.PI, isTraffic: false, color: '#0f766e' },
+      { type: 'cng', x: 3.5, z: 10, rot: Math.PI, isTraffic: false, color: '#15803d' },
+      { type: 'car', x: 8.5, z: 8, rot: Math.PI, isTraffic: false, color: '#f8fafc' },
+      { type: 'car', x: -6.5, z: 10, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
+      { type: 'rickshaw', x: 11.5, z: 3, rot: Math.PI, isTraffic: false, color: '#ec4899' },
+      { type: 'motorcycle', x: -10.5, z: 4, rot: Math.PI, isTraffic: false, color: '#e11d48' },
+      { type: 'bus', x: -4.2, z: -6, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
+      { type: 'cng', x: -7, z: 22, rot: 0, isTraffic: false, color: '#15803d' },
 
       { type: 'cng', x: -165, z: 18, rot: 0, isTraffic: true, color: '#15803d' },
       { type: 'rickshaw', x: -68, z: 160, rot: 0, isTraffic: false, color: '#ec4899' },
@@ -2255,11 +2596,8 @@ export class DhakaCityEngine {
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
-    window.addEventListener('blur', this.onBlur);
-    window.addEventListener('wheel', this.onWheel, { passive: true });
 
     const dom = this.renderer.domElement;
-    dom.addEventListener('contextmenu', (e) => e.preventDefault());
     dom.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('mouseup', this.onMouseUp);
@@ -2272,19 +2610,10 @@ export class DhakaCityEngine {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
-    window.removeEventListener('blur', this.onBlur);
-    window.removeEventListener('wheel', this.onWheel);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('mouseup', this.onMouseUp);
     this.renderer.dispose();
   }
-
-  private onBlur = () => {
-    this.keys.clear();
-    this.virtualMoveForward = 0;
-    this.virtualMoveRight = 0;
-    this.virtualSprint = false;
-  };
 
   private onResize = () => {
     if (!this.container) return;
@@ -2302,14 +2631,11 @@ export class DhakaCityEngine {
 
     if (e.button === 0) {
       this.isPointerDragging = true;
+      this.pointerDragDist = 0;
       this.lastPointerX = e.clientX;
       this.lastPointerY = e.clientY;
-      this.pointerDownStartX = e.clientX;
-      this.pointerDownStartY = e.clientY;
-    } else if (e.button === 2) {
-      if (!this.activeVehicleId) {
-        this.isAimingDownSights = true;
-      }
+    } else if (e.button === 2 && !this.activeVehicleId) {
+      this.performMeleeAttack();
     }
   };
 
@@ -2317,6 +2643,7 @@ export class DhakaCityEngine {
     if (!this.isPointerDragging) return;
     const dx = e.clientX - this.lastPointerX;
     const dy = e.clientY - this.lastPointerY;
+    this.pointerDragDist += Math.hypot(dx, dy);
     this.lastPointerX = e.clientX;
     this.lastPointerY = e.clientY;
 
@@ -2328,47 +2655,21 @@ export class DhakaCityEngine {
   };
 
   private onMouseUp = (e: MouseEvent) => {
-    if (e.button === 2) {
-      this.isAimingDownSights = false;
-      return;
+    if (
+      e.button === 0 &&
+      this.isPointerDragging &&
+      this.pointerDragDist < 6 &&
+      !this.activeVehicleId &&
+      useGameStore.getState().gamePhase === 'playing'
+    ) {
+      this.performMeleeAttack();
     }
-
     this.isPointerDragging = false;
-    const store = useGameStore.getState();
-    if (store.gamePhase !== 'playing') return;
-
-    const dragDist = Math.hypot(
-      e.clientX - this.pointerDownStartX,
-      e.clientY - this.pointerDownStartY
-    );
-    if (dragDist < 6 && !this.activeVehicleId) {
-      this.performAttackOrFire();
-    }
-  };
-
-  private onWheel = (e: WheelEvent) => {
-    const store = useGameStore.getState();
-    if (store.gamePhase !== 'playing') return;
-    if (this.activeVehicleId) return;
-    store.cycleWeapon(e.deltaY > 0 ? 1 : -1);
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
     const code = e.code;
-    if (code) this.keys.add(code);
-    if (e.key) {
-      const k = e.key.toLowerCase();
-      this.keys.add(k);
-      if (k === 'w') this.keys.add('KeyW');
-      if (k === 's') this.keys.add('KeyS');
-      if (k === 'a') this.keys.add('KeyA');
-      if (k === 'd') this.keys.add('KeyD');
-      if (e.key === 'ArrowUp') this.keys.add('ArrowUp');
-      if (e.key === 'ArrowDown') this.keys.add('ArrowDown');
-      if (e.key === 'ArrowLeft') this.keys.add('ArrowLeft');
-      if (e.key === 'ArrowRight') this.keys.add('ArrowRight');
-      if (e.key === 'Shift') this.keys.add('ShiftLeft');
-    }
+    this.keys.add(code);
 
     const store = useGameStore.getState();
 
@@ -2394,24 +2695,29 @@ export class DhakaCityEngine {
 
     dhakaAudio.init();
 
-    // 1-0 Hotkey Weapon Selector (1-9, and 0 for 10th weapon)
-    if (code.startsWith('Digit')) {
-      const digitVal = parseInt(code.replace('Digit', ''), 10);
-      const idx = digitVal === 0 ? 9 : digitVal - 1;
-      const unlocked = store.tools.filter((t) => t.unlocked);
-      if (idx >= 0 && idx < unlocked.length) {
-        store.equipTool(unlocked[idx].id);
+    // Instant Weapon & Bangladeshi Local Arm Switching (Hotkeys 1-9, 0, -, and Q to cycle)
+    const weaponHotkeyMap: Record<string, number> = {
+      Digit1: 0,
+      Digit2: 1,
+      Digit3: 2,
+      Digit4: 3,
+      Digit5: 4,
+      Digit6: 5,
+      Digit7: 6,
+      Digit8: 7,
+      Digit9: 8,
+      Digit0: 9,
+      Minus: 10,
+    };
+    if (code in weaponHotkeyMap) {
+      const targetWeapon = store.tools[weaponHotkeyMap[code]];
+      if (targetWeapon) {
+        store.equipTool(targetWeapon.id);
       }
       return;
     }
-
     if (code === 'KeyQ') {
-      if (!this.activeVehicleId) store.cycleWeapon(-1);
-      return;
-    }
-
-    if (code === 'KeyX') {
-      if (!this.activeVehicleId) store.cycleWeapon(1);
+      store.cycleTool(1);
       return;
     }
 
@@ -2439,98 +2745,48 @@ export class DhakaCityEngine {
       this.isCrouching = !this.isCrouching;
     }
 
-    if (code === 'KeyZ' && !this.activeVehicleId) {
-      this.isAimingDownSights = !this.isAimingDownSights;
-    }
-
     if (code === 'KeyV') {
       store.cycleCameraMode();
     }
 
-    if ((code === 'KeyJ' || code === 'KeyK') && !this.activeVehicleId) {
-      this.performAttackOrFire();
+    if (
+      (code === 'KeyJ' || code === 'KeyK' || code === 'KeyX') &&
+      !this.activeVehicleId
+    ) {
+      this.performMeleeAttack();
     }
 
     if (code === 'Space' && !this.activeVehicleId && this.isGrounded) {
-      if (this.isAimingDownSights) {
-        // Tactical combat dive & roll when aiming down sights
-        this.playerVelY = 3.8;
-        const rollDirX = -Math.sin(this.playerRotation) * 7.2;
-        const rollDirZ = -Math.cos(this.playerRotation) * 7.2;
-        this.playerPos.x = clampWorldCoord(this.playerPos.x + rollDirX * 0.18);
-        this.playerPos.z = clampWorldCoord(this.playerPos.z + rollDirZ * 0.18);
-        this.spawnImpactSparks(
-          new THREE.Vector3(this.playerPos.x, 0.1, this.playerPos.z),
-          '#94a3b8',
-          6
-        );
-      } else {
-        this.playerVelY = 7.8;
-      }
+      this.playerVelY = 7.8;
       this.isGrounded = false;
       this.isCrouching = false;
       dhakaAudio.playSfx('jump');
     }
 
     if (code === 'KeyR') {
-      if (this.activeVehicleId) {
-        const stations: Array<
-          'off' | 'dhaka_folk' | 'gully_beat' | 'hatirjheel_synth'
-        > = ['dhaka_folk', 'gully_beat', 'hatirjheel_synth', 'off'];
-        const next =
-          stations[(stations.indexOf(store.radioStation) + 1) % stations.length];
-        store.setRadioStation(next);
-      } else {
-        store.reloadActiveWeapon();
-      }
+      const stations: Array<
+        'off' | 'dhaka_folk' | 'gully_beat' | 'hatirjheel_synth'
+      > = ['dhaka_folk', 'gully_beat', 'hatirjheel_synth', 'off'];
+      const next =
+        stations[(stations.indexOf(store.radioStation) + 1) % stations.length];
+      store.setRadioStation(next);
     }
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
-    if (e.code) this.keys.delete(e.code);
-    if (e.key) {
-      const k = e.key.toLowerCase();
-      this.keys.delete(k);
-      if (k === 'w') this.keys.delete('KeyW');
-      if (k === 's') this.keys.delete('KeyS');
-      if (k === 'a') this.keys.delete('KeyA');
-      if (k === 'd') this.keys.delete('KeyD');
-      if (e.key === 'ArrowUp') this.keys.delete('ArrowUp');
-      if (e.key === 'ArrowDown') this.keys.delete('ArrowDown');
-      if (e.key === 'ArrowLeft') this.keys.delete('ArrowLeft');
-      if (e.key === 'ArrowRight') this.keys.delete('ArrowRight');
-      if (e.key === 'Shift') this.keys.delete('ShiftLeft');
-    }
+    this.keys.delete(e.code);
   };
 
-  public setVirtualMove(forward: number, right: number, sprint = false) {
-    this.virtualMoveForward = forward;
-    this.virtualMoveRight = right;
-    this.virtualSprint = sprint;
-  }
-
   public triggerTouchAction(
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'aim'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
   ) {
     dhakaAudio.init();
-    if (action === 'interact') {
-      const store = useGameStore.getState();
-      if (store.nearbyPrompt?.type === 'npc') {
-        this.handleTalkToNPC();
-      } else if (store.nearbyPrompt?.type === 'poi') {
-        this.executePOIInteraction(store.nearbyPrompt.id);
-      } else {
-        this.handlePrimaryInteraction(true);
-      }
-    }
+    if (action === 'interact') this.handlePrimaryInteraction(true);
     if (action === 'horn') {
       const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
       dhakaAudio.playHorn(veh ? VEHICLE_STATS[veh.type].hornType : 'bell');
     }
-    if (action === 'attack') this.performAttackOrFire();
-    if (action === 'aim' && !this.activeVehicleId) {
-      this.isAimingDownSights = !this.isAimingDownSights;
-    }
+    if (action === 'attack') this.performMeleeAttack();
     if (action === 'jump' && !this.activeVehicleId && this.isGrounded) {
       this.playerVelY = 7.8;
       this.isGrounded = false;
@@ -2541,262 +2797,158 @@ export class DhakaCityEngine {
     }
   }
 
-  public performAttackOrFire() {
-    if (this.activeVehicleId) return;
+  private spawnImpactSparks(
+    x: number,
+    y: number,
+    z: number,
+    colorHex = '#fbbf24',
+    scale = 1.0
+  ) {
+    const spark = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.24 * scale, 0),
+      new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.95,
+      })
+    );
+    spark.position.set(x, y, z);
+    this.scene.add(spark);
+    this.hitSparks.push({ mesh: spark, life: 0.22 });
+  }
+
+  private performMeleeAttack() {
+    if (this.fireCooldown > 0) return;
+
     const store = useGameStore.getState();
     const tool =
       store.tools.find((t) => t.id === store.equippedToolId) || store.tools[0];
 
-    if (tool.isGun) {
-      const res = store.fireActiveWeapon();
-      if (!res.canFire) return;
+    // 1. FIREARMS: Deshi Pipe Gun, 9mm Pistol, BD-08 Assault Rifle, 12G Shotgun, Micro-SMG
+    if (tool.isFirearm) {
+      this.fireCooldown = tool.fireRate || 0.22;
+      this.attackAnimTimer = 0.22;
 
-      this.attackAnimTimer = 0.28;
-      dhakaAudio.playSfx(tool.sound as any);
+      // Align Arif with camera aim direction when firing
+      this.playerRotation = this.cameraYaw + Math.PI;
 
-      // Camera recoil kickback
-      this.cameraPitch = Math.min(
-        1.15,
-        this.cameraPitch + tool.recoilStrength * 0.035
-      );
-      this.cameraYaw += (Math.random() - 0.5) * tool.recoilStrength * 0.015;
-
-      // Find muzzle world position
-      const muzzleObj = this.playerLimbs.weaponMesh.getObjectByName('muzzle');
-      const muzzlePos = new THREE.Vector3();
-      if (muzzleObj) {
-        muzzleObj.getWorldPosition(muzzlePos);
+      // Synthesized gunshot / shotgun / assault rifle audio
+      if (tool.id === 'deshi_pipegun' || tool.id === 'police_shotgun') {
+        dhakaAudio.playSfx('shotgun');
+      } else if (tool.id === 'bd08_rifle' || tool.id === 'smg_uzi') {
+        dhakaAudio.playSfx('rifle');
       } else {
-        muzzlePos.set(
-          this.playerPos.x + Math.sin(this.playerRotation) * 0.65,
-          this.playerPos.y + 1.25,
-          this.playerPos.z + Math.cos(this.playerRotation) * 0.65
-        );
+        dhakaAudio.playSfx('gunshot');
       }
 
-      // 3D Muzzle Flash Point Light
-      this.muzzleFlashLight.position.copy(muzzlePos);
-      this.muzzleFlashLight.intensity = 6.2;
-      this.muzzleFlashTimer = 0.07;
+      const muzzleX =
+        this.playerPos.x +
+        Math.sin(this.playerRotation) * 0.88 -
+        Math.cos(this.playerRotation) * 0.25;
+      const muzzleY = this.playerPos.y + 1.35;
+      const muzzleZ =
+        this.playerPos.z +
+        Math.cos(this.playerRotation) * 0.88 +
+        Math.sin(this.playerRotation) * 0.25;
 
-      // Spawn Brass Shell Casing Ejection
-      const shellGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.045, 8);
-      shellGeo.rotateZ(Math.PI / 2);
-      const shellMat = new THREE.MeshStandardMaterial({
-        color: '#facc15',
-        metalness: 0.9,
-        roughness: 0.2,
-      });
-      const shellMesh = new THREE.Mesh(shellGeo, shellMat);
-      shellMesh.position.copy(muzzlePos);
-      this.scene.add(shellMesh);
-      const rightDir = new THREE.Vector3(
-        Math.cos(this.playerRotation) * (2.2 + Math.random() * 0.8),
-        1.8 + Math.random() * 1.2,
-        -Math.sin(this.playerRotation) * (2.2 + Math.random() * 0.8)
-      );
-      this.shellCasings.push({ mesh: shellMesh, vel: rightDir, life: 1.2 });
+      // 3D Muzzle Flash + Dynamic PointLight
+      this.spawnImpactSparks(muzzleX, muzzleY, muzzleZ, '#facc15', 0.85);
+      if (!this.muzzleLight) {
+        this.muzzleLight = new THREE.PointLight('#fb923c', 4.5, 14);
+        this.scene.add(this.muzzleLight);
+      }
+      this.muzzleLight.position.set(muzzleX, muzzleY, muzzleZ);
+      this.muzzleLight.visible = true;
+      this.muzzleLightTimer = 0.06;
 
-      // Pellets / Shotgun Spread (Tightened under Precision ADS)
-      const adsSpreadMult = this.isAimingDownSights ? 0.35 : 1.0;
-      const pellets = tool.pelletsPerShot || 1;
+      // Spawn 3D Bullet Tracer(s) (Multi-pellet spread for Deshi Pipe Gun & 12G Shotgun)
+      const pellets = tool.pellets || 1;
+      const spread = pellets > 1 ? 0.14 : 0.018;
+      const bulletSpeed = 88;
+
       for (let p = 0; p < pellets; p++) {
-        const spreadX =
-          (Math.random() - 0.5) * (tool.category === 'shotgun' ? 0.16 : 0.02) * adsSpreadMult;
-        const spreadY =
-          (Math.random() - 0.5) * (tool.category === 'shotgun' ? 0.12 : 0.02) * adsSpreadMult;
+        const yawAngle =
+          this.playerRotation + (Math.random() - 0.5) * spread;
+        // Shared tracer geometry/materials: allocating per pellet leaked a
+        // geometry + material on every shot during full-auto fire.
+        const tracerMat =
+          pellets > 1 ? this.tracerMatSpread : this.tracerMatSingle;
+        const tracerMesh = new THREE.Mesh(this.tracerGeo, tracerMat);
+        tracerMesh.position.set(muzzleX, muzzleY, muzzleZ);
+        tracerMesh.rotation.y = yawAngle;
+        this.scene.add(tracerMesh);
 
-        const dirX = Math.sin(this.playerRotation) + spreadX;
-        const dirY = Math.tan(this.cameraPitch - 0.32) + spreadY;
-        const dirZ = Math.cos(this.playerRotation);
-        const rayDir = new THREE.Vector3(dirX, dirY, dirZ).normalize();
-
-        this.processBulletHit(
-          muzzlePos,
-          rayDir,
-          tool.range,
-          tool.damage / pellets,
-          tool.nameEn,
-          tool.nameBn
-        );
-      }
-    } else {
-      // Melee attack (Ramda, Chapati, Cricket Bat, Bamboo Lathi, Fists)
-      this.attackAnimTimer = 0.35;
-      dhakaAudio.playSfx(tool.sound as any);
-
-      for (const npc of this.npcs) {
-        const dist = Math.hypot(
-          npc.x - this.playerPos.x,
-          npc.z - this.playerPos.z
-        );
-        if (dist <= tool.range) {
-          dhakaAudio.playSfx('hit');
-          npc.health -= tool.damage;
-          this.spawnImpactSparks(
-            new THREE.Vector3(npc.x, 1.2, npc.z),
-            '#ef4444',
-            6
-          );
-
-          if (!npc.isStoryNPC) {
-            npc.aiState = 'flee';
-            store.setWantedLevel(Math.min(5, store.wantedLevel + 1));
-            store.showBanner({
-              titleEn: `STREET CLASH: ${tool.nameEn.toUpperCase()}`,
-              titleBn: `${tool.nameBn} দিয়ে আক্রমণ!`,
-              subtitleEn: 'Witnesses alerted Karwan Bazar DMP Patrol!',
-              subtitleBn: 'প্রত্যক্ষদর্শীরা টহল পুলিশকে খবর দিয়েছে!',
-              tone: 'red',
-            });
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  private processBulletHit(
-    start: THREE.Vector3,
-    dir: THREE.Vector3,
-    maxRange: number,
-    damage: number,
-    weaponNameEn: string,
-    weaponNameBn: string
-  ) {
-    const store = useGameStore.getState();
-    let closestDist = maxRange;
-    let hitType: 'npc' | 'vehicle' | 'building' | 'none' = 'none';
-    let hitNPC: NPCEntity | null = null;
-    let hitVehicle: VehicleEntity | null = null;
-
-    // Check NPCs
-    for (const npc of this.npcs) {
-      const toNpc = new THREE.Vector3(
-        npc.x - start.x,
-        1.1 - start.y,
-        npc.z - start.z
-      );
-      const proj = toNpc.dot(dir);
-      if (proj > 0.5 && proj < closestDist) {
-        const perpDist = toNpc.clone().sub(dir.clone().multiplyScalar(proj)).length();
-        if (perpDist < 0.7) {
-          closestDist = proj;
-          hitType = 'npc';
-          hitNPC = npc;
-        }
-      }
-    }
-
-    // Check Vehicles
-    for (const veh of this.vehicles) {
-      if (veh.id === this.activeVehicleId) continue;
-      const toVeh = new THREE.Vector3(
-        veh.x - start.x,
-        0.8 - start.y,
-        veh.z - start.z
-      );
-      const proj = toVeh.dot(dir);
-      if (proj > 0.5 && proj < closestDist) {
-        const perpDist = toVeh.clone().sub(dir.clone().multiplyScalar(proj)).length();
-        if (perpDist < 1.4) {
-          closestDist = proj;
-          hitType = 'vehicle';
-          hitVehicle = veh;
-          hitNPC = null;
-        }
-      }
-    }
-
-    // Check Buildings
-    for (const b of this.buildingColliders) {
-      for (let s = 1; s * 1.5 < closestDist; s++) {
-        const testX = start.x + dir.x * (s * 1.5);
-        const testZ = start.z + dir.z * (s * 1.5);
-        if (
-          testX >= b.minX &&
-          testX <= b.maxX &&
-          testZ >= b.minZ &&
-          testZ <= b.maxZ
-        ) {
-          closestDist = s * 1.5;
-          hitType = 'building';
-          hitNPC = null;
-          hitVehicle = null;
-          break;
-        }
-      }
-    }
-
-    const hitPoint = start.clone().add(dir.clone().multiplyScalar(closestDist));
-
-    // Spawn Bullet Tracer Line
-    const tracerGeo = new THREE.BufferGeometry().setFromPoints([
-      start,
-      hitPoint,
-    ]);
-    const tracerMat = new THREE.LineBasicMaterial({
-      color: '#fef08a',
-      transparent: true,
-      opacity: 0.9,
-    });
-    const tracerLine = new THREE.Line(tracerGeo, tracerMat);
-    this.scene.add(tracerLine);
-    this.bulletTracers.push({
-      line: tracerLine,
-      life: 0.08,
-      maxLife: 0.08,
-    });
-
-    if (hitType === 'npc' && hitNPC) {
-      hitNPC.health -= damage;
-      this.spawnImpactSparks(hitPoint, '#ef4444', 8);
-      dhakaAudio.playSfx('hit');
-
-      if (!hitNPC.isStoryNPC) {
-        hitNPC.aiState = 'flee';
-        store.setWantedLevel(Math.min(5, store.wantedLevel + 2));
-        store.showBanner({
-          titleEn: `GUNFIRE REPORTED: ${weaponNameEn.toUpperCase()}`,
-          titleBn: `${weaponNameBn} থেকে গুলি চালানো হয়েছে!`,
-          subtitleEn: 'DMP Riot Interceptors mobilized in this district!',
-          subtitleBn: 'ডিএমপি রায়ট পেট্রোল টিম তল্লাশি শুরু করেছে!',
-          tone: 'red',
+        this.bulletTracers.push({
+          mesh: tracerMesh,
+          vx: Math.sin(yawAngle) * bulletSpeed,
+          vy: (Math.random() - 0.5) * (pellets > 1 ? 2.8 : 0.4),
+          vz: Math.cos(yawAngle) * bulletSpeed,
+          life: tool.range / bulletSpeed,
+          damage: tool.damage / Math.max(1, pellets * 0.55),
         });
       }
-      if (hitNPC.health <= 0) {
-        this.spawnCashDrop(hitNPC.x, hitNPC.z, 500 + Math.floor(Math.random() * 800));
-      }
-    } else if (hitType === 'vehicle' && hitVehicle) {
-      hitVehicle.health = Math.max(0, hitVehicle.health - damage * 0.85);
-      this.spawnImpactSparks(hitPoint, '#facc15', 10);
-      dhakaAudio.playSfx('hit');
+      return;
+    }
 
-      if (hitVehicle.isPolice) {
-        store.setWantedLevel(Math.min(5, store.wantedLevel + 2));
-        dhakaAudio.playHorn('siren');
-      }
-    } else if (hitType === 'building') {
-      this.spawnImpactSparks(hitPoint, '#94a3b8', 6);
-      if (Math.random() > 0.4) {
-        dhakaAudio.playSfx('ricochet');
+    // 2. BANGLADESHI LOCAL ARMS & MELEE: Dhaka Ramda, Old Dhaka Chapati, Basher Lathi, Cricket Bat, Stun Baton, Fists
+    this.fireCooldown = 0.32;
+    this.attackAnimTimer = 0.35;
+
+    if (tool.id === 'ramda' || tool.id === 'chapati_cleaver') {
+      dhakaAudio.playSfx('slash');
+    } else {
+      dhakaAudio.playSfx('jump');
+    }
+
+    // Check melee hits on nearby vehicles (sparks & dents)
+    for (const veh of this.vehicles) {
+      const distV = Math.hypot(
+        veh.x - this.playerPos.x,
+        veh.z - this.playerPos.z
+      );
+      if (distV <= tool.range + 1.4) {
+        dhakaAudio.playSfx('hit');
+        veh.health = Math.max(0, veh.health - tool.damage);
+        this.spawnImpactSparks(
+          (this.playerPos.x + veh.x) * 0.5,
+          1.05,
+          (this.playerPos.z + veh.z) * 0.5,
+          tool.id === 'stun_baton' ? '#38bdf8' : '#fbbf24',
+          1.2
+        );
+        break;
       }
     }
-  }
 
-  public spawnImpactSparks(pos: THREE.Vector3, color = '#facc15', count = 6) {
-    const sparkGeo = new THREE.BoxGeometry(0.045, 0.045, 0.045);
-    const sparkMat = new THREE.MeshBasicMaterial({ color });
-    for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(sparkGeo, sparkMat);
-      mesh.position.copy(pos);
-      this.scene.add(mesh);
-      const vel = new THREE.Vector3(
-        (Math.random() - 0.5) * 6,
-        Math.random() * 5 + 1.2,
-        (Math.random() - 0.5) * 6
+    for (const npc of this.npcs) {
+      const dist = Math.hypot(
+        npc.x - this.playerPos.x,
+        npc.z - this.playerPos.z
       );
-      this.impactSparks.push({ mesh, vel, life: 0.22, maxLife: 0.22 });
+      if (dist <= tool.range) {
+        dhakaAudio.playSfx('hit');
+        this.spawnImpactSparks(
+          npc.x,
+          1.15,
+          npc.z,
+          tool.id === 'ramda' || tool.id === 'chapati_cleaver'
+            ? '#ef4444'
+            : '#fbbf24',
+          1.15
+        );
+        if (!npc.isStoryNPC) {
+          npc.aiState = 'flee';
+          store.setWantedLevel(Math.max(1, store.wantedLevel + 1));
+          store.showBanner({
+            titleEn: `LOCAL ARM STRIKE (${tool.nameEn.toUpperCase()})`,
+            titleBn: `দেশীয় অস্ত্রের আঘাত (${tool.nameBn})!`,
+            subtitleEn: 'Street witnesses alerted DMP Police Patrol!',
+            subtitleBn: 'প্রত্যক্ষদর্শীরা টহল পুলিশকে খবর দিয়েছে!',
+            tone: 'red',
+          });
+        }
+        break;
+      }
     }
   }
 
@@ -2816,28 +2968,12 @@ export class DhakaCityEngine {
     if (closest) {
       dhakaAudio.playSfx('ui');
       const idx = Math.floor(Math.random() * closest.dialogueEn.length);
-      const textEn = closest.dialogueEn[idx];
-      const textBn = closest.dialogueBn[idx] || textEn;
       store.setDialogue({
         speakerEn: closest.nameEn,
         speakerBn: closest.nameBn,
-        textEn,
-        textBn,
+        textEn: closest.dialogueEn[idx],
+        textBn: closest.dialogueBn[idx] || closest.dialogueEn[idx],
       });
-
-      // Browser Web Speech Synthesis for NPC Bengali & English dialogue
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel();
-          const spokenText = store.language === 'bn' ? textBn : textEn;
-          const utt = new SpeechSynthesisUtterance(spokenText);
-          utt.lang = store.language === 'bn' ? 'bn-BD' : 'en-US';
-          utt.rate = 1.05;
-          utt.pitch = 1.0;
-          utt.volume = Math.max(0.2, store.sfxVolume ?? 0.8);
-          window.speechSynthesis.speak(utt);
-        } catch {}
-      }
     }
   }
 
@@ -2848,17 +2984,6 @@ export class DhakaCityEngine {
     if (this.activeVehicleId) {
       const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
       if (veh) {
-        // Check if stopped near Dholaikhal Garage for Pay-n-Spray service
-        for (const poi of POINTS_OF_INTEREST) {
-          if (poi.type === 'garage') {
-            const d = Math.hypot(poi.x - veh.x, poi.z - veh.z);
-            if (d < 7.5 && !preferVehicle) {
-              this.executePOIInteraction(poi.id);
-              return;
-            }
-          }
-        }
-
         veh.speed = 0;
         const candidateOffsets = [
           [-Math.cos(veh.rotation) * 2.4, Math.sin(veh.rotation) * 2.4],
@@ -2878,8 +3003,6 @@ export class DhakaCityEngine {
           }
         }
         this.playerPos.set(safeX, 0, safeZ);
-        this.playerLimbs.group.scale.y = 1.0;
-        this.playerLimbs.group.rotation.set(0, this.playerRotation, 0);
         this.playerLimbs.group.visible = true;
         this.playerLimbs.group.position.copy(this.playerPos);
       }
@@ -3007,67 +3130,6 @@ export class DhakaCityEngine {
         tone: 'green',
       });
     } else if (poi.type === 'garage') {
-      if (this.activeVehicleId) {
-        const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
-        if (veh) {
-          if (
-            store.spendTaka(
-              350,
-              'Dholaikhal Pay-n-Spray Workshop',
-              'ধোলাইখাল পেই-অ্যান্ড-স্প্রে গ্যারেজ'
-            )
-          ) {
-            veh.health = veh.maxHealth;
-            // Pick a new vibrant Dhaka custom paint livery
-            const colors = [
-              '#16a34a',
-              '#dc2626',
-              '#2563eb',
-              '#d97706',
-              '#7c3aed',
-              '#0d9488',
-              '#e11d48',
-              '#334155',
-              '#f8fafc',
-            ];
-            veh.color = colors[Math.floor(Math.random() * colors.length)];
-
-            // Update mesh materials
-            const meshGroup = this.vehicleMeshes.get(veh.id);
-            if (meshGroup) {
-              meshGroup.traverse((child) => {
-                if (child instanceof THREE.Mesh && child.material) {
-                  const mats = Array.isArray(child.material)
-                    ? child.material
-                    : [child.material];
-                  for (const m of mats) {
-                    if (
-                      m instanceof THREE.MeshStandardMaterial &&
-                      m.color.getHex() !== 0x111827 &&
-                      m.color.getHex() !== 0xffffff
-                    ) {
-                      m.color.set(veh.color);
-                    }
-                  }
-                }
-              });
-            }
-
-            store.setWantedLevel(0);
-            dhakaAudio.playSfx('ui');
-            store.showBanner({
-              titleEn: 'PAY-N-SPRAY: VEHICLE REPAIRED & RESPRAYED!',
-              titleBn: 'ধোলাইখাল গ্যারেজ: গাড়ি মেরামত ও রঙ করা হয়েছে!',
-              subtitleEn: 'Vehicle restored to 100% and Police heat cleared!',
-              subtitleBn:
-                'গাড়ি সম্পূর্ণ মেরামত হয়েছে এবং পুলিশ কেস প্রত্যাহার করা হয়েছে!',
-              tone: 'gold',
-            });
-          }
-          return;
-        }
-      }
-
       if (
         store.spendTaka(
           400,
@@ -3287,153 +3349,173 @@ export class DhakaCityEngine {
     if (store.teleportRequest) {
       const { x, z } = store.teleportRequest;
       this.playerPos.set(x, 0, z);
-      this.playerLimbs.group.position.set(x, 0, z);
       if (this.activeVehicleId) {
         const v = this.vehicles.find((veh) => veh.id === this.activeVehicleId);
         if (v) {
           v.x = x;
           v.z = z;
           v.speed = 0;
-          const mesh = this.vehicleMeshes.get(v.id);
-          if (mesh) {
-            mesh.position.set(x, 0, z);
-          }
         }
       }
       store.clearEngineRequests();
     }
 
-    // Update Player Outfit & Weapon Visuals
+    // Update Player Outfit & Weapon Visuals (wait until gltfRoot is loaded so async .GLB never misses tint)
     if (
-      store.equippedOutfitId !== this.lastEquippedOutfit ||
-      store.equippedToolId !== this.lastEquippedTool
+      this.playerLimbs.gltfRoot &&
+      (store.equippedOutfitId !== this.lastEquippedOutfit ||
+        store.equippedToolId !== this.lastEquippedTool)
     ) {
       this.lastEquippedOutfit = store.equippedOutfitId;
       this.lastEquippedTool = store.equippedToolId;
       const outfit =
         store.outfits.find((o) => o.id === store.equippedOutfitId) ||
         store.outfits[0];
-      tintCharacterOutfit(
-        this.playerLimbs,
-        outfit.shirtColor,
-        outfit.pantsColor,
-        outfit.id === 'puran_dhaka_lungi'
-      );
+      tintCharacterOutfit(this.playerLimbs, outfit.shirtColor, outfit.pantsColor);
       updateWeaponAttachment(this.playerLimbs.weaponMesh, store.equippedToolId);
-
-      // Adjust weapon mounting position for realistic grip
-      if (store.equippedToolId === 'type56_ak' || store.equippedToolId === 'katta') {
-        this.playerLimbs.weaponMesh.position.set(0.18, 0.95, 0.38);
-        this.playerLimbs.weaponMesh.rotation.set(-0.25, 0.15, 0);
-      } else if (
-        store.equippedToolId === 'shutter_pistol' ||
-        store.equippedToolId === 'pipe_gun' ||
-        store.equippedToolId === 'tt_pistol'
-      ) {
-        this.playerLimbs.weaponMesh.position.set(0.24, 0.98, 0.35);
-        this.playerLimbs.weaponMesh.rotation.set(0, 0, 0);
-      } else {
-        this.playerLimbs.weaponMesh.position.set(0.28, 0.92, 0.22);
-        this.playerLimbs.weaponMesh.rotation.set(0, 0, 0);
-      }
     }
 
-    // Update Gunfire Muzzle Flash & Particle Systems
-    if (this.muzzleFlashTimer > 0) {
-      this.muzzleFlashTimer -= dt;
-      if (this.muzzleFlashTimer <= 0) {
-        this.muzzleFlashLight.intensity = 0;
-      }
-    }
-
-    // Bullet Tracers
-    for (let i = this.bulletTracers.length - 1; i >= 0; i--) {
-      const t = this.bulletTracers[i];
-      t.life -= dt;
-      (t.line.material as THREE.LineBasicMaterial).opacity = t.life / t.maxLife;
-      if (t.life <= 0) {
-        this.scene.remove(t.line);
-        t.line.geometry.dispose();
-        this.bulletTracers.splice(i, 1);
-      }
-    }
-
-    // Impact Sparks
-    for (let i = this.impactSparks.length - 1; i >= 0; i--) {
-      const s = this.impactSparks[i];
-      s.life -= dt;
-      s.mesh.position.addScaledVector(s.vel, dt);
-      s.vel.y -= 19 * dt;
-      s.mesh.scale.setScalar(Math.max(0.01, s.life / s.maxLife));
-      if (s.life <= 0 || s.mesh.position.y <= 0) {
-        this.scene.remove(s.mesh);
-        s.mesh.geometry.dispose();
-        this.impactSparks.splice(i, 1);
-      }
-    }
-
-    // Brass Shell Casings Physics
-    for (let i = this.shellCasings.length - 1; i >= 0; i--) {
-      const c = this.shellCasings[i];
-      c.life -= dt;
-      c.mesh.position.addScaledVector(c.vel, dt);
-      c.vel.y -= 16 * dt;
-      c.mesh.rotation.x += dt * 14;
-      c.mesh.rotation.y += dt * 12;
-      if (c.mesh.position.y <= 0.02) {
-        c.mesh.position.y = 0.02;
-        c.vel.set(0, 0, 0);
-      }
-      if (c.life <= 0) {
-        this.scene.remove(c.mesh);
-        c.mesh.geometry.dispose();
-        this.shellCasings.splice(i, 1);
-      }
-    }
-
-    // Road Skid Marks Decay
-    for (let i = this.skidMarks.length - 1; i >= 0; i--) {
-      const sm = this.skidMarks[i];
-      sm.life -= dt;
-      (sm.mesh.material as THREE.MeshBasicMaterial).opacity = Math.min(
-        0.55,
-        sm.life / 6
-      );
-      if (sm.life <= 0) {
-        this.scene.remove(sm.mesh);
-        sm.mesh.geometry.dispose();
-        this.skidMarks.splice(i, 1);
-      }
-    }
+    // Always keep Dhaka lighting, traffic, Metro Rail & NPCs alive in every phase
+    this.updateEnvironmentLighting(store.timeOfDay, store.weather, dt);
+    this.updateTrafficAndPoliceAI(dt, store.wantedLevel);
+    this.updateNPCAI(dt);
 
     if (store.gamePhase === 'playing') {
       store.tickWorldClock(dt);
-      this.updateEnvironmentLighting(store.timeOfDay, store.weather, dt);
+
+      if (this.fireCooldown > 0) {
+        this.fireCooldown = Math.max(0, this.fireCooldown - dt);
+      }
 
       if (this.activeVehicleId) {
         this.updateDrivenVehicle(dt);
       } else {
         this.updateOnFootPlayer(dt);
+        // Support full-auto firing when holding X / J / K with BD-08 Assault Rifle or Micro-SMG
+        if (
+          this.keys.has('KeyX') ||
+          this.keys.has('KeyJ') ||
+          this.keys.has('KeyK')
+        ) {
+          const activeTool = store.tools.find(
+            (t) => t.id === store.equippedToolId
+          );
+          if (activeTool?.isFirearm && this.fireCooldown <= 0) {
+            this.performMeleeAttack();
+          }
+        }
       }
 
-      this.updateTrafficAndPoliceAI(dt, store.wantedLevel);
-      this.updateNPCAI(dt);
+      this.updateBulletTracersAndFX(dt);
       this.updateCashPickups(dt);
       this.updateMissionAndInteractionChecks(dt);
-
-      this.ambientSoundTimer += dt;
-      if (this.ambientSoundTimer > 15) {
-        this.ambientSoundTimer = 0;
-        const isNearRiver = this.playerPos.z > 210;
-        dhakaAudio.playDistantAmbientSound(
-          isNearRiver ? 'boat_horn' : 'rickshaw_bell'
-        );
-      }
+    } else if (!this.activeVehicleId) {
+      setCharacterAnimationState(this.playerLimbs, 'idle', dt);
+      this.playerLimbs.group.position.copy(this.playerPos);
+      this.playerLimbs.group.rotation.y = this.playerRotation;
     }
 
     this.updateCamera(dt, store.cameraMode);
     this.renderer.render(this.scene, this.camera);
   };
+
+  private updateBulletTracersAndFX(dt: number) {
+    // 1. Update Muzzle PointLight Flash
+    if (this.muzzleLight && this.muzzleLight.visible) {
+      this.muzzleLightTimer -= dt;
+      if (this.muzzleLightTimer <= 0) {
+        this.muzzleLight.visible = false;
+      }
+    }
+
+    // 2. Update 3D Hit Sparks & Explosions
+    for (let i = this.hitSparks.length - 1; i >= 0; i--) {
+      const sp = this.hitSparks[i];
+      sp.life -= dt;
+      sp.mesh.scale.multiplyScalar(1 + dt * 6.5);
+      (sp.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        sp.life * 4.2
+      );
+      if (sp.life <= 0) {
+        this.scene.remove(sp.mesh);
+        this.hitSparks.splice(i, 1);
+      }
+    }
+
+    // 3. Update 3D Bullet Tracers & Ballistic Collisions
+    const store = useGameStore.getState();
+    for (let i = this.bulletTracers.length - 1; i >= 0; i--) {
+      const b = this.bulletTracers[i];
+      b.life -= dt;
+      const nx = b.mesh.position.x + b.vx * dt;
+      const ny = b.mesh.position.y + b.vy * dt;
+      const nz = b.mesh.position.z + b.vz * dt;
+      b.mesh.position.set(nx, ny, nz);
+
+      let hitSomething = false;
+
+      // Check Building Obstacle Hit
+      if (this.checkWorldObstacle(nx, nz, 0.2)) {
+        this.spawnImpactSparks(nx, ny, nz, '#fde047', 0.9);
+        hitSomething = true;
+      }
+
+      // Check Vehicle Hit
+      if (!hitSomething) {
+        for (const veh of this.vehicles) {
+          if (veh.id === this.activeVehicleId) continue;
+          const distV = Math.hypot(veh.x - nx, veh.z - nz);
+          if (distV < 2.2) {
+            hitSomething = true;
+            dhakaAudio.playSfx('hit');
+            this.spawnImpactSparks(nx, ny, nz, '#fb923c', 1.35);
+            veh.health = Math.max(0, veh.health - b.damage);
+
+            if (veh.health <= 0) {
+              // Vehicle Explosion FX + Respawn Health
+              this.spawnImpactSparks(veh.x, 1.4, veh.z, '#ef4444', 4.2);
+              this.spawnImpactSparks(veh.x, 2.1, veh.z, '#facc15', 3.0);
+              dhakaAudio.playSfx('shotgun');
+              veh.health = veh.maxHealth;
+              veh.speed = 0;
+              store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+              store.showBanner({
+                titleEn: 'VEHICLE DESTROYED IN DHAKA TRAFFIC!',
+                titleBn: 'গাড়িতে বিস্ফোরণ ঘটেছে!',
+                subtitleEn: 'DMP Tactical Unit dispatched to your sector!',
+                subtitleBn: 'ডিএমপি টহল পুলিশ আপনার এলাকায় রওনা হয়েছে!',
+                tone: 'red',
+              });
+            }
+            break;
+          }
+        }
+      }
+
+      // Check NPC Hit
+      if (!hitSomething) {
+        for (const npc of this.npcs) {
+          const distN = Math.hypot(npc.x - nx, npc.z - nz);
+          if (distN < 0.95) {
+            hitSomething = true;
+            dhakaAudio.playSfx('hit');
+            this.spawnImpactSparks(nx, ny, nz, '#ef4444', 1.25);
+            if (!npc.isStoryNPC) {
+              npc.aiState = 'flee';
+              store.setWantedLevel(Math.max(1, store.wantedLevel + 1));
+            }
+            break;
+          }
+        }
+      }
+
+      if (hitSomething || b.life <= 0) {
+        this.scene.remove(b.mesh);
+        this.bulletTracers.splice(i, 1);
+      }
+    }
+  }
 
   private updateCashPickups(dt: number) {
     const store = useGameStore.getState();
@@ -3479,9 +3561,11 @@ export class DhakaCityEngine {
     let ambIntensity = 0.72;
 
     if (isNight) {
-      targetSky = new THREE.Color('#090d16');
-      sunIntensity = 0.25;
-      ambIntensity = 0.38;
+      targetSky = new THREE.Color('#0a0f1a');
+      // Moonlight plus warm sodium street lighting. Pure moonlight made the
+      // asphalt a black hole; this keeps the city legible at 2am.
+      sunIntensity = 0.12;
+      ambIntensity = 0.34;
     } else if (isRain) {
       targetSky = new THREE.Color('#334155');
       sunIntensity = 0.6;
@@ -3511,28 +3595,48 @@ export class DhakaCityEngine {
       );
     }
 
-    if (this.horizonMesh) {
-      this.horizonMesh.position.set(this.playerPos.x, 55, this.playerPos.z);
-      (this.horizonMesh.material as THREE.MeshBasicMaterial).color.lerp(
-        isNight
-          ? new THREE.Color('#334155')
-          : isGolden
-          ? new THREE.Color('#ffffff')
-          : new THREE.Color('#cbd5e1'),
-        dt * 2
-      );
-    }
-
     // Animate water normal ripples
     if (this.waterNormalTex) {
       this.waterNormalTex.offset.x += dt * 0.04;
       this.waterNormalTex.offset.y += dt * 0.025;
     }
 
+    // Real solar arc: the sun rises in the east, peaks at noon and sets in the
+    // west, so shadows sweep across the city instead of staying frozen.
+    const dayT = THREE.MathUtils.clamp((hour - 6) / 12, 0, 1); // 0=6am, 1=6pm
+    const elevation = Math.sin(dayT * Math.PI); // 1 at noon
+    const azimuth = Math.PI * (0.15 + dayT * 0.7);
+    const radius = 210;
+    const sunHeight = isNight ? 24 : 40 + elevation * 170;
+    this.sunLight.position.set(
+      Math.cos(azimuth) * radius,
+      sunHeight,
+      Math.sin(azimuth) * radius * 0.75
+    );
+    this.sunLight.color.set(
+      isNight ? '#93b4e8' : isGolden ? '#fb923c' : isRain ? '#94a3b8' : '#fff7d6'
+    );
+    // Shadows get softer and shorter near noon, long at dawn/dusk.
+    if (this.sunLight.shadow) {
+      this.sunLight.shadow.radius = isNight ? 6 : isGolden ? 3.2 : 1.6;
+    }
+
+    // Lift the shadow floor at night so wet asphalt keeps some detail instead
+    // of crushing to pure black under ACES tone mapping.
+    const targetExposure = isNight ? 1.38 : isGolden ? 1.24 : 1.18;
+    this.renderer.toneMappingExposure = THREE.MathUtils.lerp(
+      this.renderer.toneMappingExposure,
+      targetExposure,
+      dt * 3
+    );
+
     this.sunLight.intensity = THREE.MathUtils.lerp(
       this.sunLight.intensity,
       sunIntensity,
-      dt * 3
+      dt * (isNight ? 5 : 3)
+    );
+    this.ambientLight.color.set(
+      isNight ? '#ffd9a0' : isGolden ? '#ffe4c4' : '#fffbeb'
     );
     this.ambientLight.intensity = THREE.MathUtils.lerp(
       this.ambientLight.intensity,
@@ -3562,36 +3666,6 @@ export class DhakaCityEngine {
       b.rotation.z = Math.sin(t * 0.8 + idx) * 0.018;
     });
 
-    // Dynamic Monsoon Wet Asphalt Gloss & Specular Reflections
-    if (this.groundMat) {
-      const targetRoughness = isRain ? 0.22 : 0.88;
-      const targetMetalness = isRain ? 0.58 : 0.08;
-      const targetColor = isRain
-        ? new THREE.Color('#1e293b')
-        : new THREE.Color('#475569');
-      this.groundMat.roughness = THREE.MathUtils.lerp(
-        this.groundMat.roughness,
-        targetRoughness,
-        dt * 2
-      );
-      this.groundMat.metalness = THREE.MathUtils.lerp(
-        this.groundMat.metalness,
-        targetMetalness,
-        dt * 2
-      );
-      this.groundMat.color.lerp(targetColor, dt * 2);
-    }
-
-    // Streetlamp Illumination at Evening & Night
-    const streetlampTarget = isNight || isGolden ? 1.0 : 0.0;
-    this.streetlampLights.forEach((light) => {
-      light.intensity = THREE.MathUtils.lerp(
-        light.intensity,
-        streetlampTarget,
-        dt * 3
-      );
-    });
-
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara, Farmgate & Motijheel
     if (this.metroTrainGroup) {
       this.metroTrainGroup.position.z = -75 + Math.sin(t * 0.32) * 165;
@@ -3599,44 +3673,17 @@ export class DhakaCityEngine {
   }
 
   private updateOnFootPlayer(dt: number) {
-    let moveForward = this.virtualMoveForward;
-    let moveRight = this.virtualMoveRight;
+    let moveForward = 0;
+    let moveRight = 0;
 
-    if (
-      this.keys.has('KeyW') ||
-      this.keys.has('ArrowUp') ||
-      this.keys.has('w')
-    ) {
-      moveForward += 1;
-    }
-    if (
-      this.keys.has('KeyS') ||
-      this.keys.has('ArrowDown') ||
-      this.keys.has('s')
-    ) {
-      moveForward -= 1;
-    }
-    if (
-      this.keys.has('KeyD') ||
-      this.keys.has('ArrowRight') ||
-      this.keys.has('d')
-    ) {
-      moveRight += 1;
-    }
-    if (
-      this.keys.has('KeyA') ||
-      this.keys.has('ArrowLeft') ||
-      this.keys.has('a')
-    ) {
-      moveRight -= 1;
-    }
+    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) moveForward += 1;
+    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) moveForward -= 1;
+    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) moveRight += 1;
+    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) moveRight -= 1;
 
     const wantsSprint =
-      this.virtualSprint ||
-      ((this.keys.has('ShiftLeft') ||
-        this.keys.has('ShiftRight') ||
-        this.keys.has('shift')) &&
-        (moveForward !== 0 || moveRight !== 0));
+      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
+      (moveForward !== 0 || moveRight !== 0);
     const isSprinting = wantsSprint && this.playerStamina > 5;
 
     if (isSprinting) {
@@ -3669,37 +3716,9 @@ export class DhakaCityEngine {
         this.playerPos.z = clampWorldCoord(nextZ);
       }
 
-      this.resolveWorldCollision(this.playerPos, 0.55);
-
       this.walkAnimPhase += dt * (isSprinting ? 15 : 10);
-      if (Date.now() - this.lastStepTime > (isSprinting ? 270 : 410)) {
-        this.lastStepTime = Date.now();
-        const store = useGameStore.getState();
-        const isRain = store.weather === 'monsoon_rain';
-        const isNearWater =
-          this.playerPos.z > 240 ||
-          (this.playerPos.x < -180 &&
-            this.playerPos.x > -265 &&
-            Math.abs(this.playerPos.z - 25) < 60);
-        const isWet = isRain || isNearWater;
-        dhakaAudio.playFootstep(isWet);
-        if (isWet) {
-          this.spawnImpactSparks(
-            new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
-            '#38bdf8',
-            3
-          );
-        } else if (isSprinting) {
-          this.spawnImpactSparks(
-            new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
-            '#e2e8f0',
-            2
-          );
-        }
-      }
     } else {
       this.walkAnimPhase = 0;
-      this.resolveWorldCollision(this.playerPos, 0.55);
     }
 
     if (!this.isGrounded) {
@@ -3709,39 +3728,35 @@ export class DhakaCityEngine {
         this.playerPos.y = 0;
         this.playerVelY = 0;
         this.isGrounded = true;
-        const store = useGameStore.getState();
-        const isRain = store.weather === 'monsoon_rain';
-        dhakaAudio.playFootstep(isRain);
-        this.spawnImpactSparks(
-          new THREE.Vector3(this.playerPos.x, 0.05, this.playerPos.z),
-          isRain ? '#38bdf8' : '#94a3b8',
-          5
-        );
       }
     }
 
-    // Update Real Skeletal GLTF AnimationMixer with firearm aiming and weapon stance
-    const store = useGameStore.getState();
-    const aimPitch = this.isAimingDownSights ? this.cameraPitch - 0.32 : 0;
+    // Update Real Skeletal GLTF AnimationMixer & Weapon / Arm Rig
+    const storeState = useGameStore.getState();
+    const activeTool = storeState.tools.find(
+      (t) => t.id === storeState.equippedToolId
+    );
+    // Firearms are only raised into the aim pose while actually firing;
+    // otherwise the character carries them at the side (natural idle).
+    const isAimingNow =
+      Boolean(activeTool?.isFirearm) &&
+      (this.fireCooldown > 0 || this.attackAnimTimer > 0);
+    // Gate the gait so feet stay planted: crouch 0.55x, walk 1x, sprint 1.45x.
+    const gaitScale = this.isCrouching ? 0.55 : isSprinting ? 1.45 : 1.0;
     setCharacterAnimationState(
       this.playerLimbs,
       targetAnimState,
       dt,
-      store.equippedToolId,
-      this.attackAnimTimer > 0 || this.isAimingDownSights,
-      aimPitch
+      this.attackAnimTimer,
+      isAimingNow,
+      gaitScale
     );
 
     // Also update fallback capsule limbs if visible
     const swing = Math.sin(this.walkAnimPhase) * 0.65;
     this.playerLimbs.leftLeg.rotation.x = swing;
     this.playerLimbs.rightLeg.rotation.x = -swing;
-    if (this.isAimingDownSights) {
-      this.playerLimbs.rightArm.rotation.x = -1.6;
-      this.playerLimbs.leftArm.rotation.x = -1.35;
-    } else {
-      this.playerLimbs.leftArm.rotation.x = -swing * 0.8;
-    }
+    this.playerLimbs.leftArm.rotation.x = -swing * 0.8;
 
     if (this.attackAnimTimer > 0) {
       this.attackAnimTimer -= dt;
@@ -3761,37 +3776,13 @@ export class DhakaCityEngine {
     if (!veh) return;
 
     const stats = VEHICLE_STATS[veh.type];
-    let throttle = this.virtualMoveForward;
-    let steer = -this.virtualMoveRight;
+    let throttle = 0;
+    let steer = 0;
 
-    if (
-      this.keys.has('KeyW') ||
-      this.keys.has('ArrowUp') ||
-      this.keys.has('w')
-    ) {
-      throttle += 1;
-    }
-    if (
-      this.keys.has('KeyS') ||
-      this.keys.has('ArrowDown') ||
-      this.keys.has('s')
-    ) {
-      throttle -= 1;
-    }
-    if (
-      this.keys.has('KeyA') ||
-      this.keys.has('ArrowLeft') ||
-      this.keys.has('a')
-    ) {
-      steer += 1;
-    }
-    if (
-      this.keys.has('KeyD') ||
-      this.keys.has('ArrowRight') ||
-      this.keys.has('d')
-    ) {
-      steer -= 1;
-    }
+    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) throttle += 1;
+    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) throttle -= 1;
+    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer += 1;
+    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer -= 1;
 
     const isDrifting = this.keys.has('Space');
 
@@ -3837,232 +3828,15 @@ export class DhakaCityEngine {
       veh.x = clampWorldCoord(nextX);
       veh.z = clampWorldCoord(nextZ);
     } else {
-      if (Math.abs(veh.speed) > 5) {
-        const impact = Math.min(2.5, Math.abs(veh.speed) / 12);
-        dhakaAudio.playCarCrash(impact);
-        veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.55);
-        this.cameraPitch += (Math.random() - 0.5) * 0.1 * impact;
-        this.spawnImpactSparks(
-          new THREE.Vector3(
-            veh.x + Math.sin(veh.rotation) * (stats.length * 0.45),
-            0.6,
-            veh.z + Math.cos(veh.rotation) * (stats.length * 0.45)
-          ),
-          '#ffea75',
-          Math.min(14, Math.floor(impact * 7))
-        );
+      if (Math.abs(veh.speed) > 12) {
+        dhakaAudio.playSfx('hit');
+        veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.45);
       }
       veh.speed = -veh.speed * 0.35;
-
-      // Obstacle Unstuck Repulsion Push (Bug Fix)
-      for (const b of this.buildingColliders) {
-        const cx = (b.minX + b.maxX) / 2;
-        const cz = (b.minZ + b.maxZ) / 2;
-        const dist = Math.hypot(veh.x - cx, veh.z - cz);
-        if (
-          dist > 0.05 &&
-          dist < radius + Math.max(b.maxX - b.minX, b.maxZ - b.minZ) * 0.55
-        ) {
-          veh.x += ((veh.x - cx) / dist) * 0.45;
-          veh.z += ((veh.z - cz) / dist) * 0.45;
-          break;
-        }
-      }
-    }
-
-    // Drifting tire smoke, screech audio & sparks
-    const isHardBraking = throttle < 0 && veh.speed > 5;
-    if ((isDrifting && Math.abs(veh.speed) > 3.6) || isHardBraking) {
-      dhakaAudio.updateSkid(Math.min(1, Math.abs(veh.speed) / 12));
-      this.spawnImpactSparks(
-        new THREE.Vector3(
-          veh.x - Math.sin(veh.rotation) * 1.5,
-          0.12,
-          veh.z - Math.cos(veh.rotation) * 1.5
-        ),
-        '#cbd5e1',
-        2
-      );
-    }
-
-    // Nitro Boost on Shift key with turbine audio & backfire sparks
-    const wantsNitro =
-      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
-      this.playerStamina > 5 &&
-      Math.abs(veh.speed) > 2.0;
-    this.nitroActive = wantsNitro;
-
-    if (wantsNitro) {
-      if (!this.lastNitroState) {
-        dhakaAudio.playNitro();
-      }
-      this.lastNitroState = true;
-      this.playerStamina = Math.max(0, this.playerStamina - dt * 26);
-      veh.speed = Math.min(
-        stats.maxSpeed * 1.48,
-        veh.speed + stats.acceleration * 2.2 * dt
-      );
-
-      // Cyan nitro flame particles
-      const flameDirZ = -Math.cos(veh.rotation) * (stats.length * 0.52);
-      const flameDirX = -Math.sin(veh.rotation) * (stats.length * 0.52);
-      this.spawnImpactSparks(
-        new THREE.Vector3(veh.x + flameDirX, 0.35, veh.z + flameDirZ),
-        '#00e5ff',
-        3
-      );
-    } else {
-      if (this.lastNitroState) {
-        // Backfire pop sparks on nitro release
-        const flameDirZ = -Math.cos(veh.rotation) * (stats.length * 0.5);
-        const flameDirX = -Math.sin(veh.rotation) * (stats.length * 0.5);
-        this.spawnImpactSparks(
-          new THREE.Vector3(veh.x + flameDirX, 0.35, veh.z + flameDirZ),
-          '#f59e0b',
-          4
-        );
-      }
-      this.lastNitroState = false;
-      this.playerStamina = Math.min(100, this.playerStamina + dt * 10);
-    }
-
-    // Exhaust smoke puffs upon initial acceleration
-    if (throttle > 0 && Math.abs(veh.speed) < 6) {
-      this.exhaustTimer += dt;
-      if (this.exhaustTimer > 0.12) {
-        this.exhaustTimer = 0;
-        const rearZ = -Math.cos(veh.rotation) * (stats.length * 0.48);
-        const rearX = -Math.sin(veh.rotation) * (stats.length * 0.48);
-        this.spawnImpactSparks(
-          new THREE.Vector3(veh.x + rearX, 0.22, veh.z + rearZ),
-          '#64748b',
-          1
-        );
-      }
-    }
-
-    // Asphalt Skid Marks when drifting or hard braking
-    if (
-      (isDrifting && Math.abs(veh.speed) > 3.6) ||
-      (throttle < 0 && veh.speed > 7.5)
-    ) {
-      const skidGeo = new THREE.PlaneGeometry(0.35, 1.1).rotateX(-Math.PI / 2);
-      const skidMat = new THREE.MeshBasicMaterial({
-        color: '#09090b',
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      });
-      const skidMesh = new THREE.Mesh(skidGeo, skidMat);
-      skidMesh.position.set(veh.x, 0.022, veh.z);
-      skidMesh.rotation.y = veh.rotation;
-      this.scene.add(skidMesh);
-      this.skidMarks.push({ mesh: skidMesh, life: 10 });
-      if (this.skidMarks.length > 70) {
-        const old = this.skidMarks.shift();
-        if (old) {
-          this.scene.remove(old.mesh);
-          old.mesh.geometry.dispose();
-        }
-      }
-    }
-
-    // Burnout tire smoke when applying throttle while holding handbrake
-    if (throttle > 0 && isDrifting && Math.abs(veh.speed) < 3.5) {
-      const rearZ = -Math.cos(veh.rotation) * (stats.length * 0.45);
-      const rearX = -Math.sin(veh.rotation) * (stats.length * 0.45);
-      this.spawnImpactSparks(
-        new THREE.Vector3(veh.x + rearX, 0.18, veh.z + rearZ),
-        '#e2e8f0',
-        3
-      );
-    }
-
-    // Engine damage smoke puff and fire sparks when damaged
-    if (veh.health < 60) {
-      this.spawnImpactSparks(
-        new THREE.Vector3(
-          veh.x + Math.sin(veh.rotation) * 1.4,
-          0.9,
-          veh.z + Math.cos(veh.rotation) * 1.4
-        ),
-        veh.health < 30 ? '#0f172a' : '#475569',
-        veh.health < 30 ? 2 : 1
-      );
-      if (veh.health < 25) {
-        this.spawnImpactSparks(
-          new THREE.Vector3(
-            veh.x + Math.sin(veh.rotation) * 1.4,
-            0.8,
-            veh.z + Math.cos(veh.rotation) * 1.4
-          ),
-          '#f97316',
-          2
-        );
-      }
     }
 
     this.playerPos.set(veh.x, 0, veh.z);
     this.playerRotation = veh.rotation;
-
-    // Show character seated inside ANY driven vehicle with authentic driving posture
-    this.playerLimbs.group.visible = true;
-
-    let seatX = 0;
-    let seatY = 0.38;
-    let seatZ = 0;
-    let scaleY = 0.82;
-
-    if (veh.type === 'cng') {
-      seatX = 0;
-      seatY = 0.44;
-      seatZ = 0.28;
-      scaleY = 0.78;
-    } else if (veh.type === 'rickshaw') {
-      seatX = 0;
-      seatY = 0.62;
-      seatZ = -0.32;
-      scaleY = 0.82;
-    } else if (veh.type === 'motorcycle') {
-      seatX = 0;
-      seatY = 0.36;
-      seatZ = -0.22;
-      scaleY = 0.85;
-    } else if (veh.type === 'bus') {
-      seatX = 0.62;
-      seatY = 1.18;
-      seatZ = 2.95;
-      scaleY = 0.85;
-    } else {
-      // Sedan / Police cruiser / Pickup (Bangladeshi right-hand drive)
-      seatX = 0.36;
-      seatY = 0.44;
-      seatZ = -0.12;
-      scaleY = 0.76;
-    }
-
-    const cosR = Math.cos(veh.rotation);
-    const sinR = Math.sin(veh.rotation);
-    const worldSeatX = veh.x + cosR * seatX + sinR * seatZ;
-    const worldSeatZ = veh.z - sinR * seatX + cosR * seatZ;
-
-    this.playerLimbs.group.position.set(worldSeatX, seatY, worldSeatZ);
-    this.playerLimbs.group.rotation.y = veh.rotation;
-    this.playerLimbs.group.scale.y = scaleY;
-
-    const vMesh = this.vehicleMeshes.get(veh.id);
-    if (vMesh) {
-      this.playerLimbs.group.rotation.x = vMesh.rotation.x;
-      this.playerLimbs.group.rotation.z = vMesh.rotation.z;
-    }
-
-    setCharacterAnimationState(this.playerLimbs, 'driving', dt);
-
-    // Also update fallback limbs driving pose
-    this.playerLimbs.leftLeg.rotation.x = -1.45;
-    this.playerLimbs.rightLeg.rotation.x = -1.45;
-    this.playerLimbs.leftArm.rotation.x = -1.15;
-    this.playerLimbs.rightArm.rotation.x = -1.15;
 
     // Position dynamic vehicle headlight cone ahead of car
     this.headlightSpot.intensity = 3.2;
@@ -4077,24 +3851,6 @@ export class DhakaCityEngine {
       veh.z + Math.cos(veh.rotation) * 24
     );
 
-    // Dynamic Red Taillight Point Light for Braking & Night Driving
-    const store = useGameStore.getState();
-    const isNightOrTwilight = store.timeOfDay > 18 || store.timeOfDay < 6;
-    const isBraking = (throttle < 0 && veh.speed > 0.4) || isDrifting;
-
-    if (this.taillightPointLight) {
-      const tailZ = -Math.cos(veh.rotation) * (stats.length * 0.52);
-      const tailX = -Math.sin(veh.rotation) * (stats.length * 0.52);
-      this.taillightPointLight.position.set(veh.x + tailX, 0.75, veh.z + tailZ);
-      if (isBraking) {
-        this.taillightPointLight.intensity = 3.8;
-      } else if (isNightOrTwilight) {
-        this.taillightPointLight.intensity = 0.85;
-      } else {
-        this.taillightPointLight.intensity = 0;
-      }
-    }
-
     if (!this.isPointerDragging && Math.abs(veh.speed) > 2.5) {
       const desiredYaw = veh.rotation + Math.PI;
       const diff = normalizeAngle(desiredYaw - this.cameraYaw);
@@ -4105,36 +3861,8 @@ export class DhakaCityEngine {
     if (mesh) {
       mesh.position.set(veh.x, 0, veh.z);
       mesh.rotation.y = veh.rotation;
-
-      // Realistic Vehicle Suspension Dynamics (Pitch on accel/brake, Roll/Banking on turns)
-      const speedNorm = Math.abs(veh.speed) / Math.max(1, stats.maxSpeed);
-      const pitchAngle =
-        (throttle > 0 ? -0.04 : throttle < 0 ? 0.065 : 0) *
-        Math.min(1, speedNorm * 1.5);
-      mesh.rotation.x = pitchAngle;
-      const rollFactor = veh.type === 'motorcycle' ? 0.35 : 0.12;
-      mesh.rotation.z = -steer * speedNorm * rollFactor;
-
-      // Authentic Dhaka CNG 4-Stroke Engine Idle Thrum & Vibration
-      if (veh.type === 'cng' && Math.abs(veh.speed) < 1.0) {
-        const vibTime = Date.now() * 0.038;
-        mesh.position.y = Math.sin(vibTime) * 0.012;
-        mesh.rotation.z += Math.sin(vibTime * 1.1) * 0.007;
-      }
-
-      // Rotate vehicle wheels proportional to speed and steer front wheels / cockpit steering wheel
-      mesh.traverse((child) => {
-        if (child.name === 'wheel') {
-          child.rotation.x += veh.speed * dt * 1.6;
-          // Front steering wheels
-          if (child.position.z > 0.4) {
-            child.rotation.y = steer * 0.44;
-          }
-        }
-        if (child.name === 'steering_wheel') {
-          child.rotation.z = -steer * 0.9;
-        }
-      });
+      // Both CarConcept.glb and ferrari.glb hubs use local X as the true axle.
+      this.animateVehicleWheels(mesh, veh.speed, dt, steer);
     }
 
     dhakaAudio.updateEngine(
@@ -4142,6 +3870,34 @@ export class DhakaCityEngine {
       veh.type,
       veh.speed / Math.max(1, stats.maxSpeed)
     );
+  }
+
+
+  /**
+   * Spins all tagged wheels of a vehicle mesh and applies a subtle body roll.
+   * Used for AI traffic and police cars so they no longer slide on locked wheels.
+   */
+  private animateVehicleWheels(
+    mesh: THREE.Object3D,
+    speed: number,
+    dt: number,
+    steerInput: number
+  ) {
+    const spin = speed * dt * 1.6;
+    const steerAngle = THREE.MathUtils.clamp(steerInput, -1, 1) * 0.42;
+    mesh.traverse((child) => {
+      if (child.name !== 'wheel') return;
+      child.rotation.x += spin;
+      // Front wheels also pivot on their vertical axis while steering.
+      if (child.userData.steer && child.userData.steerAxis !== 'z') {
+        child.rotation.y = THREE.MathUtils.lerp(
+          child.rotation.y,
+          steerAngle,
+          Math.min(1, dt * 9)
+        );
+      }
+    });
+    mesh.rotation.z = THREE.MathUtils.clamp(-steerInput * 0.06, -0.06, 0.06);
   }
 
   private updateTrafficAndPoliceAI(dt: number, wantedLevel: number) {
@@ -4160,20 +3916,6 @@ export class DhakaCityEngine {
           const flash = Math.floor(performance.now() / 160) % 2 === 0;
           redBar.visible = wantedLevel > 0 ? flash : true;
           blueBar.visible = wantedLevel > 0 ? !flash : true;
-        }
-
-        if (wantedLevel > 0) {
-          const distToPlayer = Math.hypot(
-            veh.x - this.playerPos.x,
-            veh.z - this.playerPos.z
-          );
-          if (distToPlayer < 45) {
-            this.policeSirenTimer -= dt;
-            if (this.policeSirenTimer <= 0) {
-              dhakaAudio.playHorn('siren');
-              this.policeSirenTimer = 1.8;
-            }
-          }
         }
       }
 
@@ -4229,12 +3971,12 @@ export class DhakaCityEngine {
 
           mesh.position.set(veh.x, 0, veh.z);
           mesh.rotation.y = veh.rotation;
-
-          mesh.traverse((child) => {
-            if (child.name === 'wheel') {
-              child.rotation.x += chaseSpeed * dt * 1.6;
-            }
-          });
+          this.animateVehicleWheels(
+            mesh,
+            chaseSpeed,
+            dt,
+            Math.max(-1, Math.min(1, diff * 2))
+          );
           continue;
         }
       }
@@ -4259,29 +4001,17 @@ export class DhakaCityEngine {
       if (
         Math.abs(nx) > 340 ||
         nz > 282 ||
-        nz < -335
+        nz < -335 ||
+        this.checkWorldObstacle(nx, nz, 1.5)
       ) {
         veh.rotation = normalizeAngle(veh.rotation + Math.PI);
-        if (Math.abs(veh.x) < 22) {
-          veh.x = -veh.x;
-        }
-      } else if (this.checkWorldObstacle(nx, nz, 1.5)) {
-        veh.rotation = normalizeAngle(
-          veh.rotation + (Math.random() > 0.5 ? 0.785 : -0.785)
-        );
       } else {
         veh.x = nx;
         veh.z = nz;
       }
-
       mesh.position.set(veh.x, 0, veh.z);
       mesh.rotation.y = veh.rotation;
-
-      mesh.traverse((child) => {
-        if (child.name === 'wheel') {
-          child.rotation.x += cruiseSpeed * dt * 1.6;
-        }
-      });
+      this.animateVehicleWheels(mesh, cruiseSpeed, dt, 0);
     }
   }
 
@@ -4295,15 +4025,8 @@ export class DhakaCityEngine {
 
       if (this.activeVehicleId) {
         const pv = this.vehicles.find((v) => v.id === this.activeVehicleId);
-        if (pv && Math.abs(pv.speed) > 4) {
+        if (pv && Math.abs(pv.speed) > 8) {
           const d = Math.hypot(npc.x - pv.x, npc.z - pv.z);
-          // Evasion: dodge away from approaching vehicle towards sidewalk
-          if (d < 7.2 && !npc.isStoryNPC) {
-            npc.aiState = 'flee';
-            const dodgeDir = npc.x - pv.x >= 0 ? 1 : -1;
-            npc.walkTargetX = npc.x + dodgeDir * 4.8;
-            npc.walkTargetZ = npc.z + (pv.speed > 0 ? -1.5 : 1.5);
-          }
           if (d < 2.1 && !npc.isStoryNPC) {
             dhakaAudio.playSfx('hit');
             npc.aiState = 'flee';
@@ -4441,41 +4164,10 @@ export class DhakaCityEngine {
       vehicleHealth: activeVeh ? Math.round(activeVeh.health) : 100,
       vehicleMaxHealth: activeVeh ? activeVeh.maxHealth : 100,
       stamina: Math.round(this.playerStamina),
-      isAimingDownSights: this.isAimingDownSights,
-      isNitroActive: this.nitroActive,
     });
 
-    // Real-time exploration discovery for all 16 authentic Dhaka locations
-    for (const loc of DHAKA_GAME_LOCATIONS) {
-      const distToLoc = Math.hypot(
-        loc.x - this.playerPos.x,
-        loc.z - this.playerPos.z
-      );
-      if (distToLoc < 38) {
-        store.discoverLocation(loc.id);
-      }
-    }
-
     if (this.activeVehicleId) {
-      let vehPrompt: NearbyPrompt | null = null;
-      for (const poi of POINTS_OF_INTEREST) {
-        if (poi.type === 'garage') {
-          const d = Math.hypot(
-            poi.x - this.playerPos.x,
-            poi.z - this.playerPos.z
-          );
-          if (d < 7.5) {
-            vehPrompt = {
-              type: 'poi',
-              id: poi.id,
-              labelEn: '[E] Dholaikhal Pay-n-Spray (Repair & Respray - ৳350)',
-              labelBn: '[E] ধোলাইখাল গ্যারেজ (মেরামত ও নতুন রঙ - ৳৩৫০)',
-            };
-            break;
-          }
-        }
-      }
-      store.setNearbyPrompt(vehPrompt);
+      store.setNearbyPrompt(null);
       return;
     }
 
@@ -4540,87 +4232,40 @@ export class DhakaCityEngine {
     let dist = isDriving ? 9.2 : 6.2;
     let heightOffset = isDriving ? 2.4 : 1.75;
 
-    if (this.isAimingDownSights && !isDriving) {
-      dist = 2.4;
-      heightOffset = 1.45;
-    } else if (mode === 'far_chase') {
+    if (mode === 'far_chase') {
       dist = isDriving ? 13.5 : 9.0;
       heightOffset = isDriving ? 3.4 : 2.3;
     } else if (mode === 'hood_close') {
-      dist = isDriving ? 0.65 : 2.1;
-      heightOffset = isDriving ? 1.15 : 1.55;
+      dist = isDriving ? 5.6 : 4.0;
+      heightOffset = isDriving ? 1.8 : 1.55;
     }
 
-    let targetX = this.playerPos.x;
-    let targetY = this.playerPos.y + heightOffset;
-    let targetZ = this.playerPos.z;
+    const targetX = this.playerPos.x;
+    const targetY = this.playerPos.y + heightOffset;
+    const targetZ = this.playerPos.z;
 
-    // Nitro speed camera vibration
-    if (this.nitroActive && isDriving) {
-      targetX += (Math.random() - 0.5) * 0.08;
-      targetY += (Math.random() - 0.5) * 0.06;
+    let camX =
+      targetX + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+    const camY = Math.max(1.1, targetY + Math.sin(this.cameraPitch) * dist);
+    let camZ =
+      targetZ + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+
+    // Camera Building Obstacle Avoidance (Bug Fix #3)
+    if (this.checkBuildingCollision(camX, camZ, 0.8)) {
+      const safeDist = dist * 0.48;
+      camX =
+        targetX +
+        Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * safeDist;
+      camZ =
+        targetZ +
+        Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * safeDist;
     }
-
-    // Continuous Raycast Camera Collision Check against Buildings & Walls
-    const cosPitch = Math.cos(this.cameraPitch);
-    const sinPitch = Math.sin(this.cameraPitch);
-    const dirX = Math.sin(this.cameraYaw) * cosPitch;
-    const dirY = sinPitch;
-    const dirZ = Math.cos(this.cameraYaw) * cosPitch;
-
-    let safeDist = dist;
-    const stepSize = 0.35;
-    const totalSteps = Math.ceil(dist / stepSize);
-
-    for (let i = 1; i <= totalSteps; i++) {
-      const testD = i * stepSize;
-      const testX = targetX + dirX * testD;
-      const testZ = targetZ + dirZ * testD;
-      if (this.checkBuildingCollision(testX, testZ, 0.5)) {
-        safeDist = Math.max(1.15, testD - 0.45);
-        break;
-      }
-    }
-
-    const camX = targetX + dirX * safeDist;
-    const camY = Math.max(1.1, targetY + dirY * safeDist);
-    const camZ = targetZ + dirZ * safeDist;
 
     this.camera.position.lerp(
       new THREE.Vector3(camX, camY, camZ),
       Math.min(1, dt * 15)
     );
     this.camera.lookAt(targetX, targetY, targetZ);
-
-    // Dynamic High-Speed Sprint & Driving Camera FOV Widening
-    const wantsSprint =
-      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
-      this.playerStamina > 5;
-    const currentVehSpeed = this.activeVehicleId
-      ? Math.abs(
-          this.vehicles.find((v) => v.id === this.activeVehicleId)?.speed || 0
-        )
-      : 0;
-    const isHighSpeed = this.activeVehicleId
-      ? currentVehSpeed > 16
-      : wantsSprint;
-    let targetFov = 60;
-    if (this.isAimingDownSights && !isDriving) {
-      targetFov = 38;
-    } else if (this.nitroActive && isDriving) {
-      targetFov = 75;
-    } else if (isHighSpeed) {
-      targetFov = 67;
-    }
-
-    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
-      this.camera.fov = THREE.MathUtils.lerp(
-        this.camera.fov,
-        targetFov,
-        dt * 8
-      );
-      this.camera.updateProjectionMatrix();
-    }
   }
 
   private checkBuildingCollision(
@@ -4659,36 +4304,6 @@ export class DhakaCityEngine {
     }
 
     return false;
-  }
-
-  // Active anti-stuck collision resolver that smoothly ejects entities out of any overlapping obstacle
-  private resolveWorldCollision(pos: THREE.Vector3, radius: number): boolean {
-    let resolved = false;
-    for (const b of this.buildingColliders) {
-      if (
-        pos.x + radius > b.minX &&
-        pos.x - radius < b.maxX &&
-        pos.z + radius > b.minZ &&
-        pos.z - radius < b.maxZ
-      ) {
-        resolved = true;
-        const pushLeft = pos.x + radius - b.minX;
-        const pushRight = b.maxX - (pos.x - radius);
-        const pushBack = pos.z + radius - b.minZ;
-        const pushFront = b.maxZ - (pos.z - radius);
-        const minPush = Math.min(pushLeft, pushRight, pushBack, pushFront);
-        if (minPush === pushLeft) {
-          pos.x = b.minX - radius - 0.05;
-        } else if (minPush === pushRight) {
-          pos.x = b.maxX + radius + 0.05;
-        } else if (minPush === pushBack) {
-          pos.z = b.minZ - radius - 0.05;
-        } else {
-          pos.z = b.maxZ + radius + 0.05;
-        }
-      }
-    }
-    return resolved;
   }
 }
 

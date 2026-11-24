@@ -12,7 +12,6 @@ import {
   WeatherType,
 } from '../types/game';
 import {
-  DHAKA_GAME_LOCATIONS,
   PLAYER_OUTFITS,
   SIDE_MISSIONS,
   STORY_MISSIONS,
@@ -60,16 +59,12 @@ interface GameState {
   currentVehicleHealth: number;
   currentVehicleMaxHealth: number;
   currentDistrict: DistrictId;
-  isAimingDownSights: boolean;
-  isNitroActive: boolean;
 
   // Customization & inventory
   outfits: PlayerOutfit[];
   equippedOutfitId: string;
   tools: ToolWeapon[];
   equippedToolId: ToolWeaponId;
-  weaponAmmo: Record<ToolWeaponId, { clip: number; reserve: number }>;
-  isReloading: boolean;
   transactions: TransactionRecord[];
 
   // World & Police
@@ -109,8 +104,6 @@ interface GameState {
     tone: 'gold' | 'green' | 'red' | 'blue';
   } | null;
   customWaypoint: { x: number; z: number; name: string } | null;
-  districtArrivalNotice: { districtId: DistrictId; key: number } | null;
-  discoveredLocations: string[];
 
   // Engine command bridge callbacks
   spawnVehicleRequest: VehicleType | null;
@@ -143,8 +136,6 @@ interface GameState {
     vehicleHealth: number;
     vehicleMaxHealth: number;
     stamina?: number;
-    isAimingDownSights?: boolean;
-    isNitroActive?: boolean;
   }) => void;
 
   setNearbyPrompt: (prompt: NearbyPrompt | null) => void;
@@ -176,11 +167,7 @@ interface GameState {
 
   equipOutfit: (outfitId: string) => void;
   equipTool: (toolId: ToolWeaponId) => void;
-  cycleWeapon: (direction: 1 | -1) => void;
-  reloadActiveWeapon: () => boolean;
-  fireActiveWeapon: () => { canFire: boolean; isGun: boolean; remainingClip: number; needsReload: boolean };
-  dismissDistrictArrival: () => void;
-  discoverLocation: (locationId: string) => void;
+  cycleTool: (dir?: 1 | -1) => void;
   setCustomWaypoint: (wp: { x: number; z: number; name: string } | null) => void;
   requestSpawnVehicle: (type: VehicleType | null) => void;
   requestSpawnSketchfabAsset: (req: {
@@ -200,20 +187,6 @@ interface GameState {
 
 const SAVE_KEY = 'dhaka_city_save_v1';
 
-const INITIAL_WEAPON_AMMO: Record<ToolWeaponId, { clip: number; reserve: number }> = {
-  fists: { clip: 0, reserve: 0 },
-  cricket_bat: { clip: 0, reserve: 0 },
-  bamboo_lathi: { clip: 0, reserve: 0 },
-  stun_baton: { clip: 0, reserve: 0 },
-  ramda: { clip: 0, reserve: 0 },
-  chapati: { clip: 0, reserve: 0 },
-  pipe_gun: { clip: 1, reserve: 24 },
-  shutter_pistol: { clip: 6, reserve: 54 },
-  tt_pistol: { clip: 8, reserve: 56 },
-  katta: { clip: 2, reserve: 24 },
-  type56_ak: { clip: 30, reserve: 150 },
-};
-
 export const useGameStore = create<GameState>((set, get) => ({
   gamePhase: 'playing',
   pauseTab: 'map',
@@ -222,8 +195,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   cameraMode: 'third_person',
 
   playerX: 6,
-  playerZ: 8,
-  playerRotation: 0,
+  playerZ: 16,
+  playerRotation: Math.PI,
   health: 100,
   maxHealth: 100,
   armor: 35,
@@ -236,19 +209,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   currentVehicleHealth: 120,
   currentVehicleMaxHealth: 120,
   currentDistrict: 'farmgate',
-  isAimingDownSights: false,
-  isNitroActive: false,
 
   outfits: PLAYER_OUTFITS,
   equippedOutfitId: 'dhaka_casual',
   tools: TOOL_WEAPONS,
-  equippedToolId: 'katta',
-  weaponAmmo: INITIAL_WEAPON_AMMO,
-  isReloading: false,
+  equippedToolId: 'fists',
   transactions: [
     {
       id: 'tx_init',
-      timestamp: '16:30',
+      timestamp: '15:30',
       titleEn: 'Arrival Cash at Hazrat Shahjalal Airport',
       titleBn: 'ঢাকায় আগমনী নগদ অর্থ',
       amount: 1850,
@@ -258,8 +227,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   wantedLevel: 0,
   wantedCooldown: 0,
-  timeOfDay: 16.5,
-  weather: 'golden_hour',
+  timeOfDay: 15.5,
+  weather: 'clear',
   radioStation: 'dhaka_folk',
   musicVolume: 0.45,
   sfxVolume: 0.7,
@@ -285,8 +254,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   activeChoicePrompt: null,
   bannerAlert: null,
   customWaypoint: null,
-  districtArrivalNotice: null,
-  discoveredLocations: ['farmgate', 'chawkbazar'],
 
   spawnVehicleRequest: null,
   spawnSketchfabRequest: null,
@@ -309,7 +276,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       activeMissionStepIndex: 0,
       missionTimer: null,
       completedMissionIds: [],
-      discoveredLocations: ['farmgate', 'chawkbazar'],
       storyEndingEn: null,
       storyEndingBn: null,
       teleportRequest: { x: 10, z: 18 },
@@ -337,13 +303,12 @@ export const useGameStore = create<GameState>((set, get) => ({
           health: data.health ?? 100,
           armor: data.armor ?? 35,
           completedMissionIds: data.completedMissionIds ?? [],
-          discoveredLocations: data.discoveredLocations ?? ['farmgate', 'chawkbazar'],
           activeMissionId: data.activeMissionId ?? 'm1_back_to_dhaka',
           activeMissionStepIndex: data.activeMissionStepIndex ?? 0,
           equippedOutfitId: data.equippedOutfitId ?? 'dhaka_casual',
           equippedToolId: data.equippedToolId ?? 'fists',
           outfits: data.outfits ?? PLAYER_OUTFITS,
-          tools: data.tools ?? TOOL_WEAPONS,
+          tools: TOOL_WEAPONS,
           teleportRequest: {
             x: data.playerX ?? 10,
             z: data.playerZ ?? 18,
@@ -395,30 +360,18 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ cameraMode: next });
   },
 
-  dismissDistrictArrival: () => set({ districtArrivalNotice: null }),
-
   updateTelemetry: (data) => {
-    const prevDistrict = get().currentDistrict;
-    const isNewDistrict = prevDistrict && prevDistrict !== data.district;
-    if (isNewDistrict) {
-      dhakaAudio.playSfx('ui');
-    }
     set((s) => ({
       playerX: data.x,
       playerZ: data.z,
       playerRotation: data.rotation,
       currentDistrict: data.district,
-      districtArrivalNotice: isNewDistrict
-        ? { districtId: data.district, key: Date.now() }
-        : s.districtArrivalNotice,
       inVehicleId: data.inVehicleId,
       currentVehicleType: data.vehicleType,
       currentVehicleSpeedKmh: data.speedKmh,
       currentVehicleHealth: data.vehicleHealth,
       currentVehicleMaxHealth: data.vehicleMaxHealth,
       stamina: data.stamina ?? s.stamina,
-      isAimingDownSights: data.isAimingDownSights ?? s.isAimingDownSights,
-      isNitroActive: data.isNitroActive ?? s.isNitroActive,
     }));
   },
 
@@ -826,132 +779,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     } else {
       dhakaAudio.playSfx('ui');
-      set({ equippedToolId: toolId, isReloading: false });
+      set({ equippedToolId: toolId });
     }
   },
 
-  cycleWeapon: (direction) => {
+  cycleTool: (dir = 1) => {
     const s = get();
-    const available = s.tools.filter((t) => t.unlocked);
-    if (available.length <= 1) return;
-    const curIdx = available.findIndex((t) => t.id === s.equippedToolId);
-    let nextIdx = curIdx + direction;
-    if (nextIdx >= available.length) nextIdx = 0;
-    if (nextIdx < 0) nextIdx = available.length - 1;
-    const nextTool = available[nextIdx];
+    const unlocked = s.tools.filter((t) => t.unlocked);
+    if (unlocked.length === 0) return;
+    const idx = unlocked.findIndex((t) => t.id === s.equippedToolId);
+    const nextIdx = (idx + dir + unlocked.length) % unlocked.length;
     dhakaAudio.playSfx('ui');
-    set({ equippedToolId: nextTool.id, isReloading: false });
-  },
-
-  reloadActiveWeapon: () => {
-    const s = get();
-    if (s.isReloading) return false;
-    const active = s.tools.find((t) => t.id === s.equippedToolId);
-    if (!active || !active.isGun) return false;
-
-    const ammo = s.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
-    if (ammo.clip >= active.clipSize || ammo.reserve <= 0) return false;
-
-    set({ isReloading: true });
-    dhakaAudio.playSfx('reload');
-
-    window.setTimeout(() => {
-      const state = get();
-      const current = state.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
-      const needed = active.clipSize - current.clip;
-      const amountToLoad = Math.min(needed, current.reserve);
-      set({
-        isReloading: false,
-        weaponAmmo: {
-          ...state.weaponAmmo,
-          [active.id]: {
-            clip: current.clip + amountToLoad,
-            reserve: current.reserve - amountToLoad,
-          },
-        },
-      });
-    }, active.reloadTime * 1000);
-
-    return true;
-  },
-
-  fireActiveWeapon: () => {
-    const s = get();
-    if (s.isReloading) {
-      return { canFire: false, isGun: true, remainingClip: 0, needsReload: true };
-    }
-    const active = s.tools.find((t) => t.id === s.equippedToolId);
-    if (!active) {
-      return { canFire: false, isGun: false, remainingClip: 0, needsReload: false };
-    }
-
-    if (!active.isGun) {
-      return { canFire: true, isGun: false, remainingClip: 0, needsReload: false };
-    }
-
-    const curAmmo = s.weaponAmmo[active.id] || { clip: 0, reserve: 0 };
-    if (curAmmo.clip <= 0) {
-      dhakaAudio.playSfx('dry_fire');
-      if (curAmmo.reserve > 0) {
-        get().reloadActiveWeapon();
-      }
-      return { canFire: false, isGun: true, remainingClip: 0, needsReload: true };
-    }
-
-    const newClip = curAmmo.clip - 1;
-    set({
-      weaponAmmo: {
-        ...s.weaponAmmo,
-        [active.id]: {
-          ...curAmmo,
-          clip: newClip,
-        },
-      },
-    });
-
-    if (newClip === 0 && curAmmo.reserve > 0) {
-      window.setTimeout(() => {
-        get().reloadActiveWeapon();
-      }, 350);
-    }
-
-    return { canFire: true, isGun: true, remainingClip: newClip, needsReload: newClip === 0 };
+    set({ equippedToolId: unlocked[nextIdx].id });
   },
 
   setCustomWaypoint: (wp) => {
     dhakaAudio.playSfx('ui');
     set({ customWaypoint: wp });
-  },
-
-  discoverLocation: (locationId) => {
-    const s = get();
-    if (s.discoveredLocations.includes(locationId)) return;
-    const loc = DHAKA_GAME_LOCATIONS.find((l) => l.id === locationId);
-    if (!loc) return;
-    const updated = [...s.discoveredLocations, locationId];
-    dhakaAudio.playSfx('pickup');
-    set({
-      discoveredLocations: updated,
-      taka: s.taka + 300,
-      transactions: [
-        {
-          id: `tx_disc_${Date.now()}`,
-          timestamp: formatGameClock(s.timeOfDay),
-          titleEn: `Discovered: ${loc.titleEn}`,
-          titleBn: `নতুন স্থান আবিষ্কার: ${loc.titleBn}`,
-          amount: 300,
-          type: 'earn',
-        },
-        ...s.transactions,
-      ],
-    });
-    get().showBanner({
-      titleEn: `NEW LOCATION: ${loc.titleEn.toUpperCase()}`,
-      titleBn: `নতুন স্থান আবিষ্কৃত: ${loc.titleBn}`,
-      subtitleEn: `${loc.taglineEn} (+৳300 Exploration Reward)`,
-      subtitleBn: `${loc.taglineBn} (+৩০০ টাকা অন্বেষণ বোনাস)`,
-      tone: 'gold',
-    });
   },
 
   requestSpawnVehicle: (type) => set({ spawnVehicleRequest: type }),
@@ -991,7 +835,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       playerX: s.playerX,
       playerZ: s.playerZ,
       completedMissionIds: s.completedMissionIds,
-      discoveredLocations: s.discoveredLocations,
       activeMissionId: s.activeMissionId,
       activeMissionStepIndex: s.activeMissionStepIndex,
       equippedOutfitId: s.equippedOutfitId,

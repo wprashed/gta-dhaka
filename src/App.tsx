@@ -14,6 +14,12 @@ export const App: React.FC = () => {
     if (!viewportRef.current) return;
     const engine = new DhakaCityEngine(viewportRef.current);
     engineRef.current = engine;
+    // Expose for debugging / automated smoke tests (harmless in production).
+    (window as unknown as { __dhakaEngine?: DhakaCityEngine }).__dhakaEngine =
+      engine;
+    // Live game store, for debugging and automated smoke tests.
+    (window as unknown as { __gameStore?: typeof useGameStore }).__gameStore =
+      useGameStore;
 
     return () => {
       engine.dispose();
@@ -22,13 +28,9 @@ export const App: React.FC = () => {
   }, []);
 
   const handleTriggerAction = (
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'aim'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
   ) => {
     engineRef.current?.triggerTouchAction(action);
-  };
-
-  const handleVirtualMove = (forward: number, right: number, sprint = false) => {
-    engineRef.current?.setVirtualMove(forward, right, sprint);
   };
 
   return (
@@ -42,10 +44,7 @@ export const App: React.FC = () => {
       {/* UI Overlays based on Game Phase */}
       {gamePhase === 'main_menu' && <MainMenuScreen />}
       {gamePhase === 'playing' && (
-        <GameHUD
-          onTriggerAction={handleTriggerAction}
-          onVirtualMove={handleVirtualMove}
-        />
+        <GameHUD onTriggerAction={handleTriggerAction} />
       )}
       {gamePhase === 'paused' && <PauseMenuModal />}
     </div>

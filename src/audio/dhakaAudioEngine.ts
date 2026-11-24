@@ -63,117 +63,6 @@ class DhakaAudioEngine {
     this.engineOsc.start();
   }
 
-  // Realistic Tire Skid & Screech Synthesizer
-  public updateSkid(intensity: number) {
-    if (!this.ctx) return;
-    if (intensity <= 0.05) return;
-    const now = this.ctx.currentTime;
-    const dur = 0.09;
-    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.sin((i / data.length) * Math.PI);
-    }
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1150 + Math.random() * 250, now);
-    filter.Q.setValueAtTime(4.2, now);
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(Math.min(0.22, intensity * 0.18) * this.sfxVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-    src.start(now);
-  }
-
-  // Heavy Car Impact & Crash Sound
-  public playCarCrash(intensity = 1.0) {
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-
-    // Sub-bass heavy vehicle impact thud
-    const subOsc = this.ctx.createOscillator();
-    const subGain = this.ctx.createGain();
-    subOsc.type = 'triangle';
-    subOsc.frequency.setValueAtTime(115, now);
-    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.32);
-    subGain.gain.setValueAtTime(Math.min(0.65, 0.42 * intensity) * this.sfxVolume, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
-    subOsc.connect(subGain);
-    subGain.connect(this.ctx.destination);
-    subOsc.start(now);
-    subOsc.stop(now + 0.45);
-
-    // Crunching metal & shattered glass noise blast
-    const dur = 0.35;
-    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.28));
-    }
-    const nSrc = this.ctx.createBufferSource();
-    nSrc.buffer = buf;
-    const nFilter = this.ctx.createBiquadFilter();
-    nFilter.type = 'bandpass';
-    nFilter.frequency.setValueAtTime(750, now);
-    nFilter.Q.setValueAtTime(2.2, now);
-    const nGain = this.ctx.createGain();
-    nGain.gain.setValueAtTime(Math.min(0.55, 0.35 * intensity) * this.sfxVolume, now);
-    nGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    nSrc.connect(nFilter);
-    nFilter.connect(nGain);
-    nGain.connect(this.ctx.destination);
-    nSrc.start(now);
-  }
-
-  // Turbo Nitro Spool Whoosh
-  public playNitro() {
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(240, now);
-    osc.frequency.exponentialRampToValueAtTime(780, now + 0.28);
-    gain.gain.setValueAtTime(0.12 * this.sfxVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.32);
-  }
-
-  // Puddle Water Splash Sound
-  public playWaterSplash() {
-    this.init();
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const dur = 0.18;
-    const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * dur), this.ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.35));
-    }
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1400, now);
-    filter.frequency.exponentialRampToValueAtTime(280, now + dur);
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.12 * this.sfxVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-    src.start(now);
-  }
-
   private setupRainAmbience() {
     if (!this.ctx) return;
     const bufferSize = this.ctx.sampleRate * 2;
@@ -208,112 +97,36 @@ class DhakaAudioEngine {
     this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.4);
   }
 
-  public playDistantAmbientSound(type: 'rickshaw_bell' | 'boat_horn' = 'rickshaw_bell') {
-    if (!this.ctx || this.ambienceVolume <= 0.05) return;
-    const now = this.ctx.currentTime;
-    if (type === 'rickshaw_bell') {
-      [0, 0.16].forEach((offset) => {
-        if (!this.ctx) return;
-        const o = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        o.type = 'sine';
-        o.frequency.setValueAtTime(2093, now + offset);
-        g.gain.setValueAtTime(0.045 * this.ambienceVolume, now + offset);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.35);
-        o.connect(g);
-        g.connect(this.ctx.destination);
-        o.start(now + offset);
-        o.stop(now + offset + 0.36);
-      });
-    } else {
-      // Buriganga launch deep foghorn
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(85, now);
-      o.frequency.linearRampToValueAtTime(82, now + 1.2);
-      g.gain.setValueAtTime(0.04 * this.ambienceVolume, now);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
-      o.connect(g);
-      g.connect(this.ctx.destination);
-      o.start(now);
-      o.stop(now + 1.45);
-    }
-  }
-
-  public updateEngine(
-    inVehicle: boolean,
-    vehicleType: VehicleType | null,
-    speedRatio: number
-  ) {
-    if (!this.ctx || !this.engineOsc || !this.engineGain || !this.engineFilter)
-      return;
+  public updateEngine(inVehicle: boolean, vehicleType: VehicleType | null, speedRatio: number) {
+    if (!this.ctx || !this.engineOsc || !this.engineGain || !this.engineFilter) return;
 
     if (!inVehicle || !vehicleType || vehicleType === 'rickshaw') {
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
       return;
     }
 
-    const absSpeed = Math.abs(speedRatio);
-    let baseFreq = 48;
-    let gearStages = 4;
-    let filterFreq = 280;
+    let baseFreq = 52;
+    let maxFreq = 165;
+    let filterFreq = 320;
 
     if (vehicleType === 'cng') {
-      baseFreq = 64;
-      gearStages = 3;
-      filterFreq = 420;
+      baseFreq = 68;
+      maxFreq = 210;
+      filterFreq = 480;
     } else if (vehicleType === 'motorcycle') {
-      baseFreq = 84;
-      gearStages = 5;
-      filterFreq = 520;
+      baseFreq = 85;
+      maxFreq = 280;
+      filterFreq = 540;
     } else if (vehicleType === 'bus') {
-      baseFreq = 34;
-      gearStages = 4;
-      filterFreq = 210;
-    } else {
-      // Cars & DMP Police cruisers
-      baseFreq = 52;
-      gearStages = 5;
-      filterFreq = 350;
+      baseFreq = 38;
+      maxFreq = 110;
+      filterFreq = 220;
     }
 
-    // Realistic RPM Pitch Shift with Simulated Gear Transitions
-    const gearFraction = (absSpeed * gearStages) % 1.0;
-    const gearBase = Math.floor(absSpeed * gearStages) * 0.14;
-    const rpmPitch = baseFreq * (1.0 + gearBase + gearFraction * 1.55);
-
-    this.engineOsc.frequency.setTargetAtTime(rpmPitch, this.ctx.currentTime, 0.05);
-    this.engineFilter.frequency.setTargetAtTime(
-      filterFreq + absSpeed * 420,
-      this.ctx.currentTime,
-      0.06
-    );
-    this.engineGain.gain.setTargetAtTime(
-      0.08 * this.sfxVolume,
-      this.ctx.currentTime,
-      0.06
-    );
-  }
-
-  public playFootstep(isWet = false) {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = isWet ? 'sine' : 'triangle';
-    osc.frequency.setValueAtTime(isWet ? 140 : 105, now);
-    osc.frequency.exponentialRampToValueAtTime(isWet ? 55 : 32, now + 0.045);
-    gain.gain.setValueAtTime((isWet ? 0.09 : 0.075) * this.sfxVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.055);
-
-    if (isWet) {
-      this.playWaterSplash();
-    }
+    const freq = baseFreq + Math.abs(speedRatio) * (maxFreq - baseFreq);
+    this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.06);
+    this.engineFilter.frequency.setTargetAtTime(filterFreq + Math.abs(speedRatio) * 300, this.ctx.currentTime, 0.08);
+    this.engineGain.gain.setTargetAtTime(0.065 * this.sfxVolume, this.ctx.currentTime, 0.08);
   }
 
   public playHorn(type: 'cng' | 'bell' | 'airhorn' | 'car' | 'siren' = 'cng') {
@@ -413,178 +226,76 @@ class DhakaAudioEngine {
       | 'mission_complete'
       | 'jump'
       | 'ui'
-      | 'gunshot_shotgun'
-      | 'gunshot_pistol'
-      | 'gunshot_rifle'
-      | 'reload'
-      | 'dry_fire'
-      | 'melee_slash'
-      | 'ricochet'
+      | 'gunshot'
+      | 'shotgun'
+      | 'rifle'
+      | 'slash'
   ) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
-    if (effect === 'gunshot_shotgun') {
-      // Katta (দেশি কাটা রাইফেল) - Massive Dual-Stage Boom + Sub-Bass Slam + Metallic Reverb
-      const subOsc = this.ctx.createOscillator();
-      const subGain = this.ctx.createGain();
-      subOsc.type = 'sine';
-      subOsc.frequency.setValueAtTime(175, now);
-      subOsc.frequency.exponentialRampToValueAtTime(28, now + 0.28);
-      subGain.gain.setValueAtTime(0.55 * this.sfxVolume, now);
-      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-      subOsc.connect(subGain);
-      subGain.connect(this.ctx.destination);
-      subOsc.start(now);
-      subOsc.stop(now + 0.4);
+    if (
+      effect === 'gunshot' ||
+      effect === 'shotgun' ||
+      effect === 'rifle'
+    ) {
+      // Synthesized ballistic transient + filtered noise tail
+      const duration = effect === 'shotgun' ? 0.28 : effect === 'rifle' ? 0.16 : 0.2;
+      const bufSize = Math.floor(this.ctx.sampleRate * duration);
+      const noiseBuf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.28));
+      }
+      const noiseSrc = this.ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuf;
 
-      // Noise blast
-      const noiseLen = 0.32;
-      const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * noiseLen), this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.22));
-      const nSrc = this.ctx.createBufferSource();
-      nSrc.buffer = buf;
-      const nFilter = this.ctx.createBiquadFilter();
-      nFilter.type = 'lowpass';
-      nFilter.frequency.setValueAtTime(1800, now);
-      nFilter.frequency.exponentialRampToValueAtTime(400, now + noiseLen);
-      const nGain = this.ctx.createGain();
-      nGain.gain.setValueAtTime(0.48 * this.sfxVolume, now);
-      nGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
-      nSrc.connect(nFilter);
-      nFilter.connect(nGain);
-      nGain.connect(this.ctx.destination);
-      nSrc.start(now);
-      return;
-    }
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(
+        effect === 'shotgun' ? 950 : effect === 'rifle' ? 1850 : 1400,
+        now
+      );
+      filter.frequency.exponentialRampToValueAtTime(160, now + duration);
 
-    if (effect === 'gunshot_pistol') {
-      // Shutter Revolver / Pipe Gun - Snappy Crack & Metallic Pop
-      const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(820, now);
-      osc.frequency.exponentialRampToValueAtTime(65, now + 0.14);
       gain.gain.setValueAtTime(0.42 * this.sfxVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.17);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-      const noiseLen = 0.18;
-      const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * noiseLen), this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.28));
-      const nSrc = this.ctx.createBufferSource();
-      nSrc.buffer = buf;
-      const nGain = this.ctx.createGain();
-      nGain.gain.setValueAtTime(0.35 * this.sfxVolume, now);
-      nGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
-      nSrc.connect(nGain);
-      nGain.connect(this.ctx.destination);
-      nSrc.start(now);
+      noiseSrc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noiseSrc.start(now);
+
+      // Low-end punch oscillator
+      const punch = this.ctx.createOscillator();
+      const punchGain = this.ctx.createGain();
+      punch.type = 'triangle';
+      punch.frequency.setValueAtTime(effect === 'shotgun' ? 140 : 210, now);
+      punch.frequency.exponentialRampToValueAtTime(34, now + 0.11);
+      punchGain.gain.setValueAtTime(0.32 * this.sfxVolume, now);
+      punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      punch.connect(punchGain);
+      punchGain.connect(this.ctx.destination);
+      punch.start(now);
+      punch.stop(now + 0.12);
       return;
     }
 
-    if (effect === 'gunshot_rifle') {
-      // Type-56 AK Assault Rifle - High Velocity Bark + Bolt Echo
+    if (effect === 'slash') {
+      // Metallic blade whoosh for Dhaka Ramda / Chapati
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(420, now);
-      osc.frequency.exponentialRampToValueAtTime(55, now + 0.12);
-      gain.gain.setValueAtTime(0.38 * this.sfxVolume, now);
+      osc.frequency.setValueAtTime(580, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.14);
+      gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.16);
-
-      const noiseLen = 0.22;
-      const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * noiseLen), this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.25));
-      const nSrc = this.ctx.createBufferSource();
-      nSrc.buffer = buf;
-      const f = this.ctx.createBiquadFilter();
-      f.type = 'bandpass';
-      f.frequency.setValueAtTime(2400, now);
-      const nGain = this.ctx.createGain();
-      nGain.gain.setValueAtTime(0.4 * this.sfxVolume, now);
-      nGain.gain.exponentialRampToValueAtTime(0.001, now + noiseLen);
-      nSrc.connect(f);
-      f.connect(nGain);
-      nGain.connect(this.ctx.destination);
-      nSrc.start(now);
-      return;
-    }
-
-    if (effect === 'reload') {
-      // Metallic magazine eject, slide, and bolt lock
-      [0.0, 0.28, 0.55].forEach((offset, idx) => {
-        if (!this.ctx) return;
-        const o = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        o.type = idx === 1 ? 'square' : 'triangle';
-        o.frequency.setValueAtTime(idx === 0 ? 540 : idx === 1 ? 880 : 340, now + offset);
-        o.frequency.exponentialRampToValueAtTime(idx === 0 ? 280 : idx === 1 ? 420 : 180, now + offset + 0.08);
-        g.gain.setValueAtTime(0.18 * this.sfxVolume, now + offset);
-        g.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.09);
-        o.connect(g);
-        g.connect(this.ctx.destination);
-        o.start(now + offset);
-        o.stop(now + offset + 0.1);
-      });
-      return;
-    }
-
-    if (effect === 'dry_fire') {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'square';
-      o.frequency.setValueAtTime(1400, now);
-      o.frequency.exponentialRampToValueAtTime(800, now + 0.04);
-      g.gain.setValueAtTime(0.16 * this.sfxVolume, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      o.connect(g);
-      g.connect(this.ctx.destination);
-      o.start(now);
-      o.stop(now + 0.06);
-      return;
-    }
-
-    if (effect === 'melee_slash') {
-      // Heavy Ramda / Chapati air slash whoosh
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(260, now);
-      osc.frequency.linearRampToValueAtTime(480, now + 0.06);
-      osc.frequency.exponentialRampToValueAtTime(90, now + 0.18);
-      gain.gain.setValueAtTime(0.24 * this.sfxVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.21);
-      return;
-    }
-
-    if (effect === 'ricochet') {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(2200, now);
-      o.frequency.exponentialRampToValueAtTime(450, now + 0.18);
-      g.gain.setValueAtTime(0.14 * this.sfxVolume, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      o.connect(g);
-      g.connect(this.ctx.destination);
-      o.start(now);
-      o.stop(now + 0.21);
+      osc.stop(now + 0.15);
       return;
     }
 
