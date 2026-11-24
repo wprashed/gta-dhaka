@@ -1461,16 +1461,119 @@ export function createVehicleMesh(
       group.add(shock);
     });
 
-    // Telescopic Chrome Front Forks
+    // Engine Block with Horizontal Aluminum Cooling Fins (150cc DTS-i Style)
+    const engineBlock = new THREE.Mesh(
+      new THREE.BoxGeometry(0.25, 0.34, 0.44),
+      darkMat
+    );
+    engineBlock.position.set(0, 0.48, 0.08);
+    engineBlock.castShadow = true;
+    group.add(engineBlock);
+
+    for (let f = 0; f < 4; f++) {
+      const fin = new THREE.Mesh(
+        new THREE.BoxGeometry(0.27, 0.02, 0.38),
+        chromeMat
+      );
+      fin.position.set(0, 0.38 + f * 0.07, 0.08);
+      group.add(fin);
+    }
+
+    // Rear Drive Swingarm & Enclosed Chain Guard
+    const swingarm = new THREE.Mesh(
+      new THREE.BoxGeometry(0.04, 0.08, 0.68),
+      darkMat
+    );
+    swingarm.position.set(-0.12, 0.36, -0.42);
+    group.add(swingarm);
+
+    // Dynamic Steerable Handlebar & Front Assembly Group
+    const handlebarGroup = new THREE.Group();
+    handlebarGroup.name = 'handlebar_group';
+    handlebarGroup.position.set(0, 0, 0.72);
+    group.add(handlebarGroup);
+
+    // Telescopic Chrome Front Forks (Steered with Handlebars)
     [-0.11, 0.11].forEach((fx) => {
       const fork = new THREE.Mesh(
         new THREE.CylinderGeometry(0.022, 0.02, 0.78, 10),
         chromeMat
       );
-      fork.position.set(fx, 0.72, 0.68);
+      fork.position.set(fx, 0.72, -0.04);
       fork.rotation.x = -0.34;
-      group.add(fork);
+      handlebarGroup.add(fork);
     });
+
+    const bars = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.022, 0.022, 0.74, 8).rotateZ(Math.PI / 2),
+      chromeMat
+    );
+    bars.position.set(0, 1.16, -0.16);
+    handlebarGroup.add(bars);
+
+    // Glowing Digital Speedometer Display Console
+    const speedo = new THREE.Mesh(
+      new THREE.BoxGeometry(0.12, 0.04, 0.08),
+      new THREE.MeshBasicMaterial({ color: '#38bdf8' })
+    );
+    speedo.position.set(0, 1.21, -0.20);
+    speedo.rotation.x = 0.45;
+    handlebarGroup.add(speedo);
+
+    // Handlebar Dual Rearview Mirrors
+    [-0.34, 0.34].forEach((mx) => {
+      const mirrorStem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6),
+        chromeMat
+      );
+      mirrorStem.position.set(mx, 1.24, -0.18);
+      mirrorStem.rotation.z = mx > 0 ? -0.35 : 0.35;
+      handlebarGroup.add(mirrorStem);
+
+      const mirrorHead = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.05, 0.02),
+        darkMat
+      );
+      mirrorHead.position.set(mx * 1.08, 1.32, -0.18);
+      handlebarGroup.add(mirrorHead);
+    });
+
+    // Streetfighter Aerodynamic Headlamp & Bright Projector Light
+    const hlCowl = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.22, 0.18),
+      bikeMat
+    );
+    hlCowl.position.set(0, 1.02, 0.04);
+    handlebarGroup.add(hlCowl);
+
+    const hl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 14, 14),
+      new THREE.MeshBasicMaterial({ color: '#fef08a' })
+    );
+    hl.position.set(0, 1.04, 0.12);
+    handlebarGroup.add(hl);
+
+    // Front Steerable Wheel with Disc Brake
+    const frontWheelGroup = new THREE.Group();
+    frontWheelGroup.position.set(0, 0.35, 0.04);
+    frontWheelGroup.name = 'front_wheel';
+    const fTire = new THREE.Mesh(wheelGeo, tireMat);
+    fTire.scale.set(0.92, 0.92, 0.72);
+    fTire.castShadow = true;
+    frontWheelGroup.add(fTire);
+    const discBrake = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.22, 0.02, 16).rotateZ(Math.PI / 2),
+      chromeMat
+    );
+    discBrake.position.set(0.08, 0, 0);
+    frontWheelGroup.add(discBrake);
+    const caliper = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.10, 0.06),
+      new THREE.MeshStandardMaterial({ color: '#f59e0b', metalness: 0.8, roughness: 0.3 })
+    );
+    caliper.position.set(0.09, 0.14, -0.06);
+    frontWheelGroup.add(caliper);
+    handlebarGroup.add(frontWheelGroup);
 
     // Chrome Exhaust Muffler Pipe
     const exhaust = new THREE.Mesh(
@@ -1481,40 +1584,8 @@ export function createVehicleMesh(
     exhaust.rotation.x = 0.15;
     group.add(exhaust);
 
-    const bars = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.022, 0.022, 0.74, 8).rotateZ(Math.PI / 2),
-      chromeMat
-    );
-    bars.position.set(0, 1.16, 0.56);
-    group.add(bars);
-
-    // Handlebar Dual Rearview Mirrors
-    [-0.34, 0.34].forEach((mx) => {
-      const mirrorStem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6),
-        chromeMat
-      );
-      mirrorStem.position.set(mx, 1.24, 0.54);
-      mirrorStem.rotation.z = mx > 0 ? -0.35 : 0.35;
-      group.add(mirrorStem);
-
-      const mirrorHead = new THREE.Mesh(
-        new THREE.BoxGeometry(0.08, 0.05, 0.02),
-        darkMat
-      );
-      mirrorHead.position.set(mx * 1.08, 1.32, 0.54);
-      group.add(mirrorHead);
-    });
-
-    const hl = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 14, 14),
-      new THREE.MeshBasicMaterial({ color: '#fef08a' })
-    );
-    hl.position.set(0, 1.04, 0.78);
-    group.add(hl);
-
-    addWheel(0, 0.35, 0.76, 0.95);
-    addWheel(0, 0.35, -0.76, 0.95);
+    // Rear Fixed Wheel
+    addWheel(0, 0.35, -0.76, 0.98);
 
     // 3D Human GLB Rider seated on Dhaka Motorcycle gripping handlebars
     ensureModelLoaded('readyplayerme1', (gltf) => {
@@ -3634,4 +3705,172 @@ export function createSketchfabAssetPropMesh(
   bMesh.receiveShadow = true;
   group.add(bMesh);
   return group;
+}
+
+export function createFlyoverGantryTexture(
+  line1Bn: string,
+  line1En: string,
+  line2Bn: string,
+  line2En: string
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#14532d'; // Highway Green
+  ctx.fillRect(0, 0, 1024, 320);
+
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = '#ffffff';
+  ctx.strokeRect(16, 16, 992, 288);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 38px sans-serif';
+  ctx.fillText(`↑  ${line1Bn}`, 48, 85);
+  ctx.font = '600 28px sans-serif';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText(`    ${line1En}`, 48, 130);
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(48, 160);
+  ctx.lineTo(976, 160);
+  ctx.stroke();
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 38px sans-serif';
+  ctx.fillText(`↗  ${line2Bn}`, 48, 225);
+  ctx.font = '600 28px sans-serif';
+  ctx.fillStyle = '#fde68a';
+  ctx.fillText(`    ${line2En}`, 48, 270);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createFobBillboardTexture(
+  brand: string,
+  headlineBn: string,
+  subEn: string,
+  bgColor: string
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, 1024, 256);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 48px sans-serif';
+  ctx.fillText(brand, 48, 75);
+
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillStyle = '#fef08a';
+  ctx.fillText(headlineBn, 48, 145);
+
+  ctx.font = '600 26px sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(subEn, 48, 205);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createStadiumScoreboardTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#090d16';
+  ctx.fillRect(0, 0, 1024, 512);
+
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(14, 14, 996, 484);
+
+  // Header
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText('🏏 SHER-E-BANGLA NATIONAL CRICKET STADIUM | 1ST ODI', 48, 70);
+
+  // Teams & Scores
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 44px sans-serif';
+  ctx.fillText('BANGLADESH', 48, 150);
+  ctx.fillStyle = '#4ade80';
+  ctx.font = 'bold 54px monospace';
+  ctx.fillText('324 / 5', 460, 150);
+  ctx.font = 'bold 32px monospace';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('(48.4 ov)', 740, 150);
+
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = 'bold 44px sans-serif';
+  ctx.fillText('OPPONENTS', 48, 230);
+  ctx.fillStyle = '#f87171';
+  ctx.font = 'bold 54px monospace';
+  ctx.fillText('308 / 8', 460, 230);
+  ctx.font = 'bold 32px monospace';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText('(50.0 ov)', 740, 230);
+
+  // Batsmen
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.fillText('SHAKIB AL HASAN: 96* (68b)  |  MUSFIQUR RAHIM: 64 (52b)', 48, 320);
+  ctx.fillStyle = '#facc15';
+  ctx.fillText('PARTNERSHIP: 142 RUNS (112b)', 48, 375);
+
+  // Result Banner
+  ctx.fillStyle = '#22c55e';
+  ctx.fillRect(36, 415, 952, 65);
+  ctx.fillStyle = '#090d16';
+  ctx.font = 'bold 34px sans-serif';
+  ctx.fillText('🎉 BANGLADESH WON BY 5 WICKETS - TIGERS ROAR! 🐅', 80, 460);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createMallSignboardTexture(
+  mallNameBn: string,
+  mallNameEn: string,
+  tagline: string,
+  primaryColor: string
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = primaryColor;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(12, 12, 1000, 296);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 48px sans-serif';
+  ctx.fillText(mallNameBn, 48, 90);
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 38px sans-serif';
+  ctx.fillText(mallNameEn, 48, 160);
+
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '600 26px sans-serif';
+  ctx.fillText(tagline, 48, 240);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

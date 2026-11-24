@@ -313,18 +313,31 @@ class DhakaAudioEngine {
       return;
     }
 
-    // 5. MOTORCYCLE: Thumping single-cylinder 125cc bike engine
+    // 5. MOTORCYCLE: Thumping 4-stroke 150cc Bajaj Pulsar / Yamaha FZ with multi-gear rev acoustics
     if (vehicleType === 'motorcycle') {
-      this.engineOsc.type = 'square';
-      this.engineSubOsc.type = 'sawtooth';
-      const baseFreq = 85;
-      const maxFreq = 310;
-      const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
-      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
-      this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.04);
-      this.engineFilter.frequency.setTargetAtTime(600 + absSpeed * 450, this.ctx.currentTime, 0.05);
-      this.engineGain.gain.setTargetAtTime(0.065 * this.sfxVolume, this.ctx.currentTime, 0.05);
-      this.engineSubGain.gain.setTargetAtTime(0.04 * this.sfxVolume, this.ctx.currentTime, 0.05);
+      this.engineOsc.type = 'sawtooth';
+      this.engineSubOsc.type = 'square';
+      // Multi-gear RPM climb & shift drops (1st to 5th gear)
+      let gearRpm = 0;
+      if (absSpeed < 0.02) {
+        gearRpm = 0.05; // Idle rumble
+      } else if (absSpeed < 0.18) {
+        gearRpm = absSpeed / 0.18;
+      } else if (absSpeed < 0.38) {
+        gearRpm = (absSpeed - 0.18) / 0.20;
+      } else if (absSpeed < 0.60) {
+        gearRpm = (absSpeed - 0.38) / 0.22;
+      } else if (absSpeed < 0.82) {
+        gearRpm = (absSpeed - 0.60) / 0.22;
+      } else {
+        gearRpm = Math.min(1.0, (absSpeed - 0.82) / 0.18);
+      }
+      const freq = 80 + gearRpm * 195;
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.035);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.035);
+      this.engineFilter.frequency.setTargetAtTime(550 + gearRpm * 520, this.ctx.currentTime, 0.04);
+      this.engineGain.gain.setTargetAtTime((0.075 + gearRpm * 0.035) * this.sfxVolume, this.ctx.currentTime, 0.04);
+      this.engineSubGain.gain.setTargetAtTime(0.045 * this.sfxVolume, this.ctx.currentTime, 0.04);
       return;
     }
 
