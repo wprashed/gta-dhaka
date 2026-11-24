@@ -733,8 +733,70 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
           )}
         </div>
 
-        {/* BOTTOM-RIGHT: Sleek Minimalist Vehicle Speedometer (Only when driving) */}
+        {/* BOTTOM-RIGHT: Sleek Minimalist Controls & Vehicle Speedometer */}
         <div className="pointer-events-auto flex flex-col items-end gap-1.5 shrink-0">
+          {/* Virtual Quick Action Cluster */}
+          <div className="flex items-center gap-1.5 bg-slate-950/75 backdrop-blur-md border border-slate-800/80 p-1 rounded-full shadow-2xl">
+            {inVehicleId ? (
+              <>
+                <button
+                  onClick={() => onTriggerAction('horn')}
+                  className="w-7 h-7 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 flex items-center justify-center text-[11px] transition-all active:scale-90"
+                  title="Honk vehicle horn [H]"
+                >
+                  📢
+                </button>
+                <button
+                  onClick={() => onTriggerAction('camera')}
+                  className="w-7 h-7 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex items-center justify-center text-[11px] transition-all active:scale-90"
+                  title="Switch camera view [V]"
+                >
+                  📷
+                </button>
+                <button
+                  onClick={() => onTriggerAction('interact')}
+                  className="px-2.5 h-7 rounded-full bg-red-600/80 hover:bg-red-500 border border-red-400/50 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all active:scale-90"
+                  title="Exit Vehicle [F]"
+                >
+                  <span>Exit</span>
+                  <span className="text-[8px] font-mono text-red-200">[F]</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => onTriggerAction('camera')}
+                  className="w-7 h-7 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex items-center justify-center text-[11px] transition-all active:scale-90"
+                  title="Switch camera view [V]"
+                >
+                  📷
+                </button>
+                <button
+                  onClick={() => onTriggerAction('horn')}
+                  className="w-7 h-7 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex items-center justify-center text-[11px] transition-all active:scale-90"
+                  title="Ring Rickshaw Bell / Whistle [H]"
+                >
+                  🔔
+                </button>
+                <button
+                  onClick={() => onTriggerAction('jump')}
+                  className="w-7 h-7 rounded-full bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 flex items-center justify-center text-[11px] font-bold transition-all active:scale-90"
+                  title="Jump [Space]"
+                >
+                  🦘
+                </button>
+                <button
+                  onClick={() => onTriggerAction('attack')}
+                  className="px-2.5 h-7 rounded-full bg-red-600 hover:bg-red-500 border border-red-400/60 text-white font-bold text-[10px] flex items-center justify-center gap-1 shadow-lg shadow-red-900/40 transition-all active:scale-90 animate-pulse"
+                  title="Attack / Shoot weapon [X / J / Click]"
+                >
+                  <span>{activeTool.isFirearm ? '🔫 FIRE' : '🗡️ STRIKE'}</span>
+                  <span className="text-[8px] font-mono text-red-200">[X]</span>
+                </button>
+              </>
+            )}
+          </div>
+
           {inVehicleId && vehicleStats && currentVehicleType ? (
             <div className="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-2xl p-2.5 w-44 shadow-2xl flex flex-col gap-1 animate-in fade-in">
               {/* Speedometer & Name */}

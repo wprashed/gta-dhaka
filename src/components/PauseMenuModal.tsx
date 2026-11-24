@@ -19,6 +19,7 @@ import {
   Car,
   CheckCircle2,
   Compass,
+  Crosshair,
   ExternalLink,
   Gamepad2,
   Heart,
@@ -51,6 +52,7 @@ export const PauseMenuModal: React.FC = () => {
     armor,
     healPlayer,
     spendTaka,
+    addAmmo,
     transactions,
     activeMissionId,
     completedMissionIds,
@@ -864,25 +866,58 @@ export const PauseMenuModal: React.FC = () => {
                     ৳ {taka.toLocaleString()}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    if (
-                      spendTaka(
-                        150,
-                        'Field Medkit & Body Armor Pack',
-                        'জরুরি হেলথ ও বডি আর্মার প্যাক'
-                      )
-                    ) {
-                      healPlayer(100, 100);
-                    }
-                  }}
-                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5"
-                >
-                  <Shield className="w-4 h-4" />
-                  {language === 'en'
-                    ? 'Full Heal & Armor (৳150)'
-                    : 'ফুল হেলথ ও আর্মার (৳১৫০)'}
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => {
+                      if (
+                        spendTaka(
+                          150,
+                          'Field Medkit & Body Armor Pack',
+                          'জরুরি হেলথ ও বডি আর্মার প্যাক'
+                        )
+                      ) {
+                        healPlayer(100, 100);
+                      }
+                    }}
+                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Shield className="w-4 h-4" />
+                    {language === 'en'
+                      ? 'Full Heal (৳150)'
+                      : 'ফুল হেলথ (৳১৫০)'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (
+                        spendTaka(
+                          250,
+                          'Dholaikhal Heavy Ammo Supply Crate',
+                          'ধোলাইখাল গোলাবারুদের বাক্স'
+                        )
+                      ) {
+                        addAmmo('deshi_pipegun', 50);
+                        addAmmo('pistol_9mm', 120);
+                        addAmmo('bd08_rifle', 300);
+                        addAmmo('police_shotgun', 60);
+                        addAmmo('smg_uzi', 280);
+                        showBanner({
+                          titleEn: 'AMMO CRATE PURCHASED!',
+                          titleBn: 'গোলাবারুদের বক্স ক্রয় সম্পন্ন!',
+                          subtitleEn: 'All firearm reserves restocked to maximum capacity.',
+                          subtitleBn: 'সকল অস্ত্রের গুলি সম্পূর্ণ ভর্তি করা হয়েছে।',
+                          tone: 'gold',
+                        });
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Crosshair className="w-4 h-4" />
+                    {language === 'en'
+                      ? 'Refill All Ammo (৳250)'
+                      : 'সকল অ্যামো রিফিল (৳২৫০)'}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -905,13 +940,20 @@ export const PauseMenuModal: React.FC = () => {
                       <p className="text-xs font-bold">
                         {language === 'en' ? t.nameEn : t.nameBn}
                       </p>
-                      <p className="text-[10px] text-emerald-400 mt-0.5">
-                        {t.unlocked
-                          ? equippedToolId === t.id
-                            ? 'Equipped ✓'
-                            : 'Click to Equip'
-                          : `Buy — ৳${t.price}`}
-                      </p>
+                      <div className="flex items-center justify-between text-[10px] mt-0.5">
+                        <span className="text-emerald-400">
+                          {t.unlocked
+                            ? equippedToolId === t.id
+                              ? 'Equipped ✓'
+                              : 'Click to Equip'
+                            : `Buy — ৳${t.price}`}
+                        </span>
+                        {t.isFirearm && (
+                          <span className="font-mono text-amber-400 font-bold">
+                            {t.currentClip ?? 0}/{t.reserveAmmo ?? 0}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>

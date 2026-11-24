@@ -81,6 +81,7 @@ export class DhakaCityEngine {
   private circleColliders: CircleCollider[] = [];
   private cashDrops: CashPickupDrop[] = [];
   private metroTrainGroup: THREE.Group | null = null;
+  private skidDecals: Array<{ mesh: THREE.Mesh; life: number }> = [];
 
   // Player Character State
   private playerLimbs!: CharacterLimbs;
@@ -613,6 +614,24 @@ export class DhakaCityEngine {
 
     this.scene.add(mesh);
     this.cashDrops.push({ mesh, x, z, amount });
+  }
+
+  private spawnSkidMark(x: number, z: number, rotation: number) {
+    if (this.skidDecals.length > 50) {
+      const old = this.skidDecals.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
+    const skidGeo = this.boxCache(0.32, 0.015, 1.35);
+    const skidMat = new THREE.MeshBasicMaterial({
+      color: '#0f172a',
+      transparent: true,
+      opacity: 0.55,
+    });
+    const mesh = new THREE.Mesh(skidGeo, skidMat);
+    mesh.position.set(x, 0.02, z);
+    mesh.rotation.y = rotation;
+    this.scene.add(mesh);
+    this.skidDecals.push({ mesh, life: 8.5 });
   }
 
   private policeArrestTimer = 0;
@@ -3769,6 +3788,7 @@ export class DhakaCityEngine {
 
       this.updateBulletTracersAndFX(dt);
       this.updateCashPickups(dt);
+      this.updateSkidDecals(dt);
       this.updateMissionAndInteractionChecks(dt);
     } else if (!this.activeVehicleId) {
       setCharacterAnimationState(this.playerLimbs, 'idle', dt);
@@ -3916,6 +3936,21 @@ export class DhakaCityEngine {
     }
   }
 
+  private updateSkidDecals(dt: number) {
+    for (let i = this.skidDecals.length - 1; i >= 0; i--) {
+      const sd = this.skidDecals[i];
+      sd.life -= dt;
+      (sd.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        sd.life * 0.065
+      );
+      if (sd.life <= 0) {
+        this.scene.remove(sd.mesh);
+        this.skidDecals.splice(i, 1);
+      }
+    }
+  }
+
   private updateEnvironmentLighting(
     hour: number,
     weather: string,
@@ -4039,7 +4074,9 @@ export class DhakaCityEngine {
 
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara, Farmgate & Motijheel
     if (this.metroTrainGroup) {
+      const trainSpeed = Math.cos(t * 0.32);
       this.metroTrainGroup.position.z = -75 + Math.sin(t * 0.32) * 165;
+      this.metroTrainGroup.rotation.y = trainSpeed >= 0 ? 0 : Math.PI;
     }
   }
 
@@ -4191,6 +4228,7 @@ export class DhakaCityEngine {
           '#e2e8f0',
           0.7
         );
+        this.spawnSkidMark(rearX, rearZ, veh.rotation);
       }
     }
 
@@ -4766,8 +4804,16 @@ export class DhakaCityEngine {
         if (npc.aiState === 'flee') npc.aiState = 'walk';
       } else {
         npc.rotation = Math.atan2(dx, dz);
-        npc.x += Math.sin(npc.rotation) * speed * dt;
-        npc.z += Math.cos(npc.rotation) * speed * dt;
+        const nx = npc.x + Math.sin(npc.rotation) * speed * dt;
+        const nz = npc.z + Math.cos(npc.rotation) * speed * dt;
+        if (!this.checkBuildingCollision(nx, nz, 0.45)) {
+          npc.x = nx;
+          npc.z = nz;
+        } else {
+          // Divert around buildings, flyover pillars & obstacles
+          npc.walkTargetX = npc.x + (Math.random() - 0.5) * 16;
+          npc.walkTargetZ = -npc.walkTargetZ;
+        }
       }
 
       const swing = Math.sin(t + npc.x) * 0.48;

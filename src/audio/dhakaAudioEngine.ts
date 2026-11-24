@@ -9,14 +9,21 @@ class DhakaAudioEngine {
   public sfxVolume = 0.7;
   public ambienceVolume = 0.4;
 
-  // Engine oscillator nodes
+  // Engine oscillator nodes (Dual-Oscillator for rich vehicle physics)
   private engineOsc: OscillatorNode | null = null;
+  private engineSubOsc: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
+  private engineSubGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
+  private rickshawClickInterval: number | null = null;
 
   // Rain ambience nodes
   private rainGain: GainNode | null = null;
   private isRaining = false;
+
+  // Dhaka City Traffic Ambience (BGM)
+  private trafficGain: GainNode | null = null;
+  private trafficHornInterval: number | null = null;
 
   // Radio sequencer
   private currentStation: RadioStationId = 'dhaka_folk';
@@ -32,11 +39,15 @@ class DhakaAudioEngine {
     }
 
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
       this.ctx = new AudioCtx();
       this.isInitialized = true;
       this.setupEngineSound();
       this.setupRainAmbience();
+      this.setupTrafficAmbience();
       this.startRadioSequencer();
     } catch {
       // Web Audio not allowed yet
@@ -46,21 +57,119 @@ class DhakaAudioEngine {
   private setupEngineSound() {
     if (!this.ctx) return;
     this.engineOsc = this.ctx.createOscillator();
+    this.engineSubOsc = this.ctx.createOscillator();
     this.engineFilter = this.ctx.createBiquadFilter();
     this.engineGain = this.ctx.createGain();
+    this.engineSubGain = this.ctx.createGain();
 
     this.engineOsc.type = 'sawtooth';
     this.engineOsc.frequency.value = 55;
+
+    this.engineSubOsc.type = 'square';
+    this.engineSubOsc.frequency.value = 110;
 
     this.engineFilter.type = 'lowpass';
     this.engineFilter.frequency.value = 260;
 
     this.engineGain.gain.value = 0.0;
+    this.engineSubGain.gain.value = 0.0;
 
     this.engineOsc.connect(this.engineFilter);
     this.engineFilter.connect(this.engineGain);
     this.engineGain.connect(this.ctx.destination);
+
+    this.engineSubOsc.connect(this.engineFilter);
+    this.engineFilter.connect(this.engineSubGain);
+    this.engineSubGain.connect(this.ctx.destination);
+
     this.engineOsc.start();
+    this.engineSubOsc.start();
+  }
+
+  private setupTrafficAmbience() {
+    if (!this.ctx) return;
+    // Generate filtered urban rumble noise (muffled traffic, rolling tires, city presence)
+    const bufferSize = this.ctx.sampleRate * 3;
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      output[i] = (lastOut + 0.025 * white) / 1.025;
+      lastOut = output[i];
+    }
+
+    const trafficNoise = this.ctx.createBufferSource();
+    trafficNoise.buffer = noiseBuffer;
+    trafficNoise.loop = true;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 220;
+
+    this.trafficGain = this.ctx.createGain();
+    this.trafficGain.gain.value = 0.16 * this.ambienceVolume;
+
+    trafficNoise.connect(filter);
+    filter.connect(this.trafficGain);
+    this.trafficGain.connect(this.ctx.destination);
+    trafficNoise.start();
+
+    // Periodic distant Dhaka traffic echoes (random bus airhorn or rickshaw chime echoing in background)
+    if (this.trafficHornInterval) window.clearInterval(this.trafficHornInterval);
+    this.trafficHornInterval = window.setInterval(() => {
+      if (!this.ctx || this.trafficGain?.gain.value === 0) return;
+      if (Math.random() < 0.65) {
+        this.playDistantTrafficChirp();
+      }
+    }, 5500);
+  }
+
+  private playDistantTrafficChirp() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const r = Math.random();
+
+    if (r < 0.45) {
+      // Distant cycle rickshaw bell chime
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1450, now);
+      gain.gain.setValueAtTime(0.018 * this.ambienceVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (r < 0.75) {
+      // Distant CNG auto-rickshaw horn chirp
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(520, now);
+      gain.gain.setValueAtTime(0.022 * this.ambienceVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } else {
+      // Distant Dhaka City Bus dual airhorn blast echo
+      [220, 277].forEach((f) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(f, now);
+        gain.gain.setValueAtTime(0.015 * this.ambienceVolume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      });
+    }
   }
 
   private setupRainAmbience() {
@@ -97,36 +206,139 @@ class DhakaAudioEngine {
     this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.4);
   }
 
-  public updateEngine(inVehicle: boolean, vehicleType: VehicleType | null, speedRatio: number) {
-    if (!this.ctx || !this.engineOsc || !this.engineGain || !this.engineFilter) return;
+  public updateEngine(
+    inVehicle: boolean,
+    vehicleType: VehicleType | null,
+    speedRatio: number
+  ) {
+    if (
+      !this.ctx ||
+      !this.engineOsc ||
+      !this.engineSubOsc ||
+      !this.engineGain ||
+      !this.engineSubGain ||
+      !this.engineFilter
+    )
+      return;
 
-    if (!inVehicle || !vehicleType || vehicleType === 'rickshaw') {
+    if (!inVehicle || !vehicleType) {
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      if (this.rickshawClickInterval) {
+        window.clearInterval(this.rickshawClickInterval);
+        this.rickshawClickInterval = null;
+      }
       return;
     }
 
-    let baseFreq = 52;
-    let maxFreq = 165;
-    let filterFreq = 320;
+    const absSpeed = Math.abs(speedRatio);
 
-    if (vehicleType === 'cng') {
-      baseFreq = 68;
-      maxFreq = 210;
-      filterFreq = 480;
-    } else if (vehicleType === 'motorcycle') {
-      baseFreq = 85;
-      maxFreq = 280;
-      filterFreq = 540;
-    } else if (vehicleType === 'bus') {
-      baseFreq = 38;
-      maxFreq = 110;
-      filterFreq = 220;
+    // 1. CYCLE RICKSHAW: Mechanical pedal chain rattle & spoke freewheel clicks
+    if (vehicleType === 'rickshaw') {
+      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+
+      if (absSpeed > 0.08) {
+        if (!this.rickshawClickInterval) {
+          this.rickshawClickInterval = window.setInterval(() => {
+            if (!this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(950, now);
+            osc.frequency.exponentialRampToValueAtTime(320, now + 0.035);
+            gain.gain.setValueAtTime(0.045 * this.sfxVolume, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.045);
+          }, 140);
+        }
+      } else if (this.rickshawClickInterval) {
+        window.clearInterval(this.rickshawClickInterval);
+        this.rickshawClickInterval = null;
+      }
+      return;
     }
 
-    const freq = baseFreq + Math.abs(speedRatio) * (maxFreq - baseFreq);
-    this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.06);
-    this.engineFilter.frequency.setTargetAtTime(filterFreq + Math.abs(speedRatio) * 300, this.ctx.currentTime, 0.08);
-    this.engineGain.gain.setTargetAtTime(0.065 * this.sfxVolume, this.ctx.currentTime, 0.08);
+    if (this.rickshawClickInterval) {
+      window.clearInterval(this.rickshawClickInterval);
+      this.rickshawClickInterval = null;
+    }
+
+    // 2. CNG AUTO-RICKSHAW: Iconic 2-stroke high-sputter "putt-putt" thrum
+    if (vehicleType === 'cng') {
+      this.engineOsc.type = 'sawtooth';
+      this.engineSubOsc.type = 'square';
+      const baseFreq = 72;
+      const maxFreq = 235;
+      const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 2, this.ctx.currentTime, 0.05);
+      this.engineFilter.frequency.setTargetAtTime(450 + absSpeed * 350, this.ctx.currentTime, 0.06);
+      this.engineGain.gain.setTargetAtTime(0.075 * this.sfxVolume, this.ctx.currentTime, 0.06);
+      this.engineSubGain.gain.setTargetAtTime(0.04 * this.sfxVolume, this.ctx.currentTime, 0.06);
+      return;
+    }
+
+    // 3. DHAKA CITY BUS: Deep sub-harmonic 6-cylinder diesel chug & turbo air resonance
+    if (vehicleType === 'bus') {
+      this.engineOsc.type = 'sawtooth';
+      this.engineSubOsc.type = 'sine';
+      const baseFreq = 32;
+      const maxFreq = 95;
+      const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.08);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.08);
+      this.engineFilter.frequency.setTargetAtTime(200 + absSpeed * 180, this.ctx.currentTime, 0.08);
+      this.engineGain.gain.setTargetAtTime(0.09 * this.sfxVolume, this.ctx.currentTime, 0.08);
+      this.engineSubGain.gain.setTargetAtTime(0.06 * this.sfxVolume, this.ctx.currentTime, 0.08);
+      return;
+    }
+
+    // 4. DMP POLICE CRUISER: High-revving pursuit interceptor V6 engine
+    if (vehicleType === 'police') {
+      this.engineOsc.type = 'sawtooth';
+      this.engineSubOsc.type = 'triangle';
+      const baseFreq = 62;
+      const maxFreq = 250;
+      const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 1.5, this.ctx.currentTime, 0.04);
+      this.engineFilter.frequency.setTargetAtTime(520 + absSpeed * 400, this.ctx.currentTime, 0.06);
+      this.engineGain.gain.setTargetAtTime(0.08 * this.sfxVolume, this.ctx.currentTime, 0.05);
+      this.engineSubGain.gain.setTargetAtTime(0.035 * this.sfxVolume, this.ctx.currentTime, 0.05);
+      return;
+    }
+
+    // 5. MOTORCYCLE: Thumping single-cylinder 125cc bike engine
+    if (vehicleType === 'motorcycle') {
+      this.engineOsc.type = 'square';
+      this.engineSubOsc.type = 'sawtooth';
+      const baseFreq = 85;
+      const maxFreq = 310;
+      const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.04);
+      this.engineFilter.frequency.setTargetAtTime(600 + absSpeed * 450, this.ctx.currentTime, 0.05);
+      this.engineGain.gain.setTargetAtTime(0.065 * this.sfxVolume, this.ctx.currentTime, 0.05);
+      this.engineSubGain.gain.setTargetAtTime(0.04 * this.sfxVolume, this.ctx.currentTime, 0.05);
+      return;
+    }
+
+    // 6. GULSHAN EXECUTIVE SEDAN (Default Car): Smooth modern 4-cylinder purr
+    this.engineOsc.type = 'triangle';
+    this.engineSubOsc.type = 'sawtooth';
+    const baseFreq = 50;
+    const maxFreq = 180;
+    const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
+    this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+    this.engineSubOsc.frequency.setTargetAtTime(freq * 2, this.ctx.currentTime, 0.05);
+    this.engineFilter.frequency.setTargetAtTime(360 + absSpeed * 280, this.ctx.currentTime, 0.06);
+    this.engineGain.gain.setTargetAtTime(0.065 * this.sfxVolume, this.ctx.currentTime, 0.06);
+    this.engineSubGain.gain.setTargetAtTime(0.025 * this.sfxVolume, this.ctx.currentTime, 0.06);
   }
 
   public playHorn(type: 'cng' | 'bell' | 'airhorn' | 'car' | 'siren' = 'cng') {
@@ -508,6 +720,13 @@ class DhakaAudioEngine {
     this.sfxVolume = sfx;
     this.ambienceVolume = ambience;
     this.setRainActive(this.isRaining);
+    if (this.ctx && this.trafficGain) {
+      this.trafficGain.gain.setTargetAtTime(
+        0.16 * this.ambienceVolume,
+        this.ctx.currentTime,
+        0.2
+      );
+    }
   }
 }
 
