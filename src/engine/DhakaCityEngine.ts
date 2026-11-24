@@ -95,13 +95,17 @@ export class DhakaCityEngine {
   private lastEquippedOutfit = '';
   private lastEquippedTool = '';
 
-  // Camera State
+  // Camera & Performance State
   private cameraYaw = 0;
   private cameraPitch = 0.25;
+  private currentCameraDist = 6.2;
+  private cameraTargetPos = new THREE.Vector3();
+  private cameraLookTarget = new THREE.Vector3(6, 1.75, 16);
   private isPointerDragging = false;
   private pointerDragDist = 0;
   private lastPointerX = 0;
   private lastPointerY = 0;
+  private worldClockTimer = 0;
 
   // 3D Firearm Ballistics, Muzzle Flash & Explosion FX
   private fireCooldown = 0;
@@ -155,11 +159,12 @@ export class DhakaCityEngine {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
+      stencil: false,
     });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -189,8 +194,9 @@ export class DhakaCityEngine {
     this.sunLight = new THREE.DirectionalLight('#fef08a', 1.55);
     this.sunLight.position.set(120, 180, 90);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 2048;
-    this.sunLight.shadow.mapSize.height = 2048;
+    this.sunLight.shadow.mapSize.width = 1024;
+    this.sunLight.shadow.mapSize.height = 1024;
+    this.sunLight.shadow.bias = -0.0004;
     this.sunLight.shadow.camera.near = 10;
     this.sunLight.shadow.camera.far = 480;
     const d = 180;
@@ -2336,6 +2342,12 @@ export class DhakaCityEngine {
     );
     this.playerLimbs.group.position.copy(this.playerPos);
     this.scene.add(this.playerLimbs.group);
+    this.cameraLookTarget.set(
+      this.playerPos.x,
+      this.playerPos.y + 1.75,
+      this.playerPos.z
+    );
+    this.currentCameraDist = 6.2;
   }
 
   private spawnInitialVehicles() {
@@ -3123,7 +3135,7 @@ export class DhakaCityEngine {
         for (const [ox, oz] of candidateOffsets) {
           const tx = veh.x + ox;
           const tz = veh.z + oz;
-          if (!this.checkWorldObstacle(tx, tz, 0.6)) {
+          if (!this.checkWorldObstacle(tx, tz, 0.6, veh.id)) {
             safeX = tx;
             safeZ = tz;
             break;
@@ -3449,10 +3461,10 @@ export class DhakaCityEngine {
       this.lastGraphicsQuality = store.graphicsQuality;
       const isHigh = store.graphicsQuality === 'high';
       this.renderer.setPixelRatio(
-        isHigh ? Math.min(window.devicePixelRatio, 2) : 1
+        isHigh ? Math.min(window.devicePixelRatio, 1.35) : 1
       );
       this.renderer.shadowMap.enabled = isHigh;
-      this.camera.far = isHigh ? 620 : 340;
+      this.camera.far = isHigh ? 550 : 320;
       this.camera.updateProjectionMatrix();
     }
 
@@ -3526,7 +3538,11 @@ export class DhakaCityEngine {
     this.updateNPCAI(dt);
 
     if (store.gamePhase === 'playing') {
-      store.tickWorldClock(dt);
+      this.worldClockTimer += dt;
+      if (this.worldClockTimer >= 0.22) {
+        store.tickWorldClock(this.worldClockTimer);
+        this.worldClockTimer = 0;
+      }
 
       if (this.fireCooldown > 0) {
         this.fireCooldown = Math.max(0, this.fireCooldown - dt);
@@ -3796,10 +3812,12 @@ export class DhakaCityEngine {
         const posAttr = this.rainSystem.geometry.getAttribute(
           'position'
         ) as THREE.BufferAttribute;
-        for (let i = 0; i < posAttr.count; i++) {
-          let y = posAttr.getY(i) - 42 * dt;
+        const arr = posAttr.array as Float32Array;
+        const dy = 42 * dt;
+        for (let i = 1; i < arr.length; i += 3) {
+          let y = arr[i] - dy;
           if (y < 0) y = 52;
-          posAttr.setY(i, y);
+          arr[i] = y;
         }
         posAttr.needsUpdate = true;
       }
@@ -4028,17 +4046,18 @@ export class DhakaCityEngine {
 
         if (canSlideX && Math.abs(vx) > 0.05) {
           veh.x = clampWorldCoord(nextX);
-          veh.speed *= Math.pow(0.55, dt);
+          veh.speed *= Math.pow(0.68, dt);
         } else if (canSlideZ && Math.abs(vz) > 0.05) {
           veh.z = clampWorldCoord(nextZ);
-          veh.speed *= Math.pow(0.55, dt);
+          veh.speed *= Math.pow(0.68, dt);
         } else {
           // Direct head-on impact into railing, wall or concrete post
-          if (Math.abs(veh.speed) > 8) {
+          if (Math.abs(veh.speed) > 6) {
             dhakaAudio.playSfx('hit');
             veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.45);
           }
-          veh.speed = -veh.speed * 0.3;
+          // Stop forward momentum cleanly instead of vibrating back and forth
+          veh.speed = 0;
         }
       }
     }
@@ -4091,10 +4110,20 @@ export class DhakaCityEngine {
     dt: number,
     steerInput: number
   ) {
+    if (!mesh.userData.wheelCache) {
+      const wheels: THREE.Object3D[] = [];
+      mesh.traverse((child) => {
+        if (child.name === 'wheel') wheels.push(child);
+      });
+      mesh.userData.wheelCache = wheels;
+    }
+
     const spin = speed * dt * 1.6;
     const steerAngle = THREE.MathUtils.clamp(steerInput, -1, 1) * 0.42;
-    mesh.traverse((child) => {
-      if (child.name !== 'wheel') return;
+    const wheels = mesh.userData.wheelCache as THREE.Object3D[];
+
+    for (let i = 0; i < wheels.length; i++) {
+      const child = wheels[i];
       child.rotation.x += spin;
       // Front wheels also pivot on their vertical axis while steering.
       if (child.userData.steer && child.userData.steerAxis !== 'z') {
@@ -4104,7 +4133,7 @@ export class DhakaCityEngine {
           Math.min(1, dt * 9)
         );
       }
-    });
+    }
     mesh.rotation.z = THREE.MathUtils.clamp(-steerInput * 0.06, -0.06, 0.06);
   }
 
@@ -4341,7 +4370,7 @@ export class DhakaCityEngine {
     }
 
     this.telemetryTimer += dt;
-    if (this.telemetryTimer < 0.065) return;
+    if (this.telemetryTimer < 0.09) return;
     this.telemetryTimer = 0;
 
     let district: DistrictId = 'farmgate';
@@ -4437,14 +4466,14 @@ export class DhakaCityEngine {
   ) {
     const isDriving = Boolean(this.activeVehicleId);
 
-    let dist = isDriving ? 9.2 : 6.2;
+    let desiredDist = isDriving ? 9.2 : 6.2;
     let heightOffset = isDriving ? 2.4 : 1.75;
 
     if (mode === 'far_chase') {
-      dist = isDriving ? 13.5 : 9.0;
+      desiredDist = isDriving ? 13.5 : 9.0;
       heightOffset = isDriving ? 3.4 : 2.3;
     } else if (mode === 'hood_close') {
-      dist = isDriving ? 5.6 : 4.0;
+      desiredDist = isDriving ? 5.6 : 4.0;
       heightOffset = isDriving ? 1.8 : 1.55;
     }
 
@@ -4452,28 +4481,63 @@ export class DhakaCityEngine {
     const targetY = this.playerPos.y + heightOffset;
     const targetZ = this.playerPos.z;
 
-    let camX =
-      targetX + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
-    const camY = Math.max(1.1, targetY + Math.sin(this.cameraPitch) * dist);
-    let camZ =
-      targetZ + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * dist;
+    // Camera Collision Avoidance: Test ONLY against large solid buildings (never thin street poles/metro pillars)
+    const testCamX =
+      targetX +
+      Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * desiredDist;
+    const testCamZ =
+      targetZ +
+      Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * desiredDist;
 
-    // Camera Building Obstacle Avoidance (Bug Fix #3)
-    if (this.checkBuildingCollision(camX, camZ, 0.8)) {
-      const safeDist = dist * 0.48;
-      camX =
-        targetX +
-        Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * safeDist;
-      camZ =
-        targetZ +
-        Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * safeDist;
+    let occluded = false;
+    for (const b of this.buildingColliders) {
+      if (
+        testCamX + 0.6 > b.minX &&
+        testCamX - 0.6 < b.maxX &&
+        testCamZ + 0.6 > b.minZ &&
+        testCamZ - 0.6 < b.maxZ
+      ) {
+        occluded = true;
+        break;
+      }
     }
 
-    this.camera.position.lerp(
-      new THREE.Vector3(camX, camY, camZ),
-      Math.min(1, dt * 15)
+    if (occluded) {
+      const safeDist = desiredDist * 0.52;
+      this.currentCameraDist = Math.min(this.currentCameraDist, safeDist);
+    } else {
+      // Smoothly ease back out to full distance without jumping or oscillating
+      this.currentCameraDist +=
+        (desiredDist - this.currentCameraDist) * Math.min(1, dt * 5.0);
+    }
+
+    const camX =
+      targetX +
+      Math.sin(this.cameraYaw) *
+        Math.cos(this.cameraPitch) *
+        this.currentCameraDist;
+    const camY = Math.max(
+      1.1,
+      targetY + Math.sin(this.cameraPitch) * this.currentCameraDist
     );
-    this.camera.lookAt(targetX, targetY, targetZ);
+    const camZ =
+      targetZ +
+      Math.cos(this.cameraYaw) *
+        Math.cos(this.cameraPitch) *
+        this.currentCameraDist;
+
+    // Reuse persistent vector to eliminate GC churn and stutter
+    this.cameraTargetPos.set(camX, camY, camZ);
+    this.camera.position.lerp(this.cameraTargetPos, Math.min(1, dt * 14));
+
+    // Smooth camera look target in unison with position to eliminate angular jitter
+    this.cameraLookTarget.x +=
+      (targetX - this.cameraLookTarget.x) * Math.min(1, dt * 18);
+    this.cameraLookTarget.y +=
+      (targetY - this.cameraLookTarget.y) * Math.min(1, dt * 18);
+    this.cameraLookTarget.z +=
+      (targetZ - this.cameraLookTarget.z) * Math.min(1, dt * 18);
+    this.camera.lookAt(this.cameraLookTarget);
   }
 
   private checkBuildingCollision(
