@@ -19,6 +19,11 @@ export const MinimapHUD: React.FC = () => {
     activeMissionStepIndex,
     customWaypoint,
     wantedLevel,
+    health,
+    maxHealth,
+    armor,
+    maxArmor,
+    stamina,
     language,
     setGamePhase,
   } = useGameStore();
@@ -250,6 +255,43 @@ export const MinimapHUD: React.FC = () => {
             {Math.round(playerX)},{Math.round(playerZ)}
           </span>
         </div>
+      </div>
+
+      {/* GTA V-Style Integrated Vitals Bars (Health, Armor, Stamina) */}
+      <div className="flex flex-col gap-1 w-full px-0.5">
+        <div className="flex items-center gap-1.5 w-full">
+          {/* Health Bar (Emerald Green) */}
+          <div className="flex-1 bg-slate-950/90 h-1.5 rounded-full overflow-hidden border border-slate-800 shadow-sm">
+            <div
+              className="bg-emerald-400 h-full transition-all duration-150"
+              style={{
+                width: `${Math.max(0, Math.min(100, (health / maxHealth) * 100))}%`,
+              }}
+            />
+          </div>
+          {/* Armor Bar (Cyan Blue - only visible when armor exists) */}
+          {armor > 0 && (
+            <div className="flex-1 bg-slate-950/90 h-1.5 rounded-full overflow-hidden border border-slate-800 shadow-sm">
+              <div
+                className="bg-cyan-400 h-full transition-all duration-150"
+                style={{
+                  width: `${Math.max(0, Math.min(100, (armor / maxArmor) * 100))}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+        {/* Stamina Bar (Amber - only displays when sprinting or recovering) */}
+        {stamina < 98 && (
+          <div className="w-full bg-slate-950/90 h-1 rounded-full overflow-hidden border border-slate-800">
+            <div
+              className="bg-amber-400 h-full transition-all duration-150"
+              style={{
+                width: `${Math.max(0, Math.min(100, stamina))}%`,
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
