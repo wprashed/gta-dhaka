@@ -3843,7 +3843,7 @@ export class DhakaCityEngine {
     if (moveForward !== 0 || moveRight !== 0) {
       targetAnimState = isSprinting ? 'run' : 'walk';
       const inputAngle = Math.atan2(moveRight, moveForward);
-      const targetYaw = this.cameraYaw + Math.PI + inputAngle;
+      const targetYaw = this.cameraYaw + Math.PI - inputAngle;
 
       const diff = normalizeAngle(targetYaw - this.playerRotation);
       this.playerRotation += diff * Math.min(1, dt * 14);
