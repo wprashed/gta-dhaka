@@ -134,6 +134,9 @@ export class DhakaCityEngine {
   private static readonly SKY_GOLDEN = new THREE.Color('#ea580c');
 
   // 3D Firearm Ballistics, Muzzle Flash & Explosion FX
+  public isAiming = false;
+  private meleeComboStep = 0;
+  private meleeComboTimer = 0;
   private fireCooldown = 0;
   private bulletTracers: Array<{
     mesh: THREE.Mesh;
@@ -142,6 +145,29 @@ export class DhakaCityEngine {
     vz: number;
     life: number;
     damage: number;
+  }> = [];
+  private shellCasings: Array<{
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    rx: number;
+    ry: number;
+    rz: number;
+    life: number;
+    bounced: boolean;
+  }> = [];
+  private muzzleSmokePuffs: Array<{
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    life: number;
+    maxLife: number;
+  }> = [];
+  private bulletHoles: Array<{
+    mesh: THREE.Mesh;
+    life: number;
   }> = [];
   private hitSparks: Array<{
     mesh: THREE.Mesh;
@@ -1910,6 +1936,26 @@ export class DhakaCityEngine {
   private tracerGeo = new THREE.BoxGeometry(0.05, 0.05, 0.95);
   private tracerMatSingle = new THREE.MeshBasicMaterial({ color: '#fde047' });
   private tracerMatSpread = new THREE.MeshBasicMaterial({ color: '#fb923c' });
+  private casingGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.045, 8).rotateX(Math.PI / 2);
+  private casingMat = new THREE.MeshStandardMaterial({
+    color: '#eab308',
+    metalness: 0.95,
+    roughness: 0.22,
+  });
+  private smokeGeo = new THREE.SphereGeometry(0.09, 6, 6);
+  private smokeMat = new THREE.MeshBasicMaterial({
+    color: '#cbd5e1',
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  private bulletHoleGeo = new THREE.CircleGeometry(0.055, 8).rotateX(-Math.PI / 2);
+  private bulletHoleMat = new THREE.MeshBasicMaterial({
+    color: '#0f172a',
+    transparent: true,
+    opacity: 0.88,
+    depthWrite: false,
+  });
   private coilGeo: THREE.BufferGeometry = new THREE.TorusGeometry(0.36, 0.055, 8, 16);
   private matCache = new Map<string, THREE.Material>();
 
@@ -3578,6 +3624,7 @@ export class DhakaCityEngine {
     window.addEventListener('keyup', this.onKeyUp);
 
     const dom = this.renderer.domElement;
+    dom.addEventListener('contextmenu', this.onContextMenu);
     dom.addEventListener('mousedown', this.onMouseDown);
     window.addEventListener('mousemove', this.onMouseMove);
     window.addEventListener('mouseup', this.onMouseUp);
@@ -3587,6 +3634,9 @@ export class DhakaCityEngine {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
     }
+    const dom = this.renderer.domElement;
+    dom?.removeEventListener('contextmenu', this.onContextMenu);
+    dom?.removeEventListener('mousedown', this.onMouseDown);
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
@@ -3594,6 +3644,10 @@ export class DhakaCityEngine {
     window.removeEventListener('mouseup', this.onMouseUp);
     this.renderer.dispose();
   }
+
+  private onContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+  };
 
   private onResize = () => {
     if (!this.container) return;
@@ -3609,36 +3663,56 @@ export class DhakaCityEngine {
     if (store.gamePhase !== 'playing') return;
     dhakaAudio.init();
 
+    if (e.button === 2 && !this.activeVehicleId) {
+      // Right Mouse Button: Enter Tactical Aim Mode (ADS / High-Ready)
+      e.preventDefault();
+      this.isAiming = true;
+      this.playerRotation = this.cameraYaw + Math.PI;
+      return;
+    }
+
     if (e.button === 0) {
+      if (this.isAiming && !this.activeVehicleId) {
+        this.performMeleeAttack();
+        return;
+      }
       this.isPointerDragging = true;
       this.pointerDragDist = 0;
       this.lastPointerX = e.clientX;
       this.lastPointerY = e.clientY;
-    } else if (e.button === 2 && !this.activeVehicleId) {
-      this.performMeleeAttack();
     }
   };
 
   private onMouseMove = (e: MouseEvent) => {
-    if (!this.isPointerDragging) return;
+    if (!this.isPointerDragging && !this.isAiming) return;
     const dx = e.clientX - this.lastPointerX;
     const dy = e.clientY - this.lastPointerY;
     this.pointerDragDist += Math.hypot(dx, dy);
     this.lastPointerX = e.clientX;
     this.lastPointerY = e.clientY;
 
-    this.cameraYaw -= dx * 0.0065;
+    const sens = this.isAiming ? 0.0042 : 0.0065;
+    this.cameraYaw -= dx * sens;
     this.cameraPitch = Math.max(
-      0.12,
-      Math.min(1.15, this.cameraPitch + dy * 0.005)
+      0.08,
+      Math.min(1.15, this.cameraPitch + dy * (sens * 0.75))
     );
+
+    if (this.isAiming && !this.activeVehicleId) {
+      this.playerRotation = this.cameraYaw + Math.PI;
+    }
   };
 
   private onMouseUp = (e: MouseEvent) => {
+    if (e.button === 2) {
+      this.isAiming = false;
+      return;
+    }
+
     if (
       e.button === 0 &&
       this.isPointerDragging &&
-      this.pointerDragDist < 6 &&
+      this.pointerDragDist < 8 &&
       !this.activeVehicleId &&
       useGameStore.getState().gamePhase === 'playing'
     ) {
@@ -3756,6 +3830,13 @@ export class DhakaCityEngine {
       dhakaAudio.playSfx('jump');
     }
 
+    if (code === 'KeyZ' && !this.activeVehicleId) {
+      this.isAiming = !this.isAiming;
+      if (this.isAiming) {
+        this.playerRotation = this.cameraYaw + Math.PI;
+      }
+    }
+
     if (code === 'KeyR') {
       if (this.activeVehicleId) {
         const stations: Array<
@@ -3765,7 +3846,17 @@ export class DhakaCityEngine {
           stations[(stations.indexOf(store.radioStation) + 1) % stations.length];
         store.setRadioStation(next);
       } else {
-        store.reloadCurrentWeapon();
+        const activeTool = store.tools.find((t) => t.id === store.equippedToolId);
+        const reloaded = store.reloadCurrentWeapon();
+        if (reloaded && activeTool) {
+          store.showBanner({
+            titleEn: 'WEAPON RELOADED',
+            titleBn: 'অস্ত্র রিলোড সম্পন্ন',
+            subtitleEn: `${activeTool.nameEn}: Fresh clip ready.`,
+            subtitleBn: `${activeTool.nameBn}: তাজা ম্যাগাজিন প্রস্তুত।`,
+            tone: 'blue',
+          });
+        }
       }
     }
   };
@@ -3819,6 +3910,67 @@ export class DhakaCityEngine {
     this.hitSparks.push({ mesh: spark, life: 0.22 });
   }
 
+  private spawnShellCasing(x: number, y: number, z: number) {
+    if (this.shellCasings.length > 35) {
+      const old = this.shellCasings.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
+    const mesh = new THREE.Mesh(this.casingGeo, this.casingMat);
+    mesh.position.set(x, y, z);
+    this.scene.add(mesh);
+
+    const rightX = Math.cos(this.playerRotation);
+    const rightZ = -Math.sin(this.playerRotation);
+    this.shellCasings.push({
+      mesh,
+      vx: rightX * (2.2 + Math.random() * 0.8) + (Math.random() - 0.5) * 0.35,
+      vy: 1.85 + Math.random() * 0.55,
+      vz: rightZ * (2.2 + Math.random() * 0.8) + (Math.random() - 0.5) * 0.35,
+      rx: 16 * (Math.random() - 0.5),
+      ry: 16 * (Math.random() - 0.5),
+      rz: 16 * (Math.random() - 0.5),
+      life: 3.5,
+      bounced: false,
+    });
+  }
+
+  private spawnMuzzleSmoke(x: number, y: number, z: number) {
+    if (this.muzzleSmokePuffs.length > 25) {
+      const old = this.muzzleSmokePuffs.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
+    const mesh = new THREE.Mesh(this.smokeGeo, this.smokeMat.clone());
+    mesh.position.set(x, y, z);
+    this.scene.add(mesh);
+
+    const fwdX = Math.sin(this.playerRotation);
+    const fwdZ = Math.cos(this.playerRotation);
+    this.muzzleSmokePuffs.push({
+      mesh,
+      vx: fwdX * 0.55 + (Math.random() - 0.5) * 0.2,
+      vy: 0.42 + Math.random() * 0.25,
+      vz: fwdZ * 0.55 + (Math.random() - 0.5) * 0.2,
+      life: 0.55,
+      maxLife: 0.55,
+    });
+  }
+
+  private spawnBulletHole(x: number, y: number, z: number) {
+    if (this.bulletHoles.length > 45) {
+      const old = this.bulletHoles.shift();
+      if (old) this.scene.remove(old.mesh);
+    }
+    const mesh = new THREE.Mesh(this.bulletHoleGeo, this.bulletHoleMat);
+    mesh.position.set(x, Math.max(0.04, y), z);
+    this.scene.add(mesh);
+    this.bulletHoles.push({ mesh, life: 25.0 });
+  }
+
+  private spawnConcreteDust(x: number, y: number, z: number) {
+    this.spawnImpactSparks(x, y, z, '#94a3b8', 0.7);
+    this.spawnImpactSparks(x, y + 0.08, z, '#cbd5e1', 0.5);
+  }
+
   private performMeleeAttack() {
     if (this.fireCooldown > 0) return;
 
@@ -3829,16 +3981,15 @@ export class DhakaCityEngine {
     // 1. FIREARMS: Deshi Pipe Gun, 9mm Pistol, BD-08 Assault Rifle, 12G Shotgun, Micro-SMG
     if (tool.isFirearm) {
       if (!store.consumeAmmo(tool.id)) {
-        dhakaAudio.playSfx('ui');
-        store.reloadCurrentWeapon();
+        dhakaAudio.playSfx('dry_fire');
         store.showBanner({
-          titleEn: 'RELOADING WEAPON...',
-          titleBn: 'অস্ত্র রিলোড হচ্ছে...',
-          subtitleEn: `${tool.nameEn}: Press [R] anytime to load fresh clip.`,
-          subtitleBn: `${tool.nameBn}: নতুন ম্যাগাজিন লোড করা হচ্ছে।`,
+          titleEn: 'CLIP EMPTY! PRESS [R] TO RELOAD',
+          titleBn: 'ম্যাগাজিন খালি! [R] চেপে রিলোড করুন',
+          subtitleEn: `${tool.nameEn}: Reserve ammo available.`,
+          subtitleBn: `${tool.nameBn}: রিজার্ভ ম্যাগাজিন লোড করতে [R] চাপুন।`,
           tone: 'blue',
         });
-        this.fireCooldown = 0.55;
+        this.fireCooldown = 0.35;
         return;
       }
 
@@ -3847,6 +3998,16 @@ export class DhakaCityEngine {
 
       // Align Arif with camera aim direction when firing
       this.playerRotation = this.cameraYaw + Math.PI;
+
+      // Realistic muzzle climb & camera kickback
+      this.cameraPitch = Math.max(
+        0.08,
+        this.cameraPitch - (tool.pellets && tool.pellets > 1 ? 0.042 : 0.022)
+      );
+      this.cameraTrauma = Math.min(
+        0.65,
+        this.cameraTrauma + (tool.pellets && tool.pellets > 1 ? 0.26 : 0.14)
+      );
 
       // Synthesized gunshot / shotgun / assault rifle audio
       if (tool.id === 'deshi_pipegun' || tool.id === 'police_shotgun') {
@@ -3877,6 +4038,10 @@ export class DhakaCityEngine {
       this.muzzleLight.visible = true;
       this.muzzleLightTimer = 0.06;
 
+      // Spawn spent brass cartridge ejection & barrel smoke
+      this.spawnShellCasing(muzzleX, muzzleY, muzzleZ);
+      this.spawnMuzzleSmoke(muzzleX, muzzleY, muzzleZ);
+
       // Spawn 3D Bullet Tracer(s) (Multi-pellet spread for Deshi Pipe Gun & 12G Shotgun)
       const pellets = tool.pellets || 1;
       const spread = pellets > 1 ? 0.14 : 0.018;
@@ -3885,8 +4050,6 @@ export class DhakaCityEngine {
       for (let p = 0; p < pellets; p++) {
         const yawAngle =
           this.playerRotation + (Math.random() - 0.5) * spread;
-        // Shared tracer geometry/materials: allocating per pellet leaked a
-        // geometry + material on every shot during full-auto fire.
         const tracerMat =
           pellets > 1 ? this.tracerMatSpread : this.tracerMatSingle;
         const tracerMesh = new THREE.Mesh(this.tracerGeo, tracerMat);
@@ -3905,18 +4068,39 @@ export class DhakaCityEngine {
       }
 
       // Gunshot noise panics nearby pedestrians
-      this.alertNearbyPedestrians(this.playerPos.x, this.playerPos.z, 30);
+      this.alertNearbyPedestrians(this.playerPos.x, this.playerPos.z, 35);
       return;
     }
 
-    // 2. BANGLADESHI LOCAL ARMS & MELEE: Dhaka Ramda, Old Dhaka Chapati, Basher Lathi, Cricket Bat, Stun Baton, Fists
-    this.fireCooldown = 0.32;
-    this.attackAnimTimer = 0.35;
-
-    if (tool.id === 'ramda' || tool.id === 'chapati_cleaver') {
-      dhakaAudio.playSfx('slash');
+    // 2. BANGLADESHI LOCAL ARMS & MELEE COMBAT: Combo fighting, Ramda, Chapati, Lathi, Bat, Baton
+    if (this.meleeComboTimer > 0) {
+      this.meleeComboStep = (this.meleeComboStep + 1) % 3;
     } else {
-      dhakaAudio.playSfx('jump');
+      this.meleeComboStep = 0;
+    }
+    this.meleeComboTimer = 0.85;
+
+    const isBlade = tool.id === 'ramda' || tool.id === 'chapati_cleaver';
+    const isFists = tool.id === 'fists';
+    const isBaton = tool.id === 'stun_baton';
+
+    if (isFists) {
+      this.fireCooldown = this.meleeComboStep === 2 ? 0.35 : 0.22;
+      this.attackAnimTimer = this.meleeComboStep === 2 ? 0.34 : 0.24;
+      dhakaAudio.playSfx('punch_swing');
+    } else if (isBlade) {
+      this.fireCooldown = 0.34;
+      this.attackAnimTimer = 0.35;
+      dhakaAudio.playSfx('slash');
+    } else if (isBaton) {
+      this.fireCooldown = 0.28;
+      this.attackAnimTimer = 0.30;
+      dhakaAudio.playSfx('ui');
+    } else {
+      // Cricket bat or bamboo lathi
+      this.fireCooldown = 0.38;
+      this.attackAnimTimer = 0.38;
+      dhakaAudio.playSfx('punch_swing');
     }
 
     const forwardX = Math.sin(this.playerRotation);
@@ -3928,11 +4112,11 @@ export class DhakaCityEngine {
       const dz = veh.z - this.playerPos.z;
       const distV = Math.hypot(dx, dz);
       if (distV <= tool.range + 1.4) {
-        // Forward cone check: only hit vehicles in front
         const dot = (dx * forwardX + dz * forwardZ) / Math.max(0.01, distV);
         if (dot < 0.2) continue;
 
-        dhakaAudio.playSfx('hit');
+        const isHeavy = this.meleeComboStep === 2 || tool.category === 'local_arm';
+        dhakaAudio.playSfx(isBlade ? 'slash' : isHeavy ? 'heavy_hit' : 'hit');
         veh.health = Math.max(0, veh.health - tool.damage);
         this.spawnImpactSparks(
           (this.playerPos.x + veh.x) * 0.5,
@@ -3951,24 +4135,34 @@ export class DhakaCityEngine {
       const dz = npc.z - this.playerPos.z;
       const dist = Math.hypot(dx, dz);
       if (dist <= tool.range) {
-        // Forward cone check: only hit NPCs in front of Arif
         const dot = (dx * forwardX + dz * forwardZ) / Math.max(0.01, dist);
         if (dot < 0.25) continue;
 
-        dhakaAudio.playSfx('hit');
+        const isHeavy = this.meleeComboStep === 2 || tool.category === 'local_arm';
+        dhakaAudio.playSfx(isBlade ? 'slash' : isHeavy ? 'heavy_hit' : 'hit');
+        dhakaAudio.playSfx('pain_grunt');
+
+        // Physical knockback impulse on victim
+        const pushDist = isBlade ? 1.6 : isHeavy ? 1.4 : 0.75;
+        npc.x += forwardX * pushDist;
+        npc.z += forwardZ * pushDist;
+
+        // Blood puddle decal on road for blade or heavy punch
+        if (isBlade || (isHeavy && Math.random() < 0.6)) {
+          this.spawnBloodDecal(npc.x, npc.z);
+        }
+
         this.spawnImpactSparks(
           npc.x,
           1.15,
           npc.z,
-          tool.id === 'ramda' || tool.id === 'chapati_cleaver'
-            ? '#ef4444'
-            : '#fbbf24',
-          1.15
+          isBlade ? '#ef4444' : isBaton ? '#38bdf8' : '#fbbf24',
+          1.25
         );
 
         if (!npc.isStoryNPC) {
           npc.health -= tool.damage;
-          if (npc.health <= 0 || tool.id === 'ramda' || tool.id === 'chapati_cleaver') {
+          if (npc.health <= 0 || isBlade) {
             // Fatal Melee Strike
             npc.isDead = true;
             npc.aiState = 'dead';
@@ -3988,11 +4182,14 @@ export class DhakaCityEngine {
             store.setWantedLevel(Math.max(1, store.wantedLevel + 1));
           }
 
+          // Bengali voice reaction groan
+          const groans = ['উফফ!', 'আহহ!', 'মারিস না ভাই!', 'ওরে বাবারে!', 'বাঁচাও!'];
+          const groanText = groans[Math.floor(Math.random() * groans.length)];
           store.showBanner({
-            titleEn: `LOCAL ARM STRIKE (${tool.nameEn.toUpperCase()})`,
-            titleBn: `দেশীয় অস্ত্রের আঘাত (${tool.nameBn})!`,
-            subtitleEn: 'Street witnesses alerted DMP Police Patrol!',
-            subtitleBn: 'প্রত্যক্ষদর্শীরা টহল পুলিশকে খবর দিয়েছে!',
+            titleEn: `${npc.nameEn}: "${groanText}"`,
+            titleBn: `${npc.nameBn}: "${groanText}"`,
+            subtitleEn: `Struck by ${tool.nameEn} (Combo #${this.meleeComboStep + 1})`,
+            subtitleBn: `${tool.nameBn}-এর মারাত্মক আঘাত!`,
             tone: 'red',
           });
         }
@@ -4436,6 +4633,9 @@ export class DhakaCityEngine {
       if (this.fireCooldown > 0) {
         this.fireCooldown = Math.max(0, this.fireCooldown - dt);
       }
+      if (this.meleeComboTimer > 0) {
+        this.meleeComboTimer = Math.max(0, this.meleeComboTimer - dt);
+      }
 
       if (store.isWasted) {
         if (this.activeVehicleId) {
@@ -4454,11 +4654,12 @@ export class DhakaCityEngine {
         this.updateDrivenVehicle(dt);
       } else {
         this.updateOnFootPlayer(dt);
-        // Support full-auto firing when holding X / J / K with BD-08 Assault Rifle or Micro-SMG
+        // Support full-auto firing when holding X / J / K / Space with Firearms
         if (
           this.keys.has('KeyX') ||
           this.keys.has('KeyJ') ||
-          this.keys.has('KeyK')
+          this.keys.has('KeyK') ||
+          (this.isAiming && this.isPointerDragging && this.pointerDragDist < 4)
         ) {
           const activeTool = store.tools.find(
             (t) => t.id === store.equippedToolId
@@ -4470,6 +4671,9 @@ export class DhakaCityEngine {
       }
 
       this.updateBulletTracersAndFX(dt);
+      this.updateShellCasings(dt);
+      this.updateMuzzleSmoke(dt);
+      this.updateBulletHoles(dt);
       this.updateCashPickups(dt);
       this.updateSkidDecals(dt);
       this.updateBloodDecals(dt);
@@ -4522,9 +4726,14 @@ export class DhakaCityEngine {
 
       let hitSomething = false;
 
-      // Check Building Obstacle Hit
+      // Check Building Obstacle Hit (Sparks, Concrete Dust, Bullet Hole Decal, Ricochet)
       if (this.checkWorldObstacle(nx, nz, 0.2)) {
         this.spawnImpactSparks(nx, ny, nz, '#fde047', 0.9);
+        this.spawnConcreteDust(nx, ny, nz);
+        this.spawnBulletHole(nx, ny, nz);
+        if (Math.random() < 0.35) {
+          dhakaAudio.playSfx('ricochet');
+        }
         hitSomething = true;
       }
 
@@ -4554,7 +4763,14 @@ export class DhakaCityEngine {
           if (distN < 0.95) {
             hitSomething = true;
             dhakaAudio.playSfx('hit');
-            this.spawnImpactSparks(nx, ny, nz, '#ef4444', 1.25);
+            dhakaAudio.playSfx('pain_grunt');
+            this.spawnImpactSparks(nx, ny, nz, '#ef4444', 1.35);
+            this.spawnBloodDecal(npc.x, npc.z);
+
+            // Ballistic knockback impulse on victim
+            npc.x += (b.vx / 88) * 0.85;
+            npc.z += (b.vz / 88) * 0.85;
+
             if (!npc.isStoryNPC) {
               npc.health -= b.damage;
               if (npc.health <= 0) {
@@ -4583,6 +4799,75 @@ export class DhakaCityEngine {
       if (hitSomething || b.life <= 0) {
         this.scene.remove(b.mesh);
         this.bulletTracers.splice(i, 1);
+      }
+    }
+  }
+
+  private updateShellCasings(dt: number) {
+    for (let i = this.shellCasings.length - 1; i >= 0; i--) {
+      const c = this.shellCasings[i];
+      c.life -= dt;
+      c.vy -= 9.8 * dt;
+      c.mesh.position.x += c.vx * dt;
+      c.mesh.position.y += c.vy * dt;
+      c.mesh.position.z += c.vz * dt;
+      c.mesh.rotation.x += c.rx * dt;
+      c.mesh.rotation.y += c.ry * dt;
+      c.mesh.rotation.z += c.rz * dt;
+
+      if (c.mesh.position.y <= 0.02) {
+        if (!c.bounced) {
+          c.mesh.position.y = 0.02;
+          c.vy = -c.vy * 0.38;
+          c.vx *= 0.55;
+          c.vz *= 0.55;
+          c.rx *= 0.5;
+          c.rz *= 0.5;
+          c.bounced = true;
+          dhakaAudio.playSfx('casing_drop');
+        } else {
+          c.mesh.position.y = 0.015;
+          c.vy = 0;
+          c.vx = 0;
+          c.vz = 0;
+        }
+      }
+
+      if (c.life <= 0) {
+        this.scene.remove(c.mesh);
+        this.shellCasings.splice(i, 1);
+      }
+    }
+  }
+
+  private updateMuzzleSmoke(dt: number) {
+    for (let i = this.muzzleSmokePuffs.length - 1; i >= 0; i--) {
+      const sm = this.muzzleSmokePuffs[i];
+      sm.life -= dt;
+      sm.mesh.position.x += sm.vx * dt;
+      sm.mesh.position.y += sm.vy * dt;
+      sm.mesh.position.z += sm.vz * dt;
+      const progress = 1 - sm.life / sm.maxLife;
+      sm.mesh.scale.setScalar(1 + progress * 2.4);
+      (sm.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(
+        0,
+        (1 - progress) * 0.42
+      );
+
+      if (sm.life <= 0) {
+        this.scene.remove(sm.mesh);
+        this.muzzleSmokePuffs.splice(i, 1);
+      }
+    }
+  }
+
+  private updateBulletHoles(dt: number) {
+    for (let i = this.bulletHoles.length - 1; i >= 0; i--) {
+      const bh = this.bulletHoles[i];
+      bh.life -= dt;
+      if (bh.life <= 0) {
+        this.scene.remove(bh.mesh);
+        this.bulletHoles.splice(i, 1);
       }
     }
   }
@@ -4902,11 +5187,28 @@ export class DhakaCityEngine {
     const activeTool = storeState.tools.find(
       (t) => t.id === storeState.equippedToolId
     );
-    // Firearms are only raised into the aim pose while actually firing;
-    // otherwise the character carries them at the side (natural idle).
+    const isFirearm = Boolean(activeTool?.isFirearm);
     const isAimingNow =
-      Boolean(activeTool?.isFirearm) &&
-      (this.fireCooldown > 0 || this.attackAnimTimer > 0);
+      isFirearm &&
+      (this.isAiming || this.fireCooldown > 0 || this.attackAnimTimer > 0);
+
+    let weaponCategory: 'fists' | 'melee' | 'pistol' | 'rifle' = 'fists';
+    if (activeTool?.isFirearm) {
+      if (activeTool.id === 'pistol_9mm' || activeTool.id === 'smg_uzi') {
+        weaponCategory = 'pistol';
+      } else {
+        weaponCategory = 'rifle';
+      }
+    } else if (activeTool?.category === 'local_arm') {
+      weaponCategory = 'melee';
+    } else {
+      weaponCategory = 'fists';
+    }
+
+    if (this.isAiming) {
+      this.playerRotation = this.cameraYaw + Math.PI;
+    }
+
     // Gate the gait so feet stay planted: crouch 0.55x, walk 1x, sprint 1.45x.
     const gaitScale = this.isCrouching ? 0.55 : isSprinting ? 1.45 : 1.0;
     setCharacterAnimationState(
@@ -4915,7 +5217,9 @@ export class DhakaCityEngine {
       dt,
       this.attackAnimTimer,
       isAimingNow,
-      gaitScale
+      gaitScale,
+      weaponCategory,
+      this.meleeComboStep
     );
 
     // Also update fallback capsule limbs if visible
@@ -5932,7 +6236,10 @@ export class DhakaCityEngine {
     let desiredDist = isDriving ? 9.2 : 6.2;
     let heightOffset = isDriving ? 2.4 : 1.75;
 
-    if (mode === 'far_chase') {
+    if (!isDriving && this.isAiming) {
+      desiredDist = 3.6;
+      heightOffset = 1.62;
+    } else if (mode === 'far_chase') {
       desiredDist = isDriving ? 13.5 : 9.0;
       heightOffset = isDriving ? 3.4 : 2.3;
     } else if (mode === 'hood_close') {
@@ -5940,9 +6247,17 @@ export class DhakaCityEngine {
       heightOffset = isDriving ? 1.8 : 1.55;
     }
 
-    const targetX = this.playerPos.x;
+    let targetX = this.playerPos.x;
     const targetY = this.playerPos.y + heightOffset;
-    const targetZ = this.playerPos.z;
+    let targetZ = this.playerPos.z;
+
+    // Tactical Over-The-Shoulder Camera Offset when Aiming on Foot
+    if (!isDriving && this.isAiming) {
+      const shoulderX = Math.cos(this.cameraYaw) * 0.46;
+      const shoulderZ = -Math.sin(this.cameraYaw) * 0.46;
+      targetX += shoulderX;
+      targetZ += shoulderZ;
+    }
 
     // Camera Collision Avoidance: Test ONLY against large solid buildings (never thin street poles/metro pillars)
     const testCamX =

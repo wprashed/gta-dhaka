@@ -1930,6 +1930,10 @@ export interface CharacterLimbs {
     rightArmRest: THREE.Quaternion;
     rightForeArm: THREE.Object3D;
     rightForeArmRest: THREE.Quaternion;
+    leftArm?: THREE.Object3D;
+    leftArmRest?: THREE.Quaternion;
+    leftForeArm?: THREE.Object3D;
+    leftForeArmRest?: THREE.Quaternion;
     spine?: THREE.Object3D;
     spineRest?: THREE.Quaternion;
   };
@@ -2375,11 +2379,15 @@ export function createCharacterMesh(
       {
         let ra: THREE.Object3D | undefined;
         let rfa: THREE.Object3D | undefined;
+        let la: THREE.Object3D | undefined;
+        let lfa: THREE.Object3D | undefined;
         let sp: THREE.Object3D | undefined;
         clonedScene.traverse((node) => {
           const n = node.name.replace(/^mixamorig[:_]?/, '');
           if (n === 'RightArm' && !ra) ra = node;
           else if (n === 'RightForeArm' && !rfa) rfa = node;
+          else if (n === 'LeftArm' && !la) la = node;
+          else if (n === 'LeftForeArm' && !lfa) lfa = node;
           else if (n === 'Spine' && !sp) sp = node;
         });
         if (ra && rfa) {
@@ -2388,6 +2396,10 @@ export function createCharacterMesh(
             rightArmRest: ra.quaternion.clone(),
             rightForeArm: rfa,
             rightForeArmRest: rfa.quaternion.clone(),
+            leftArm: la,
+            leftArmRest: la ? la.quaternion.clone() : undefined,
+            leftForeArm: lfa,
+            leftForeArmRest: lfa ? lfa.quaternion.clone() : undefined,
             spine: sp,
             spineRest: sp ? sp.quaternion.clone() : undefined,
           };
@@ -2477,6 +2489,7 @@ function accumulateTransform(
 }
 
 const _axisX = new THREE.Vector3(1, 0, 0);
+const _axisY = new THREE.Vector3(0, 1, 0);
 const _axisZ = new THREE.Vector3(0, 0, 1);
 const _tmpQuat = new THREE.Quaternion();
 
@@ -2487,7 +2500,9 @@ export function setCharacterAnimationState(
   attackTimer = 0,
   isAimingGun = false,
   /** Playback speed for the walk/run clip; keeps feet in sync with the ground. */
-  speedScale = 1
+  speedScale = 1,
+  weaponCategory: 'fists' | 'melee' | 'pistol' | 'rifle' = 'fists',
+  comboStep = 0
 ) {
   // Close the right hand into a grip around the weapon (fingers curl on +X,
   // measured on the live RPM hand: index tip travels 3.0cm toward the palm at
@@ -2515,14 +2530,46 @@ export function setCharacterAnimationState(
     const attachedToHand =
       limbs.weaponMesh.parent && limbs.weaponMesh.parent !== limbs.group;
     if (attachedToHand) {
-      if (isAimingGun) {
-        const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.14 : 0;
-        limbs.weaponMesh.position.set(0, 0, 0.06 - recoil * 0.3);
-        limbs.weaponMesh.rotation.set(-recoil, 0, 0);
+      if (weaponCategory === 'rifle') {
+        if (isAimingGun || attackTimer > 0) {
+          const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.16 : 0;
+          limbs.weaponMesh.position.set(0.01, -0.01, 0.10 - recoil * 0.28);
+          limbs.weaponMesh.rotation.set(-recoil * 0.75, 0, 0);
+        } else {
+          // Low-ready patrol angle
+          limbs.weaponMesh.position.set(0.03, -0.04, 0.08);
+          limbs.weaponMesh.rotation.set(0.48, 0.12, 0);
+        }
+      } else if (weaponCategory === 'pistol') {
+        if (isAimingGun || attackTimer > 0) {
+          const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.22 : 0;
+          limbs.weaponMesh.position.set(0, 0, 0.07 - recoil * 0.25);
+          limbs.weaponMesh.rotation.set(-recoil * 1.1, 0, 0);
+        } else {
+          // Low-ready sidearm angle
+          limbs.weaponMesh.position.set(0, -0.02, 0.06);
+          limbs.weaponMesh.rotation.set(0.38, 0, 0);
+        }
       } else if (attackTimer > 0) {
-        const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
-        limbs.weaponMesh.position.set(0, 0, 0.06 + slash * 0.05);
-        limbs.weaponMesh.rotation.set(slash * 1.45, slash * 0.45, 0);
+        if (comboStep === 1) {
+          // Horizontal Cleave / Bat Swing
+          const sweep = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          limbs.weaponMesh.position.set(-sweep * 0.09, 0, 0.07 + sweep * 0.06);
+          limbs.weaponMesh.rotation.set(0.2, sweep * 1.8, -sweep * 0.5);
+        } else if (comboStep === 2) {
+          // Brutal Uppercut / Smash
+          const fin = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          limbs.weaponMesh.position.set(0, -0.04 + fin * 0.15, 0.07 + fin * 0.08);
+          limbs.weaponMesh.rotation.set(-fin * 1.4, 0, fin * 0.35);
+        } else {
+          // Diagonal / Overhead Chop
+          const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          limbs.weaponMesh.position.set(0, slash * 0.06, 0.07 + slash * 0.05);
+          limbs.weaponMesh.rotation.set(slash * 1.55, slash * 0.35, 0);
+        }
+      } else if (weaponCategory === 'melee') {
+        limbs.weaponMesh.position.set(0, 0, 0.07);
+        limbs.weaponMesh.rotation.set(0.32, 0.12, 0);
       } else {
         limbs.weaponMesh.position.set(0, 0, 0.06);
         limbs.weaponMesh.rotation.set(0.22, 0, 0);
@@ -2602,50 +2649,125 @@ export function setCharacterAnimationState(
       limbs.gltfRoot.position.y =
         targetState === 'idle' ? 0 : Math.abs(Math.sin(rig.phase)) * 0.025;
     }
-    if (rig.leftArm) {
-      _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
-      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+    if (rig.leftArm && rig.leftForeArm) {
+      if (weaponCategory === 'rifle') {
+        if (isAimingGun || attackTimer > 0) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 1.15);
+          rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
+          rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+        } else {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
+          rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.32);
+          rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+        }
+      } else if (weaponCategory === 'pistol' && (isAimingGun || attackTimer > 0)) {
+        _tmpQuat.setFromAxisAngle(_axisZ, 0.85);
+        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, 0.55);
+        rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+      } else if (weaponCategory === 'fists' && attackTimer > 0) {
+        if (comboStep === 0) {
+          const p = Math.sin((attackTimer / 0.32) * Math.PI);
+          _tmpQuat.setFromAxisAngle(_axisZ, 1.35 * p);
+          rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.25 * p);
+          rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+        } else {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.72);
+          rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.65);
+          rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+        }
+      } else {
+        _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
+        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+        const elbowBend =
+          targetState === 'run'
+            ? -0.65 - Math.max(0, s) * 0.35
+            : targetState === 'walk'
+            ? -0.28 - Math.max(0, s) * 0.22
+            : -0.12;
+        _tmpQuat.setFromAxisAngle(_axisZ, elbowBend);
+        rig.leftForeArm.bone.quaternion
+          .copy(rig.leftForeArm.rest)
+          .multiply(_tmpQuat);
+      }
     }
-    if (rig.leftForeArm) {
-      const elbowBend =
-        targetState === 'run'
-          ? -0.65 - Math.max(0, s) * 0.35
-          : targetState === 'walk'
-          ? -0.28 - Math.max(0, s) * 0.22
-          : -0.12;
-      _tmpQuat.setFromAxisAngle(_axisZ, elbowBend);
-      rig.leftForeArm.bone.quaternion
-        .copy(rig.leftForeArm.rest)
-        .multiply(_tmpQuat);
-    }
-    if (rig.rightArm) {
-      if (isAimingGun) {
+    if (rig.rightArm && rig.rightForeArm) {
+      if (weaponCategory === 'rifle') {
         const recoilKick = attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
-        _tmpQuat.setFromAxisAngle(_axisZ, -1.1 + recoilKick);
-        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+        if (isAimingGun || attackTimer > 0) {
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.22 + recoilKick);
+          rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
+          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+        } else {
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.55);
+          rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.32);
+          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+        }
+      } else if (weaponCategory === 'pistol') {
+        const recoilKick = attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.22 : 0;
+        if (isAimingGun || attackTimer > 0) {
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.15 + recoilKick);
+          rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.15);
+          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+        } else {
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.42);
+          rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.25);
+          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+        }
       } else if (attackTimer > 0) {
-        const swingAngle = -1.25 * Math.sin((attackTimer / 0.35) * Math.PI);
-        _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+        if (weaponCategory === 'fists') {
+          if (comboStep === 1) {
+            const p = Math.sin((attackTimer / 0.32) * Math.PI);
+            _tmpQuat.setFromAxisAngle(_axisZ, -1.45 * p);
+            rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.25 * p);
+            rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+          } else if (comboStep === 2) {
+            const p = Math.sin((attackTimer / 0.35) * Math.PI);
+            _tmpQuat.setFromAxisAngle(_axisZ, -1.25 * p);
+            rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.75 * p);
+            rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+          } else {
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.75);
+            rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.65);
+            rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+          }
+        } else {
+          const swingAngle = -1.35 * Math.sin((attackTimer / 0.35) * Math.PI);
+          _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+          rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.45 * Math.sin((attackTimer / 0.35) * Math.PI));
+          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+        }
+      } else if (weaponCategory === 'melee') {
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.45);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.28);
+        rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
       } else {
         _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+        const rElbowBend =
+          targetState === 'run'
+            ? -0.65 - Math.max(0, -s) * 0.35
+            : targetState === 'walk'
+            ? -0.28 - Math.max(0, -s) * 0.22
+            : -0.12;
+        _tmpQuat.setFromAxisAngle(_axisZ, rElbowBend);
+        rig.rightForeArm.bone.quaternion
+          .copy(rig.rightForeArm.rest)
+          .multiply(_tmpQuat);
       }
-    }
-    if (rig.rightForeArm) {
-      const rElbowBend = isAimingGun
-        ? -0.18
-        : attackTimer > 0
-        ? -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
-        : targetState === 'run'
-        ? -0.65 - Math.max(0, -s) * 0.35
-        : targetState === 'walk'
-        ? -0.28 - Math.max(0, -s) * 0.22
-        : -0.12;
-      _tmpQuat.setFromAxisAngle(_axisZ, rElbowBend);
-      rig.rightForeArm.bone.quaternion
-        .copy(rig.rightForeArm.rest)
-        .multiply(_tmpQuat);
     }
     return;
   }
@@ -2674,31 +2796,128 @@ export function setCharacterAnimationState(
   }
   limbs.mixer.update(dt);
 
-  // Upper-body aim / slash overrides applied AFTER the mixer so the gun arm
-  // points forward and melee swings read clearly over the mocap base pose.
-  if (limbs.aimBones && (isAimingGun || attackTimer > 0)) {
+  // Upper-body aim / stance overrides applied AFTER the mixer so gun stances,
+  // low-ready carries and fighting combos read cleanly over the mocap base pose.
+  if (
+    limbs.aimBones &&
+    (isAimingGun || attackTimer > 0 || weaponCategory !== 'fists')
+  ) {
     const ab = limbs.aimBones;
-    if (isAimingGun) {
+    if (weaponCategory === 'rifle') {
       const recoilKick =
         attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
-      _tmpQuat.setFromAxisAngle(_axisZ, -1.1 + recoilKick);
-      ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-      _tmpQuat.setFromAxisAngle(_axisZ, -0.18);
-      ab.rightForeArm.quaternion
-        .copy(ab.rightForeArmRest)
-        .multiply(_tmpQuat);
-      if (ab.spine && ab.spineRest) {
-        _tmpQuat.setFromAxisAngle(_axisX, -0.08);
-        ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+      if (isAimingGun || attackTimer > 0) {
+        _tmpQuat.setFromAxisAngle(_axisZ, -1.22 + recoilKick);
+        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
+        ab.rightForeArm.quaternion
+          .copy(ab.rightForeArmRest)
+          .multiply(_tmpQuat);
+        if (ab.leftArm && ab.leftArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 1.15);
+          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+        }
+        if (ab.leftForeArm && ab.leftForeArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
+          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+        }
+        if (ab.spine && ab.spineRest) {
+          _tmpQuat.setFromAxisAngle(_axisX, -0.09 + recoilKick * 0.35);
+          ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+        }
+      } else {
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.55);
+        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.32);
+        ab.rightForeArm.quaternion
+          .copy(ab.rightForeArmRest)
+          .multiply(_tmpQuat);
+        if (ab.leftArm && ab.leftArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
+          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+        }
+        if (ab.leftForeArm && ab.leftForeArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.32);
+          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+        }
       }
-    } else {
-      const swingAngle = -1.25 * Math.sin((attackTimer / 0.35) * Math.PI);
-      _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+    } else if (weaponCategory === 'pistol') {
+      const recoilKick =
+        attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.22 : 0;
+      if (isAimingGun || attackTimer > 0) {
+        _tmpQuat.setFromAxisAngle(_axisZ, -1.15 + recoilKick);
+        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.15);
+        ab.rightForeArm.quaternion
+          .copy(ab.rightForeArmRest)
+          .multiply(_tmpQuat);
+        if (ab.leftArm && ab.leftArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.85);
+          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+        }
+        if (ab.leftForeArm && ab.leftForeArmRest) {
+          _tmpQuat.setFromAxisAngle(_axisZ, 0.55);
+          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+        }
+        if (ab.spine && ab.spineRest) {
+          _tmpQuat.setFromAxisAngle(_axisX, -0.06);
+          ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+        }
+      } else {
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.42);
+        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.25);
+        ab.rightForeArm.quaternion
+          .copy(ab.rightForeArmRest)
+          .multiply(_tmpQuat);
+      }
+    } else if (attackTimer > 0) {
+      if (weaponCategory === 'fists') {
+        if (comboStep === 0) {
+          const p = Math.sin((attackTimer / 0.32) * Math.PI);
+          if (ab.leftArm && ab.leftArmRest) {
+            _tmpQuat.setFromAxisAngle(_axisZ, 1.35 * p);
+            ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+          }
+          if (ab.leftForeArm && ab.leftForeArmRest) {
+            _tmpQuat.setFromAxisAngle(_axisZ, 0.25 * p);
+            ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+          }
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.75);
+          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        } else if (comboStep === 1) {
+          const p = Math.sin((attackTimer / 0.32) * Math.PI);
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.45 * p);
+          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.25 * p);
+          ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+          if (ab.leftArm && ab.leftArmRest) {
+            _tmpQuat.setFromAxisAngle(_axisZ, 0.75);
+            ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+          }
+        } else {
+          const p = Math.sin((attackTimer / 0.35) * Math.PI);
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.25 * p);
+          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.75 * p);
+          ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+        }
+      } else {
+        const swingAngle = -1.35 * Math.sin((attackTimer / 0.35) * Math.PI);
+        _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(
+          _axisZ,
+          -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
+        );
+        ab.rightForeArm.quaternion
+          .copy(ab.rightForeArmRest)
+          .multiply(_tmpQuat);
+      }
+    } else if (weaponCategory === 'melee') {
+      _tmpQuat.setFromAxisAngle(_axisZ, -0.45);
       ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-      _tmpQuat.setFromAxisAngle(
-        _axisZ,
-        -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
-      );
+      _tmpQuat.setFromAxisAngle(_axisZ, -0.28);
       ab.rightForeArm.quaternion
         .copy(ab.rightForeArmRest)
         .multiply(_tmpQuat);

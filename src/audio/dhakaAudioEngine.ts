@@ -435,6 +435,8 @@ class DhakaAudioEngine {
       | 'pickup'
       | 'cash'
       | 'hit'
+      | 'heavy_hit'
+      | 'punch_swing'
       | 'mission_complete'
       | 'jump'
       | 'ui'
@@ -449,6 +451,10 @@ class DhakaAudioEngine {
       | 'wasted'
       | 'busted'
       | 'crash'
+      | 'dry_fire'
+      | 'casing_drop'
+      | 'ricochet'
+      | 'pain_grunt'
   ) {
     this.init();
     if (!this.ctx) return;
@@ -671,6 +677,114 @@ class DhakaAudioEngine {
         osc.start(now + idx * 0.09);
         osc.stop(now + idx * 0.09 + 0.3);
       });
+      return;
+    }
+
+    if (effect === 'dry_fire') {
+      // Hollow metallic firing pin click
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1200, now);
+      osc.frequency.exponentialRampToValueAtTime(350, now + 0.04);
+      gain.gain.setValueAtTime(0.28 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.05);
+      return;
+    }
+
+    if (effect === 'casing_drop') {
+      // High brass shell casing ping and bounce
+      const freqs = [3200, 3850];
+      freqs.forEach((f, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now + idx * 0.035);
+        osc.frequency.exponentialRampToValueAtTime(f * 0.85, now + idx * 0.035 + 0.04);
+        gain.gain.setValueAtTime(0.14 * this.sfxVolume, now + idx * 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.035 + 0.045);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + idx * 0.035);
+        osc.stop(now + idx * 0.035 + 0.05);
+      });
+      return;
+    }
+
+    if (effect === 'punch_swing') {
+      // Snappy athletic arm swoosh
+      const bufSize = Math.floor(this.ctx.sampleRate * 0.12);
+      const noiseBuf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.sin((i / bufSize) * Math.PI);
+      }
+      const noiseSrc = this.ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuf;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(650, now);
+      filter.frequency.exponentialRampToValueAtTime(260, now + 0.11);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.22 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      noiseSrc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noiseSrc.start(now);
+      return;
+    }
+
+    if (effect === 'heavy_hit') {
+      // Deep blunt wooden / bone crunch (cricket bat / bamboo lathi / heavy combo)
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(95, now);
+      osc.frequency.exponentialRampToValueAtTime(28, now + 0.22);
+      gain.gain.setValueAtTime(0.38 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
+      return;
+    }
+
+    if (effect === 'ricochet') {
+      // Whistling bullet ricochet zip
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(2400, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.18);
+      gain.gain.setValueAtTime(0.2 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.2);
+      return;
+    }
+
+    if (effect === 'pain_grunt') {
+      // Human vocal grunt reaction
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(85, now + 0.15);
+      gain.gain.setValueAtTime(0.24 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.17);
       return;
     }
 

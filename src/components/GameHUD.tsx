@@ -574,12 +574,33 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
       </div>
 
       {/* ==================== CENTER SCREEN ==================== */}
-      {/* Aiming Reticle (Only when wielding a firearm on foot) */}
+      {/* Dynamic Tactical Reticle & Aiming HUD */}
       {!inVehicleId && activeTool?.isFirearm && (
-        <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-10">
-          <div className="relative w-5 h-5 flex items-center justify-center opacity-85">
-            <div className="w-1 h-1 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" />
-            <div className="absolute w-4 h-4 rounded-full border border-amber-400/60" />
+        <div className="fixed inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
+          <div className="relative w-8 h-8 flex items-center justify-center">
+            {/* Center precision red dot */}
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
+            {/* Outer tactical crosshair brackets */}
+            <div className="absolute top-0 w-0.5 h-2 bg-amber-400/70" />
+            <div className="absolute bottom-0 w-0.5 h-2 bg-amber-400/70" />
+            <div className="absolute left-0 h-0.5 w-2 bg-amber-400/70" />
+            <div className="absolute right-0 h-0.5 w-2 bg-amber-400/70" />
+            <div className="absolute w-6 h-6 rounded-full border border-amber-400/30" />
+          </div>
+          {/* Tactical Hotkey Pill under reticle */}
+          <div className="mt-2.5 px-2 py-0.5 rounded-full bg-slate-950/70 backdrop-blur-sm border border-slate-700/60 text-[8px] font-mono font-medium text-slate-300 opacity-80">
+            [RMB/Z] AIM • [LMB/X] FIRE • [R] RELOAD
+          </div>
+        </div>
+      )}
+
+      {!inVehicleId && !activeTool?.isFirearm && activeTool?.id !== 'fists' && (
+        <div className="fixed inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
+          <div className="w-2 h-2 rounded-full border border-amber-400/50 flex items-center justify-center">
+            <div className="w-0.5 h-0.5 rounded-full bg-amber-400" />
+          </div>
+          <div className="mt-2 px-2 py-0.5 rounded-full bg-slate-950/70 backdrop-blur-sm border border-slate-700/60 text-[8px] font-mono font-medium text-amber-300 opacity-75">
+            [LMB/X] STRIKE (COMBO 1-2-3)
           </div>
         </div>
       )}
