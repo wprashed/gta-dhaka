@@ -798,6 +798,7 @@ export function createVehicleMesh(
     ensureModelLoaded('readyplayerme1', (gltf) => {
       try {
         const driver = SkeletonUtils.clone(gltf.scene);
+        driver.name = 'npc_driver';
         driver.scale.setScalar(0.78);
         driver.position.set(0, 0.12, 0.28);
         group.add(driver);
@@ -1142,6 +1143,7 @@ export function createVehicleMesh(
     ensureModelLoaded('readyplayerme1', (gltf) => {
       try {
         const puller = SkeletonUtils.clone(gltf.scene);
+        puller.name = 'npc_driver';
         puller.scale.setScalar(0.88);
         puller.position.set(0, 0.22, 0.34);
         const lungiTex = createLungiPatternTexture('#1e3a8a', '#facc15');
@@ -1211,6 +1213,18 @@ export function createVehicleMesh(
       });
       group.remove(fallbackGroup);
       group.add(cloned);
+
+      // 3D Human driver seated in the car's driver seat
+      ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
+        try {
+          const driver = SkeletonUtils.clone(driverGltf.scene);
+          driver.name = 'npc_driver';
+          driver.scale.setScalar(0.72);
+          driver.position.set(-0.35, 0.22, 0.08);
+          driver.rotation.y = 0;
+          cloned.add(driver);
+        } catch {}
+      });
     });
 
     return group;
@@ -1343,6 +1357,17 @@ export function createVehicleMesh(
     addWheel(-1.34, 0.48, -2.55, 1.35);
     addWheel(1.34, 0.48, -2.55, 1.35);
 
+    // Bus driver seated in the elevated front driver cabin
+    ensureModelLoaded('readyplayerme1', (driverGltf) => {
+      try {
+        const driver = SkeletonUtils.clone(driverGltf.scene);
+        driver.name = 'npc_driver';
+        driver.scale.setScalar(0.85);
+        driver.position.set(-0.65, 1.15, 3.8);
+        group.add(driver);
+      } catch {}
+    });
+
     return group;
   }
 
@@ -1429,6 +1454,7 @@ export function createVehicleMesh(
     ensureModelLoaded('readyplayerme1', (gltf) => {
       try {
         const rider = SkeletonUtils.clone(gltf.scene);
+        rider.name = 'npc_driver';
         rider.scale.setScalar(0.84);
         rider.position.set(0, 0.26, -0.14);
         const reachQuat = new THREE.Quaternion()
@@ -1799,6 +1825,18 @@ export function createVehicleMesh(
 
       group.remove(fallbackGroup);
       group.add(cloned);
+
+      // 3D Human driver seated in the car's driver seat
+      ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
+        try {
+          const driver = SkeletonUtils.clone(driverGltf.scene);
+          driver.name = 'npc_driver';
+          driver.scale.setScalar(0.72);
+          driver.position.set(-0.35, 0.22, 0.08);
+          driver.rotation.y = 0;
+          cloned.add(driver);
+        } catch {}
+      });
 
       // Fit plates / glow / beacon to this GLB's real bounds (local space).
       if (carModelKey === 'car_concept') {

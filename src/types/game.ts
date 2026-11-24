@@ -78,6 +78,7 @@ export interface VehicleEntity {
 }
 
 export type NPCRole =
+  | 'citizen'
   | 'rickshaw_puller'
   | 'shopkeeper'
   | 'street_vendor'
@@ -110,6 +111,8 @@ export interface NPCEntity {
   health: number;
   isDead?: boolean;
   respawnTimer?: number;
+  isEjectedDriver?: boolean;
+  ejectedTumbleTimer?: number;
 }
 
 export type POIType =

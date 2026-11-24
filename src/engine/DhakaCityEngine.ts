@@ -1103,11 +1103,113 @@ export class DhakaCityEngine {
       this.playerPos.set(safeX, 0, safeZ);
       this.playerLimbs.group.visible = true;
       this.playerLimbs.group.position.copy(this.playerPos);
+      this.playerLimbs.group.scale.set(1.0, 1.0, 1.0);
+      this.playerLimbs.group.rotation.set(0, this.playerRotation, 0);
+      this.playerLimbs.leftArm.rotation.set(0, 0, 0);
+      this.playerLimbs.rightArm.rotation.set(0, 0, 0);
+      this.playerLimbs.leftLeg.rotation.set(0, 0, 0);
+      this.playerLimbs.rightLeg.rotation.set(0, 0, 0);
+      if (this.playerLimbs.rpmRig) {
+        const rig = this.playerLimbs.rpmRig;
+        if (rig.leftUpLeg) rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest);
+        if (rig.rightUpLeg) rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest);
+        if (rig.leftLeg) rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest);
+        if (rig.rightLeg) rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest);
+        if (rig.leftArm) rig.leftArm.bone.quaternion.copy(rig.leftArm.rest);
+        if (rig.rightArm) rig.rightArm.bone.quaternion.copy(rig.rightArm.rest);
+      }
     }
     this.activeVehicleId = null;
     this.headlightSpot.intensity = 0;
     dhakaAudio.updateEngine(false, null, 0);
     useGameStore.setState({ inVehicleId: null, currentVehicleType: null });
+  }
+
+  public ejectDriverFromVehicle(veh: VehicleEntity) {
+    const store = useGameStore.getState();
+    const mesh = this.vehicleMeshes.get(veh.id);
+
+    let hadDriver = false;
+    if (mesh) {
+      // Find driver model in top-level or descendants
+      const driverObj = mesh.getObjectByName('npc_driver');
+      if (driverObj) {
+        hadDriver = true;
+        driverObj.visible = false;
+        driverObj.parent?.remove(driverObj);
+      }
+    }
+
+    // If it was traffic or had a driver, drop the driver out onto the street!
+    if (veh.isTraffic || hadDriver) {
+      const ejectSide = veh.type === 'bus' ? -2.2 : -1.6; // Driver door / side of bike
+      const ejectAngle = veh.rotation + Math.PI / 2;
+      const dropX = clampWorldCoord(veh.x + Math.sin(ejectAngle) * ejectSide);
+      const dropZ = clampWorldCoord(veh.z + Math.cos(ejectAngle) * ejectSide);
+
+      const droppedId = `ejected_driver_${Date.now()}_${Math.floor(Math.random() * 999)}`;
+      const droppedNPC: NPCEntity = {
+        id: droppedId,
+        nameEn: 'Ejected Driver',
+        nameBn: 'গাড়ির চালক',
+        role: veh.isPolice
+          ? 'police_officer'
+          : veh.type === 'rickshaw'
+          ? 'rickshaw_puller'
+          : 'citizen',
+        x: dropX,
+        z: dropZ,
+        rotation: veh.rotation + Math.PI + (Math.random() - 0.5) * 0.4,
+        shirtColor: veh.isPolice ? '#1e3a8a' : '#d97706',
+        pantsColor: '#1e293b',
+        dialogueEn: ['Hey! My vehicle! Stop thief! Call the police!'],
+        dialogueBn: ['আরে আমার গাড়ি! ছিনতাইকারী! পুলিশ ডাকো! এই ব্যাটা নাম!'],
+        aiState: 'flee',
+        walkTargetX: dropX + (Math.random() - 0.5) * 60,
+        walkTargetZ: dropZ + (Math.random() - 0.5) * 60,
+        health: 80,
+        isEjectedDriver: true,
+        ejectedTumbleTimer: 2.2, // Tumbles on the ground for 2.2s before scrambling to feet
+      };
+
+      const droppedLimbs = createCharacterMesh(
+        droppedNPC.shirtColor,
+        droppedNPC.pantsColor,
+        droppedNPC.role,
+        false
+      );
+
+      // Ejected driver hits the street pavement (ragdoll tumbling on the ground)
+      droppedLimbs.group.position.set(dropX, 0.08, dropZ);
+      droppedLimbs.group.rotation.x = -Math.PI / 2; // Lies flat on the pavement
+      droppedLimbs.group.rotation.y = veh.rotation + Math.PI / 2;
+      this.scene.add(droppedLimbs.group);
+
+      this.npcs.push(droppedNPC);
+      this.npcLimbsMap.set(droppedId, droppedLimbs);
+
+      // Spawn road scrape dust & play impact grunt sound
+      this.spawnImpactSparks(dropX, 0.18, dropZ, '#cbd5e1', 2.0);
+      dhakaAudio.playSfx('hit');
+
+      store.showBanner({
+        titleEn: 'DRIVER DROPPED OUT — YOU ARE THE DRIVER!',
+        titleBn: 'চালককে নামিয়ে দেওয়া হয়েছে — আপনি এখন ড্রাইভার!',
+        subtitleEn: veh.isPolice
+          ? 'Commandeered DMP Patrol cruiser! Wanted Level 2!'
+          : `Ejected driver to the street! Now driving ${veh.type.toUpperCase()}.`,
+        subtitleBn: veh.isPolice
+          ? 'পুলিশের গাড়ি দখল করেছেন! ওয়ান্টেড লেভেল ২!'
+          : 'চালককে নামিয়ে দিয়েছেন! আপনি এখন গাড়ি চালাচ্ছেন।',
+        tone: veh.isPolice ? 'red' : 'gold',
+      });
+
+      if (veh.isPolice && store.wantedLevel === 0) {
+        store.setWantedLevel(2);
+      } else if (!veh.isPolice && store.wantedLevel === 0 && Math.random() < 0.45) {
+        store.setWantedLevel(1);
+      }
+    }
   }
 
   public explodeVehicle(veh: VehicleEntity) {
@@ -3955,22 +4057,18 @@ export class DhakaCityEngine {
     }
 
     if (closestVeh) {
+      this.ejectDriverFromVehicle(closestVeh);
+
       this.activeVehicleId = closestVeh.id;
       closestVeh.isTraffic = false;
-      this.playerLimbs.group.visible = false;
+      this.playerLimbs.group.visible = true;
       this.cameraYaw = closestVeh.rotation + Math.PI;
       dhakaAudio.playSfx('pickup');
 
-      if (closestVeh.isPolice && store.wantedLevel === 0) {
-        store.setWantedLevel(2);
-        store.showBanner({
-          titleEn: 'COMMANDEERED DMP PATROL VEHICLE!',
-          titleBn: 'ডিএমপি পুলিশের গাড়ি দখল করেছেন!',
-          subtitleEn: 'Police dispatch alerted — Wanted Level 2!',
-          subtitleBn: 'পুলিশ কন্ট্রোল রুম সতর্ক হয়েছে — ওয়ান্টেড লেভেল ২!',
-          tone: 'red',
-        });
-      }
+      useGameStore.setState({
+        inVehicleId: closestVeh.id,
+        currentVehicleType: closestVeh.type,
+      });
       return;
     }
 
@@ -5073,8 +5171,134 @@ export class DhakaCityEngine {
     if (mesh) {
       mesh.position.set(veh.x, 0, veh.z);
       mesh.rotation.y = veh.rotation;
+
+      // Motorcycle dynamic body roll / leaning when turning at speed
+      if (veh.type === 'motorcycle') {
+        const leanTarget =
+          -steer * Math.min(1, Math.abs(veh.speed) / 5.5) * 0.32;
+        mesh.rotation.z += (leanTarget - mesh.rotation.z) * Math.min(1, dt * 9);
+      } else {
+        mesh.rotation.z = 0;
+      }
+
       // Both CarConcept.glb and ferrari.glb hubs use local X as the true axle.
       this.animateVehicleWheels(mesh, veh.speed, dt, steer);
+    }
+
+    // Visibly mount and pose the player as the active driver behind the wheel / handlebars!
+    this.playerLimbs.group.visible = true;
+
+    if (veh.type === 'motorcycle') {
+      const backOffset = -0.16;
+      const seatY = 0.52;
+      const px = veh.x + Math.sin(veh.rotation) * backOffset;
+      const pz = veh.z + Math.cos(veh.rotation) * backOffset;
+      this.playerLimbs.group.position.set(px, seatY, pz);
+      this.playerLimbs.group.rotation.set(
+        0,
+        veh.rotation,
+        mesh ? mesh.rotation.z : 0
+      );
+      this.playerLimbs.group.scale.set(0.85, 0.85, 0.85);
+
+      this.playerLimbs.leftArm.rotation.set(0.72, 0.22, -0.42);
+      this.playerLimbs.rightArm.rotation.set(0.72, -0.22, 0.42);
+      this.playerLimbs.leftLeg.rotation.set(1.05, 0.22, -0.2);
+      this.playerLimbs.rightLeg.rotation.set(1.05, -0.22, 0.2);
+    } else if (veh.type === 'rickshaw') {
+      const px = veh.x + Math.sin(veh.rotation) * 0.34;
+      const pz = veh.z + Math.cos(veh.rotation) * 0.34;
+      this.playerLimbs.group.position.set(px, 0.38, pz);
+      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
+      this.playerLimbs.group.scale.set(0.88, 0.88, 0.88);
+
+      this.playerLimbs.leftArm.rotation.set(0.55, 0.2, -0.35);
+      this.playerLimbs.rightArm.rotation.set(0.55, -0.2, 0.35);
+      const pedal = performance.now() * 0.008 * (veh.speed || 0.6);
+      this.playerLimbs.leftLeg.rotation.set(
+        Math.sin(pedal) * 0.4 + 0.5,
+        0.1,
+        0
+      );
+      this.playerLimbs.rightLeg.rotation.set(
+        Math.sin(pedal + Math.PI) * 0.4 + 0.5,
+        -0.1,
+        0
+      );
+    } else if (veh.type === 'cng') {
+      const px = veh.x + Math.sin(veh.rotation) * 0.28;
+      const pz = veh.z + Math.cos(veh.rotation) * 0.28;
+      this.playerLimbs.group.position.set(px, 0.26, pz);
+      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
+      this.playerLimbs.group.scale.set(0.82, 0.82, 0.82);
+
+      this.playerLimbs.leftArm.rotation.set(0.5, 0.2, -0.3);
+      this.playerLimbs.rightArm.rotation.set(0.5, -0.2, 0.3);
+      this.playerLimbs.leftLeg.rotation.set(0.95, 0.2, 0);
+      this.playerLimbs.rightLeg.rotation.set(0.95, -0.2, 0);
+    } else if (veh.type === 'car' || veh.type === 'police') {
+      const sideAngle = veh.rotation + Math.PI / 2;
+      const px =
+        veh.x - Math.sin(sideAngle) * 0.36 + Math.sin(veh.rotation) * 0.08;
+      const pz =
+        veh.z - Math.cos(sideAngle) * 0.36 + Math.cos(veh.rotation) * 0.08;
+      this.playerLimbs.group.position.set(px, 0.22, pz);
+      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
+      this.playerLimbs.group.scale.set(0.74, 0.74, 0.74);
+
+      this.playerLimbs.leftArm.rotation.set(0.48, 0.2, -0.25);
+      this.playerLimbs.rightArm.rotation.set(0.48, -0.2, 0.25);
+      this.playerLimbs.leftLeg.rotation.set(1.1, 0.15, 0);
+      this.playerLimbs.rightLeg.rotation.set(1.1, -0.15, 0);
+    } else if (veh.type === 'pickup') {
+      const sideAngle = veh.rotation + Math.PI / 2;
+      const px =
+        veh.x - Math.sin(sideAngle) * 0.42 + Math.sin(veh.rotation) * 0.35;
+      const pz =
+        veh.z - Math.cos(sideAngle) * 0.42 + Math.cos(veh.rotation) * 0.35;
+      this.playerLimbs.group.position.set(px, 0.46, pz);
+      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
+      this.playerLimbs.group.scale.set(0.78, 0.78, 0.78);
+
+      this.playerLimbs.leftArm.rotation.set(0.48, 0.2, -0.25);
+      this.playerLimbs.rightArm.rotation.set(0.48, -0.2, 0.25);
+      this.playerLimbs.leftLeg.rotation.set(1.1, 0.15, 0);
+      this.playerLimbs.rightLeg.rotation.set(1.1, -0.15, 0);
+    } else if (veh.type === 'bus') {
+      const sideAngle = veh.rotation + Math.PI / 2;
+      const px =
+        veh.x - Math.sin(sideAngle) * 0.65 + Math.sin(veh.rotation) * 3.8;
+      const pz =
+        veh.z - Math.cos(sideAngle) * 0.65 + Math.cos(veh.rotation) * 3.8;
+      this.playerLimbs.group.position.set(px, 1.15, pz);
+      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
+      this.playerLimbs.group.scale.set(0.86, 0.86, 0.86);
+
+      this.playerLimbs.leftArm.rotation.set(0.5, 0.2, -0.3);
+      this.playerLimbs.rightArm.rotation.set(0.5, -0.2, 0.3);
+      this.playerLimbs.leftLeg.rotation.set(1.0, 0.15, 0);
+      this.playerLimbs.rightLeg.rotation.set(1.0, -0.15, 0);
+    }
+
+    if (this.playerLimbs.rpmRig) {
+      const rig = this.playerLimbs.rpmRig;
+      const axisX = new THREE.Vector3(1, 0, 0);
+      const tmpQuat = new THREE.Quaternion();
+      tmpQuat.setFromAxisAngle(axisX, 1.05);
+      if (rig.leftUpLeg)
+        rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQuat);
+      if (rig.rightUpLeg)
+        rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQuat);
+      tmpQuat.setFromAxisAngle(axisX, -1.15);
+      if (rig.leftLeg)
+        rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQuat);
+      if (rig.rightLeg)
+        rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQuat);
+      tmpQuat.setFromAxisAngle(axisX, 0.48);
+      if (rig.leftArm)
+        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQuat);
+      if (rig.rightArm)
+        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQuat);
     }
 
     dhakaAudio.updateEngine(
@@ -5389,6 +5613,20 @@ export class DhakaCityEngine {
           npc.x = (Math.random() - 0.5) * 80;
           npc.z = (Math.random() - 0.5) * 120;
           limbs.group.position.set(npc.x, 0, npc.z);
+        }
+        continue;
+      }
+
+      // Handle Ejected Drivers (tumble flat on the pavement, then stand up and flee)
+      if (npc.isEjectedDriver && (npc.ejectedTumbleTimer ?? 0) > 0) {
+        npc.ejectedTumbleTimer = (npc.ejectedTumbleTimer ?? 0) - dt;
+        limbs.group.position.set(npc.x, 0.08, npc.z);
+        limbs.group.rotation.x = -Math.PI / 2;
+        if (npc.ejectedTumbleTimer <= 0) {
+          limbs.group.rotation.x = 0;
+          npc.aiState = 'flee';
+          npc.walkTargetX = npc.x + (Math.random() - 0.5) * 80;
+          npc.walkTargetZ = npc.z + (Math.random() - 0.5) * 80;
         }
         continue;
       }
