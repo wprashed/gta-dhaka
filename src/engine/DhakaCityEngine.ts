@@ -3200,38 +3200,38 @@ export class DhakaCityEngine {
       { type: 'police', x: 215, z: -95, rot: 0, isTraffic: true, color: '#1e3a8a' },
       { type: 'police', x: -165, z: 110, rot: 0, isTraffic: true, color: '#1e3a8a' },
 
-      // Mirpur-10 & Cricket Stadium Sector Spawns
-      { type: 'rickshaw', x: -420, z: -170, rot: 0, isTraffic: true, color: '#f59e0b' },
-      { type: 'cng', x: -424, z: -210, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'bus', x: -420, z: -120, rot: 0, isTraffic: true, color: '#b91c1c' },
-      { type: 'motorcycle', x: -450, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#ef4444' },
-      { type: 'police', x: -424, z: -260, rot: Math.PI, isTraffic: true, color: '#1e3a8a' },
+      // Mirpur-10 & Cricket Stadium Sector Spawns (Avenue at X = -380)
+      { type: 'rickshaw', x: -376.5, z: -170, rot: 0, isTraffic: true, color: '#f59e0b' },
+      { type: 'cng', x: -383.5, z: -210, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'bus', x: -376.5, z: -120, rot: 0, isTraffic: true, color: '#b91c1c' },
+      { type: 'motorcycle', x: -383.5, z: -175, rot: Math.PI, isTraffic: false, color: '#ef4444' },
+      { type: 'police', x: -383.5, z: -260, rot: Math.PI, isTraffic: true, color: '#1e3a8a' },
 
-      // Purbachal 300ft High-Speed Expressway Spawns
-      { type: 'car', x: 480, z: -254, rot: -Math.PI / 2, isTraffic: true, color: '#ef4444' },
-      { type: 'motorcycle', x: 540, z: -246, rot: Math.PI / 2, isTraffic: true, color: '#f97316' },
-      { type: 'car', x: 620, z: -250, rot: 0, isTraffic: false, color: '#38bdf8' },
-      { type: 'pickup', x: 420, z: -246, rot: Math.PI / 2, isTraffic: true, color: '#0284c7' },
+      // Purbachal 300ft High-Speed Expressway Spawns (Expressway at Z = -315, NS at X = 640)
+      { type: 'car', x: 480, z: -318.5, rot: -Math.PI / 2, isTraffic: true, color: '#ef4444' },
+      { type: 'motorcycle', x: 540, z: -311.5, rot: Math.PI / 2, isTraffic: true, color: '#f97316' },
+      { type: 'car', x: 644, z: -250, rot: 0, isTraffic: false, color: '#38bdf8' },
+      { type: 'pickup', x: 420, z: -311.5, rot: Math.PI / 2, isTraffic: true, color: '#0284c7' },
 
-      // Bashundhara R/A & Jamuna Future Park Spawns
-      { type: 'car', x: 420, z: -320, rot: 0, isTraffic: false, color: '#f8fafc' },
-      { type: 'cng', x: 424, z: -350, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'motorcycle', x: 416, z: -290, rot: 0, isTraffic: true, color: '#10b981' },
+      // Bashundhara R/A & Jamuna Future Park Spawns (Avenue at X = 440)
+      { type: 'car', x: 443.5, z: -320, rot: 0, isTraffic: false, color: '#f8fafc' },
+      { type: 'cng', x: 436.5, z: -350, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'motorcycle', x: 443.5, z: -290, rot: 0, isTraffic: true, color: '#10b981' },
 
-      // Uttara North Metro Terminal Spawns
-      { type: 'bus', x: -210, z: -520, rot: 0, isTraffic: true, color: '#047857' },
-      { type: 'cng', x: -214, z: -460, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'police', x: -210, z: -580, rot: 0, isTraffic: true, color: '#1e3a8a' },
+      // Uttara North Metro Terminal Spawns (Avenue at X = -170, Runway at Z = -620)
+      { type: 'bus', x: -166.5, z: -520, rot: 0, isTraffic: true, color: '#047857' },
+      { type: 'cng', x: -173.5, z: -460, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'police', x: -166.5, z: -580, rot: 0, isTraffic: true, color: '#1e3a8a' },
 
-      // Lalbagh Fort & Chawkbazar Spawns
-      { type: 'rickshaw', x: -170, z: 270, rot: 0, isTraffic: true, color: '#ec4899' },
-      { type: 'rickshaw', x: -174, z: 320, rot: Math.PI, isTraffic: true, color: '#f59e0b' },
-      { type: 'pickup', x: -170, z: 360, rot: 0, isTraffic: false, color: '#d97706' },
+      // Lalbagh Fort & Chawkbazar Spawns (Roads at X = -170, X = -70, Z = 285)
+      { type: 'rickshaw', x: -166.5, z: 270, rot: 0, isTraffic: true, color: '#ec4899' },
+      { type: 'rickshaw', x: -173.5, z: 240, rot: Math.PI, isTraffic: true, color: '#f59e0b' },
+      { type: 'pickup', x: -67.5, z: 200, rot: 0, isTraffic: false, color: '#d97706' },
 
-      // Keraniganj & Buriganga South Bank Spawns
-      { type: 'pickup', x: 4, z: 430, rot: 0, isTraffic: true, color: '#475569' },
-      { type: 'cng', x: -4, z: 460, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'motorcycle', x: 12, z: 440, rot: 0, isTraffic: false, color: '#06b6d4' },
+      // Keraniganj & Buriganga South Bank Spawns (Highway at Z = 440)
+      { type: 'pickup', x: 120, z: 436.5, rot: -Math.PI / 2, isTraffic: true, color: '#475569' },
+      { type: 'cng', x: 80, z: 443.5, rot: Math.PI / 2, isTraffic: true, color: '#15803d' },
+      { type: 'motorcycle', x: 0, z: 436.5, rot: -Math.PI / 2, isTraffic: false, color: '#06b6d4' },
     ];
 
     presets.forEach((p, idx) => {
@@ -5454,20 +5454,18 @@ export class DhakaCityEngine {
           const nx = veh.x + Math.sin(veh.rotation) * chaseSpeed * dt;
           const nz = veh.z + Math.cos(veh.rotation) * chaseSpeed * dt;
 
-          if (!this.checkWorldObstacle(nx, nz, 1.4)) {
+          if (!this.checkWorldObstacle(nx, nz, 1.4, veh.id)) {
             veh.x = nx;
             veh.z = nz;
           } else {
-            // Intelligent obstacle unstuck: back up slightly and steer
-            const backX = veh.x - Math.sin(veh.rotation) * 3 * dt;
-            const backZ = veh.z - Math.cos(veh.rotation) * 3 * dt;
-            if (!this.checkWorldObstacle(backX, backZ, 1.4)) {
+            // Intelligent obstacle unstuck: back up cleanly along reverse vector without spinning
+            const backX = veh.x - Math.sin(veh.rotation) * 4 * dt;
+            const backZ = veh.z - Math.cos(veh.rotation) * 4 * dt;
+            if (!this.checkWorldObstacle(backX, backZ, 1.4, veh.id)) {
               veh.x = backX;
               veh.z = backZ;
             }
-            veh.rotation = normalizeAngle(
-              veh.rotation + (diff >= 0 ? 1 : -1) * dt * 2.5
-            );
+            veh.rotation = normalizeAngle(veh.rotation + diff * Math.min(1, dt * 1.5));
           }
 
           // Police ramming Arif's vehicle
@@ -5540,6 +5538,8 @@ export class DhakaCityEngine {
         if (Math.random() < 0.015) {
           dhakaAudio.playHorn(stats.hornType);
         }
+        veh.speed = 0;
+        this.animateVehicleWheels(mesh, 0, dt, 0);
         continue;
       }
 
@@ -5567,26 +5567,33 @@ export class DhakaCityEngine {
         if (Math.random() < 0.006) {
           dhakaAudio.playHorn(stats.hornType);
         }
+        veh.speed = 0;
+        this.animateVehicleWheels(mesh, 0, dt, 0);
         continue; // Wait behind car ahead in lane
       }
 
       const nx = veh.x + Math.sin(veh.rotation) * cruiseSpeed * dt;
       const nz = veh.z + Math.cos(veh.rotation) * cruiseSpeed * dt;
 
-      if (
+      // Check boundary or obstacle ahead - pass veh.id to avoid self-collision!
+      const isBlocked =
         Math.abs(nx) > 740 ||
         nz > 450 ||
         nz < -690 ||
-        this.checkWorldObstacle(nx, nz, 1.5)
-      ) {
-        // Smooth steering arc when reaching boundary
-        veh.rotation = normalizeAngle(veh.rotation + dt * 2.8);
+        this.checkWorldObstacle(nx, nz, 1.4, veh.id);
+
+      if (isBlocked) {
+        // Clean 180° road lane reversal - NEVER spin continuously!
+        veh.rotation = normalizeAngle(veh.rotation + Math.PI);
+        veh.x += Math.sin(veh.rotation) * 1.5;
+        veh.z += Math.cos(veh.rotation) * 1.5;
       } else {
         veh.x = nx;
         veh.z = nz;
       }
       mesh.position.set(veh.x, 0, veh.z);
       mesh.rotation.y = veh.rotation;
+      this.animateVehicleWheels(mesh, cruiseSpeed, dt, 0);
       this.animateVehicleWheels(mesh, cruiseSpeed, dt, 0);
     }
   }
@@ -6055,21 +6062,8 @@ export class DhakaCityEngine {
       }
     }
 
-    // Buriganga River Southern Boundary (Allow Sadarghat launch terminal pontoon, gangway & jetty deck)
-    if (z + radius > 294) {
-      const onSadarghatJetty = x >= -40 && x <= 40 && z <= 320;
-      if (!onSadarghatJetty) return true;
-    }
-
-    // Dhanmondi Lake Water Boundary (-265..-183, -35..85)
-    if (x > -265 && x < -183 && z > -35 && z < 85) return true;
-
-    // Hatirjheel Lake Water Boundary (165..275, -80..70), EXCEPT on the Bridge Deck (X = 208..232) or Central Causeway (Z = -10..10)
-    if (x > 165 && x < 275 && z > -80 && z < 70) {
-      const onBridge = x >= 208 && x <= 232;
-      const onCauseway = z >= -10 && z <= 10;
-      if (!onBridge && !onCauseway) return true;
-    }
+    // Check Water Boundaries across expanded Dhaka metropolitan (Buriganga, Hatirjheel, Dhanmondi, Gulshan, Uttara lakes)
+    if (this.isPositionInWater(x, z)) return true;
 
     return false;
   }
