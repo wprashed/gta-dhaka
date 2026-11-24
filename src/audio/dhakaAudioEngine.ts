@@ -230,10 +230,44 @@ class DhakaAudioEngine {
       | 'shotgun'
       | 'rifle'
       | 'slash'
+      | 'skid'
+      | 'eat'
+      | 'drink'
   ) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+
+    if (effect === 'skid') {
+      // High-pitched friction noise for tires drifting on Dhaka asphalt
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(840, now);
+      osc.frequency.linearRampToValueAtTime(710, now + 0.18);
+      gain.gain.setValueAtTime(0.08 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.21);
+      return;
+    }
+
+    if (effect === 'drink' || effect === 'eat') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(effect === 'drink' ? 360 : 280, now);
+      osc.frequency.exponentialRampToValueAtTime(480, now + 0.15);
+      gain.gain.setValueAtTime(0.15 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.19);
+      return;
+    }
 
     if (
       effect === 'gunshot' ||
@@ -354,6 +388,14 @@ class DhakaAudioEngine {
   public setRadioStation(station: RadioStationId) {
     this.currentStation = station;
     this.radioStep = 0;
+    if (station === 'off') {
+      if (this.radioInterval) {
+        window.clearInterval(this.radioInterval);
+        this.radioInterval = null;
+      }
+    } else if (!this.radioInterval) {
+      this.startRadioSequencer();
+    }
   }
 
   private startRadioSequencer() {

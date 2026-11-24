@@ -100,10 +100,12 @@ export interface NPCEntity {
   storyId?: string;
   dialogueEn: string[];
   dialogueBn: string[];
-  aiState: 'walk' | 'idle' | 'vendor' | 'flee' | 'patrol';
+  aiState: 'walk' | 'idle' | 'vendor' | 'flee' | 'patrol' | 'dead';
   walkTargetX: number;
   walkTargetZ: number;
   health: number;
+  isDead?: boolean;
+  respawnTimer?: number;
 }
 
 export type POIType =
