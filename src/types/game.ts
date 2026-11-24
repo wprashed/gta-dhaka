@@ -70,6 +70,7 @@ export interface VehicleEntity {
   color: string;
   isTraffic: boolean;
   isPolice?: boolean;
+  isParked?: boolean;
   aiTargetX?: number;
   aiTargetZ?: number;
   aiLaneOffset?: number;

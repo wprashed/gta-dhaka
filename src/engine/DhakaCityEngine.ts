@@ -4714,39 +4714,185 @@ export class DhakaCityEngine {
       }
     }
 
-    // 3. Update 3D Bullet Tracers & Ballistic Collisions
+    // 3. Update 3D Bullet Tracers & Continuous Ballistic Collisions
     const store = useGameStore.getState();
     for (let i = this.bulletTracers.length - 1; i >= 0; i--) {
       const b = this.bulletTracers[i];
       b.life -= dt;
-      const nx = b.mesh.position.x + b.vx * dt;
-      const ny = b.mesh.position.y + b.vy * dt;
-      const nz = b.mesh.position.z + b.vz * dt;
+      const prevX = b.mesh.position.x;
+      const prevY = b.mesh.position.y;
+      const prevZ = b.mesh.position.z;
+
+      const nx = prevX + b.vx * dt;
+      const ny = prevY + b.vy * dt;
+      const nz = prevZ + b.vz * dt;
       b.mesh.position.set(nx, ny, nz);
 
       let hitSomething = false;
 
-      // Check Building Obstacle Hit (Sparks, Concrete Dust, Bullet Hole Decal, Ricochet)
-      if (this.checkWorldObstacle(nx, nz, 0.2)) {
-        this.spawnImpactSparks(nx, ny, nz, '#fde047', 0.9);
-        this.spawnConcreteDust(nx, ny, nz);
-        this.spawnBulletHole(nx, ny, nz);
-        if (Math.random() < 0.35) {
-          dhakaAudio.playSfx('ricochet');
+      // Swept segment vector [prevX, prevZ] -> [nx, nz]
+      const segDx = nx - prevX;
+      const segDz = nz - prevZ;
+      const segLenSq = segDx * segDx + segDz * segDz;
+
+      // 1. Check NPC Hit FIRST with continuous swept-line collision (prevents tunneling through pedestrians)
+      for (const npc of this.npcs) {
+        if (npc.isDead) continue;
+
+        let t = 0;
+        if (segLenSq > 0.0001) {
+          t = Math.max(
+            0,
+            Math.min(
+              1,
+              ((npc.x - prevX) * segDx + (npc.z - prevZ) * segDz) / segLenSq
+            )
+          );
         }
-        hitSomething = true;
+        const hitX = prevX + t * segDx;
+        const hitZ = prevZ + t * segDz;
+        const distN = Math.hypot(npc.x - hitX, npc.z - hitZ);
+
+        if (distN < 1.15) {
+          hitSomething = true;
+          dhakaAudio.playSfx('hit');
+          dhakaAudio.playSfx('pain_grunt');
+          this.spawnImpactSparks(hitX, 1.15, hitZ, '#ef4444', 1.85);
+          this.spawnBloodDecal(npc.x, npc.z);
+
+          // Ballistic knockback impulse on victim
+          npc.x += (b.vx / 88) * 0.95;
+          npc.z += (b.vz / 88) * 0.95;
+
+          if (!npc.isStoryNPC) {
+            // Lethal gunshot fatality: pedestrians die from gunshot
+            npc.health = 0;
+            npc.isDead = true;
+            npc.aiState = 'dead';
+            npc.respawnTimer = 45;
+
+            const limbs = this.npcLimbsMap.get(npc.id);
+            if (limbs) {
+              limbs.group.position.set(npc.x, 0.08, npc.z);
+              limbs.group.rotation.x = -Math.PI / 2;
+              limbs.group.rotation.z = Math.random() * Math.PI * 2;
+            }
+            this.spawnImpactSparks(npc.x, 0.3, npc.z, '#b91c1c', 2.5);
+            this.spawnCashDrop(npc.x, npc.z, Math.floor(Math.random() * 350 + 150));
+            store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+            this.alertNearbyPedestrians(npc.x, npc.z, 35);
+
+            store.showBanner({
+              titleEn: 'PEDESTRIAN KILLED BY GUNSHOT!',
+              titleBn: 'গুলির আঘাতে পথচারী নিহত!',
+              subtitleEn: `${npc.nameEn} fatally shot. DMP Police in pursuit (Wanted ★)!`,
+              subtitleBn: `${npc.nameBn} গুলিবিদ্ধ হয়ে মারা গেছে। পুলিশ তল্লাশি শুরু করেছে!`,
+              tone: 'red',
+            });
+          }
+          break;
+        }
       }
 
-      // Check Vehicle Hit
+      // 2. Check Vehicle & Driver Hit
       if (!hitSomething) {
         for (const veh of this.vehicles) {
           if (veh.id === this.activeVehicleId) continue;
-          const distV = Math.hypot(veh.x - nx, veh.z - nz);
+
+          let t = 0;
+          if (segLenSq > 0.0001) {
+            t = Math.max(
+              0,
+              Math.min(
+                1,
+                ((veh.x - prevX) * segDx + (veh.z - prevZ) * segDz) / segLenSq
+              )
+            );
+          }
+          const hitX = prevX + t * segDx;
+          const hitZ = prevZ + t * segDz;
+          const distV = Math.hypot(veh.x - hitX, veh.z - hitZ);
+
           if (distV < 2.2) {
             hitSomething = true;
             dhakaAudio.playSfx('hit');
-            this.spawnImpactSparks(nx, ny, nz, '#fb923c', 1.35);
+            this.spawnImpactSparks(hitX, ny, hitZ, '#fb923c', 1.35);
             veh.health = Math.max(0, veh.health - b.damage);
+
+            // Check if vehicle has an active driver (motorcycle rider, rickshaw puller, CNG driver, etc.)
+            const vehMesh = this.vehicleMeshes.get(veh.id);
+            const driverObj = vehMesh?.getObjectByName('npc_driver');
+            if (driverObj) {
+              const isOpenVehicle =
+                veh.type === 'motorcycle' ||
+                veh.type === 'rickshaw' ||
+                veh.type === 'cng';
+              if (isOpenVehicle || ny > 0.72) {
+                // Driver fatally shot!
+                vehMesh?.remove(driverObj);
+                dhakaAudio.playSfx('pain_grunt');
+                this.spawnBloodDecal(veh.x, veh.z);
+                this.spawnImpactSparks(veh.x, 0.8, veh.z, '#ef4444', 2.0);
+
+                const deadDriverId = `dead_driver_${Date.now()}_${Math.floor(
+                  Math.random() * 1000
+                )}`;
+                const deadNPC: NPCEntity = {
+                  id: deadDriverId,
+                  nameEn: `${VEHICLE_STATS[veh.type].nameEn} Driver`,
+                  nameBn: `${VEHICLE_STATS[veh.type].nameBn} চালক`,
+                  role: 'citizen',
+                  x: veh.x,
+                  z: veh.z,
+                  rotation: veh.rotation,
+                  shirtColor: '#991b1b',
+                  pantsColor: '#1e293b',
+                  dialogueEn: [],
+                  dialogueBn: [],
+                  aiState: 'dead',
+                  walkTargetX: veh.x,
+                  walkTargetZ: veh.z,
+                  health: 0,
+                  isDead: true,
+                  respawnTimer: 45,
+                };
+                this.npcs.push(deadNPC);
+
+                const deadLimbs = createCharacterMesh(
+                  '#991b1b',
+                  '#1e293b',
+                  'citizen',
+                  false
+                );
+                deadLimbs.group.position.set(veh.x, 0.08, veh.z);
+                deadLimbs.group.rotation.x = -Math.PI / 2;
+                deadLimbs.group.rotation.y = veh.rotation + Math.PI / 2;
+                this.scene.add(deadLimbs.group);
+                this.npcLimbsMap.set(deadDriverId, deadLimbs);
+
+                this.spawnCashDrop(
+                  veh.x,
+                  veh.z,
+                  Math.floor(Math.random() * 400 + 200)
+                );
+                veh.speed = 0;
+                veh.isParked = true;
+                store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+                this.alertNearbyPedestrians(veh.x, veh.z, 35);
+
+                store.showBanner({
+                  titleEn: `${VEHICLE_STATS[
+                    veh.type
+                  ].nameEn.toUpperCase()} DRIVER SHOT DEAD!`,
+                  titleBn: `${VEHICLE_STATS[veh.type].nameBn} চালক গুলিবিদ্ধ হয়ে নিহত!`,
+                  subtitleEn:
+                    'Vehicle halted on roadway. Police alerted (Wanted ★)!',
+                  subtitleBn:
+                    'চালকবিহীন যানবাহন রাস্তায় থেমে গেছে। পুলিশ সতর্কাবস্থায়!',
+                  tone: 'red',
+                });
+              }
+            }
 
             if (veh.health <= 0) {
               this.explodeVehicle(veh);
@@ -4756,44 +4902,15 @@ export class DhakaCityEngine {
         }
       }
 
-      // Check NPC Hit
-      if (!hitSomething) {
-        for (const npc of this.npcs) {
-          const distN = Math.hypot(npc.x - nx, npc.z - nz);
-          if (distN < 0.95) {
-            hitSomething = true;
-            dhakaAudio.playSfx('hit');
-            dhakaAudio.playSfx('pain_grunt');
-            this.spawnImpactSparks(nx, ny, nz, '#ef4444', 1.35);
-            this.spawnBloodDecal(npc.x, npc.z);
-
-            // Ballistic knockback impulse on victim
-            npc.x += (b.vx / 88) * 0.85;
-            npc.z += (b.vz / 88) * 0.85;
-
-            if (!npc.isStoryNPC) {
-              npc.health -= b.damage;
-              if (npc.health <= 0) {
-                npc.isDead = true;
-                npc.aiState = 'dead';
-                npc.respawnTimer = 35;
-                const limbs = this.npcLimbsMap.get(npc.id);
-                if (limbs) {
-                  limbs.group.position.set(npc.x, 0.08, npc.z);
-                  limbs.group.rotation.x = -Math.PI / 2;
-                }
-                this.spawnImpactSparks(npc.x, 0.3, npc.z, '#b91c1c', 2.0);
-                this.spawnCashDrop(npc.x, npc.z, 220);
-                store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
-                this.alertNearbyPedestrians(npc.x, npc.z, 28);
-              } else {
-                npc.aiState = 'flee';
-                store.setWantedLevel(Math.max(1, store.wantedLevel + 1));
-              }
-            }
-            break;
-          }
+      // 3. Check Building Obstacle Hit (Sparks, Concrete Dust, Bullet Hole Decal, Ricochet)
+      if (!hitSomething && this.checkWorldObstacle(nx, nz, 0.2)) {
+        this.spawnImpactSparks(nx, ny, nz, '#fde047', 0.9);
+        this.spawnConcreteDust(nx, ny, nz);
+        this.spawnBulletHole(nx, ny, nz);
+        if (Math.random() < 0.35) {
+          dhakaAudio.playSfx('ricochet');
         }
+        hitSomething = true;
       }
 
       if (hitSomething || b.life <= 0) {
@@ -5685,6 +5802,7 @@ export class DhakaCityEngine {
 
       const mesh = this.vehicleMeshes.get(veh.id);
       if (!mesh) continue;
+      if (veh.isParked) continue;
 
       if (veh.isPolice) {
         const redBar = mesh.getObjectByName('siren_red');
