@@ -39,6 +39,14 @@ interface BuildingCollider {
   maxX: number;
   minZ: number;
   maxZ: number;
+  tag?: string;
+}
+
+interface CircleCollider {
+  x: number;
+  z: number;
+  radius: number;
+  tag?: string;
 }
 
 interface CashPickupDrop {
@@ -68,8 +76,9 @@ export class DhakaCityEngine {
   private hatirjheelLights: THREE.PointLight[] = [];
   private lastGraphicsQuality: 'high' | 'low' = 'high';
 
-  // World Collision Boxes, Pickups & Live Dhaka Metro Train
+  // World Collision Boxes, Cylinders, Pickups & Live Dhaka Metro Train
   private buildingColliders: BuildingCollider[] = [];
+  private circleColliders: CircleCollider[] = [];
   private cashDrops: CashPickupDrop[] = [];
   private metroTrainGroup: THREE.Group | null = null;
 
@@ -408,6 +417,12 @@ export class DhakaCityEngine {
     ];
 
     billboardLocations.forEach((b) => {
+      this.circleColliders.push({
+        x: b.x,
+        z: b.z,
+        radius: 0.6,
+        tag: 'billboard_pole',
+      });
       const poleGroup = new THREE.Group();
       poleGroup.position.set(b.x, 0, b.z);
       poleGroup.rotation.y = b.rot;
@@ -430,6 +445,12 @@ export class DhakaCityEngine {
     });
 
     // 2. Iconic Karwan Bazar SAARC Fountain (সার্ক ফোয়ারা - কারওয়ান বাজার মোড়)
+    this.circleColliders.push({
+      x: 0,
+      z: -28,
+      radius: 4.3,
+      tag: 'saarc_fountain',
+    });
     const saarcFountain = new THREE.Group();
     saarcFountain.position.set(0, 0, -28);
 
@@ -626,10 +647,32 @@ export class DhakaCityEngine {
     this.hatirjheelLights.push(bridgeLight);
 
     this.scene.add(archGroup);
+
+    // Hatirjheel Bridge guardrails (prevent driving off into the lake!)
+    this.buildingColliders.push({
+      minX: 209.2,
+      maxX: 210.4,
+      minZ: -52.5,
+      maxZ: 42.5,
+      tag: 'bridge_rail_west',
+    });
+    this.buildingColliders.push({
+      minX: 229.6,
+      maxX: 230.8,
+      minZ: -52.5,
+      maxZ: 42.5,
+      tag: 'bridge_rail_east',
+    });
   }
 
   private buildMotijheelShaplaMonument() {
     // 1. 3D Motijheel Shapla Chattar (শাপলা চত্বর — Water Lily Monument)
+    this.circleColliders.push({
+      x: 220,
+      z: 175,
+      radius: 7.5,
+      tag: 'shapla_chattar',
+    });
     const shaplaGroup = new THREE.Group();
     shaplaGroup.position.set(220, 0.1, 175);
 
@@ -865,6 +908,12 @@ export class DhakaCityEngine {
 
     for (let z = -290; z <= 140; z += 45) {
       if (Math.abs(z) < 18 || Math.abs(z + 175) < 18) continue;
+      this.circleColliders.push({
+        x: -10.5,
+        z,
+        radius: 1.35,
+        tag: 'metro_pillar',
+      });
       const pier = new THREE.Mesh(
         new THREE.CylinderGeometry(1.1, 1.25, 11.5, 12),
         concreteMat
@@ -1154,10 +1203,22 @@ export class DhakaCityEngine {
         const stall = createStreetStallMesh('tea_stall');
         stall.position.set(poi.x + 2.5, 0, poi.z + 2.0);
         this.scene.add(stall);
+        this.circleColliders.push({
+          x: poi.x + 2.5,
+          z: poi.z + 2.0,
+          radius: 1.4,
+          tag: 'tea_stall',
+        });
       } else if (poi.type === 'fuchka_stall') {
         const stall = createStreetStallMesh('fuchka_stall');
         stall.position.set(poi.x - 2.5, 0, poi.z + 1.8);
         this.scene.add(stall);
+        this.circleColliders.push({
+          x: poi.x - 2.5,
+          z: poi.z + 1.8,
+          radius: 1.4,
+          tag: 'fuchka_stall',
+        });
       }
     });
   }
@@ -1655,6 +1716,12 @@ export class DhakaCityEngine {
     ];
 
     treeSpots.forEach(([tx, tz], idx) => {
+      this.circleColliders.push({
+        x: tx,
+        z: tz,
+        radius: 0.55,
+        tag: 'tree',
+      });
       const tree = new THREE.Group();
       tree.position.set(tx, 0, tz);
       const trunk = new THREE.Mesh(
@@ -1916,6 +1983,15 @@ export class DhakaCityEngine {
       );
       railTop.position.set(0, 0.72, mz + 0.5);
       this.scene.add(railTop);
+
+      // Add physical obstacle collider for central road median!
+      this.buildingColliders.push({
+        minX: -0.55,
+        maxX: 0.55,
+        minZ: mz - 10.2,
+        maxZ: mz + 15.2,
+        tag: 'road_median',
+      });
     });
 
     // 2. Concrete Utility Poles, Cylindrical Transformers & Tangled Overhead Black Cable Bundles (তারের জট)
@@ -1952,6 +2028,12 @@ export class DhakaCityEngine {
     const crossbarPositions: Array<{ x: number; y: number; z: number }> = [];
     const coilPositions: Array<{ x: number; y: number; z: number }> = [];
     poleCoords.forEach(([px, pz], idx) => {
+      this.circleColliders.push({
+        x: px,
+        z: pz,
+        radius: 0.45,
+        tag: 'utility_pole',
+      });
       const pole = new THREE.Mesh(this.cylCache(0.16, 0.22, 8.6, 8), poleMat);
       pole.position.set(px, 4.3, pz);
       pole.castShadow = true;
@@ -2072,6 +2154,13 @@ export class DhakaCityEngine {
       [95, 60], [-130, 40], [58, -60], [-92, -120],
     ];
     vendorSpots.forEach(([vx, vz], vi) => {
+      this.buildingColliders.push({
+        minX: vx - 1.2,
+        maxX: vx + 1.2,
+        minZ: vz - 1.4,
+        maxZ: vz + 1.4,
+        tag: 'vendor_cart',
+      });
       const cart = new THREE.Group();
       cart.position.set(vx, 0, vz);
       cart.rotation.y = (vi % 4) * (Math.PI / 2);
@@ -2126,27 +2215,59 @@ export class DhakaCityEngine {
       this.scene.add(cart);
     });
 
-    // 5. Rusted Green Dhaka Roadside Railings along the main avenue
+    // 5. Rusted Green Dhaka Roadside Railings along the main avenue (segmented with intersection & crosswalk openings)
     const railingPostMat = new THREE.MeshStandardMaterial({
       color: '#166534',
       metalness: 0.55,
       roughness: 0.45,
     });
     const railingPostPositions: Array<{ x: number; y: number; z: number }> = [];
+
+    // Continuous sections with physical openings at cross streets and zebra crossings
+    const railingSections: Array<[number, number]> = [
+      [-304, -186], // between Expressway (-315) and Karwan Bazar (-175)
+      [-164, -36],  // between Karwan Bazar (-175) and SAARC Fountain (-28)
+      [-20, -9.5],  // between SAARC Fountain (-28) and Farmgate intersection (0)
+      [9.5, 71],    // between Farmgate (0) and crosswalk (75)
+      [79, 151],    // between crosswalk (75) and crosswalk (155)
+      [159, 166],   // between crosswalk (155) and Puran Dhaka crossing (175)
+      [185, 275],   // between Puran Dhaka (175) and Riverfront road (285)
+    ];
+
     for (const side of [-1, 1]) {
-      for (let rz = -300; rz <= 270; rz += 9) {
-        railingPostPositions.push({ x: side * 9.6, y: 0.52, z: rz });
-      }
-      // Continuous top rail
-      const rail = new THREE.Mesh(
-        this.boxCache(0.08, 0.08, 570),
-        railingPostMat
-      );
-      rail.position.set(side * 9.6, 1.02, -15);
-      this.scene.add(rail);
+      const railX = side * 9.6;
+      railingSections.forEach(([zStart, zEnd]) => {
+        const segLen = zEnd - zStart;
+        const centerZ = (zStart + zEnd) / 2;
+
+        // Top continuous rail
+        const railTop = new THREE.Mesh(this.boxCache(0.1, 0.08, segLen), railingPostMat);
+        railTop.position.set(railX, 1.02, centerZ);
+        this.scene.add(railTop);
+
+        // Mid continuous rail
+        const railMid = new THREE.Mesh(this.boxCache(0.08, 0.06, segLen), railingPostMat);
+        railMid.position.set(railX, 0.52, centerZ);
+        this.scene.add(railMid);
+
+        // Vertical posts every 3.5m
+        for (let rz = zStart; rz <= zEnd; rz += 3.5) {
+          railingPostPositions.push({ x: railX, y: 0.52, z: rz });
+        }
+
+        // PHYSICAL COLLIDER FOR THE ROADSIDE RAILING!
+        this.buildingColliders.push({
+          minX: railX - 0.28,
+          maxX: railX + 0.28,
+          minZ: zStart - 0.15,
+          maxZ: zEnd + 0.15,
+          tag: 'roadside_railing',
+        });
+      });
     }
+
     this.addInstances(
-      this.boxCache(0.1, 1.05, 0.1),
+      this.boxCache(0.12, 1.05, 0.12),
       railingPostMat,
       railingPostPositions
     );
@@ -2167,6 +2288,12 @@ export class DhakaCityEngine {
       [150, 92, false], [-120, 118, true], [-200, -80, false],
     ];
     stationSpots.forEach(([sx, sz, blue]) => {
+      this.circleColliders.push({
+        x: sx,
+        z: sz,
+        radius: 2.2,
+        tag: 'cng_station',
+      });
       const grp = new THREE.Group();
       grp.position.set(sx, 0, sz);
 
@@ -2221,10 +2348,10 @@ export class DhakaCityEngine {
       color: string;
     }> = [
       { type: 'cng', x: 3.5, z: 10, rot: Math.PI, isTraffic: false, color: '#15803d' },
-      { type: 'car', x: 8.5, z: 8, rot: Math.PI, isTraffic: false, color: '#f8fafc' },
+      { type: 'car', x: 6.8, z: 8, rot: Math.PI, isTraffic: false, color: '#f8fafc' },
       { type: 'car', x: -6.5, z: 10, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
-      { type: 'rickshaw', x: 11.5, z: 3, rot: Math.PI, isTraffic: false, color: '#ec4899' },
-      { type: 'motorcycle', x: -10.5, z: 4, rot: Math.PI, isTraffic: false, color: '#e11d48' },
+      { type: 'rickshaw', x: 5.2, z: 3, rot: Math.PI, isTraffic: false, color: '#ec4899' },
+      { type: 'motorcycle', x: -6.8, z: 4, rot: Math.PI, isTraffic: false, color: '#e11d48' },
       { type: 'bus', x: -4.2, z: -6, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
       { type: 'cng', x: -7, z: 22, rot: 0, isTraffic: false, color: '#15803d' },
 
@@ -3186,8 +3313,26 @@ export class DhakaCityEngine {
   public spawnPlayerVehicleNear(type: VehicleType) {
     const stats = VEHICLE_STATS[type];
     const id = `veh_spawn_${Date.now()}`;
-    const spawnX = this.playerPos.x + 3.8;
-    const spawnZ = this.playerPos.z + 2.5;
+    const vehRadius = Math.max(stats.width, stats.length) * 0.45;
+
+    let spawnX = this.playerPos.x + Math.sin(this.playerRotation) * 4.2;
+    let spawnZ = this.playerPos.z + Math.cos(this.playerRotation) * 4.2;
+
+    if (this.checkWorldObstacle(spawnX, spawnZ, vehRadius)) {
+      const candidates = [
+        [3.5, 0], [-3.5, 0], [0, 3.5], [0, -3.5],
+        [3, 3], [-3, 3], [3, -3], [-3, -3],
+      ];
+      for (const [ox, oz] of candidates) {
+        const tx = this.playerPos.x + ox;
+        const tz = this.playerPos.z + oz;
+        if (!this.checkWorldObstacle(tx, tz, vehRadius)) {
+          spawnX = tx;
+          spawnZ = tz;
+          break;
+        }
+      }
+    }
 
     const entity: VehicleEntity = {
       id,
@@ -3709,10 +3854,10 @@ export class DhakaCityEngine {
       const nextX = this.playerPos.x + vx;
       const nextZ = this.playerPos.z + vz;
 
-      if (!this.checkWorldObstacle(nextX, this.playerPos.z, 0.55)) {
+      if (!this.checkWorldObstacle(nextX, this.playerPos.z, 0.48, this.activeVehicleId)) {
         this.playerPos.x = clampWorldCoord(nextX);
       }
-      if (!this.checkWorldObstacle(this.playerPos.x, nextZ, 0.55)) {
+      if (!this.checkWorldObstacle(this.playerPos.x, nextZ, 0.48, this.activeVehicleId)) {
         this.playerPos.z = clampWorldCoord(nextZ);
       }
 
@@ -3824,15 +3969,78 @@ export class DhakaCityEngine {
     const nextZ = veh.z + vz;
 
     const radius = Math.max(stats.width, stats.length) * 0.45;
-    if (!this.checkWorldObstacle(nextX, nextZ, radius)) {
+    if (!this.checkWorldObstacle(nextX, nextZ, radius, veh.id)) {
       veh.x = clampWorldCoord(nextX);
       veh.z = clampWorldCoord(nextZ);
     } else {
-      if (Math.abs(veh.speed) > 12) {
-        dhakaAudio.playSfx('hit');
-        veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.45);
+      // 1. Check if collision is with another vehicle in Dhaka traffic
+      let hitVeh: VehicleEntity | null = null;
+      for (const ov of this.vehicles) {
+        if (ov.id === veh.id) continue;
+        const oStats = VEHICLE_STATS[ov.type];
+        const oRad = Math.max(oStats.width, oStats.length) * 0.42;
+        const dx = nextX - ov.x;
+        const dz = nextZ - ov.z;
+        const minDist = radius + oRad;
+        if (dx * dx + dz * dz < minDist * minDist) {
+          hitVeh = ov;
+          break;
+        }
       }
-      veh.speed = -veh.speed * 0.35;
+
+      if (hitVeh) {
+        const oStats = VEHICLE_STATS[hitVeh.type];
+        const dx = nextX - hitVeh.x;
+        const dz = nextZ - hitVeh.z;
+        const d = Math.max(0.1, Math.hypot(dx, dz));
+        const nx = dx / d;
+        const nz = dz / d;
+        const oRad = Math.max(oStats.width, oStats.length) * 0.42;
+        const minDist = radius + oRad;
+
+        // Separate vehicles along contact normal
+        veh.x = clampWorldCoord(hitVeh.x + nx * (minDist + 0.12));
+        veh.z = clampWorldCoord(hitVeh.z + nz * (minDist + 0.12));
+
+        // Knockback impact on other vehicle
+        hitVeh.x = clampWorldCoord(hitVeh.x - nx * 0.7);
+        hitVeh.z = clampWorldCoord(hitVeh.z - nz * 0.7);
+        if (hitVeh.isTraffic) {
+          hitVeh.speed = Math.max(hitVeh.speed, 6);
+        }
+
+        dhakaAudio.playSfx('hit');
+        if (Math.abs(veh.speed) > 6) {
+          dhakaAudio.playHorn(oStats.hornType);
+          veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.5);
+        }
+        veh.speed = -veh.speed * 0.35;
+
+        if (hitVeh.isPolice) {
+          const curWanted = useGameStore.getState().wantedLevel;
+          useGameStore.getState().setWantedLevel(Math.min(5, curWanted + 1));
+        }
+      } else {
+        // 2. Static obstacle hit (railing, median, metro pillar, pole, wall)
+        // Check if vehicle can slide along X or Z axis (scraping against railing or curb)
+        const canSlideX = !this.checkWorldObstacle(nextX, veh.z, radius, veh.id);
+        const canSlideZ = !this.checkWorldObstacle(veh.x, nextZ, radius, veh.id);
+
+        if (canSlideX && Math.abs(vx) > 0.05) {
+          veh.x = clampWorldCoord(nextX);
+          veh.speed *= Math.pow(0.55, dt);
+        } else if (canSlideZ && Math.abs(vz) > 0.05) {
+          veh.z = clampWorldCoord(nextZ);
+          veh.speed *= Math.pow(0.55, dt);
+        } else {
+          // Direct head-on impact into railing, wall or concrete post
+          if (Math.abs(veh.speed) > 8) {
+            dhakaAudio.playSfx('hit');
+            veh.health = Math.max(15, veh.health - Math.abs(veh.speed) * 0.45);
+          }
+          veh.speed = -veh.speed * 0.3;
+        }
+      }
     }
 
     this.playerPos.set(veh.x, 0, veh.z);
@@ -4283,12 +4491,40 @@ export class DhakaCityEngine {
         return true;
       }
     }
+    for (const c of this.circleColliders) {
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const r = radius + c.radius;
+      if (dx * dx + dz * dz < r * r) {
+        return true;
+      }
+    }
     return false;
   }
 
-  // Checks both Building Colliders AND Water Basins (allowing Hatirjheel Bridge passage!)
-  private checkWorldObstacle(x: number, z: number, radius: number): boolean {
+  // Checks Building Colliders, Obstacle Circles, Road Railings, Medians, Water Basins, and Other Vehicles!
+  private checkWorldObstacle(
+    x: number,
+    z: number,
+    radius: number,
+    ignoreVehicleId?: string | null
+  ): boolean {
     if (this.checkBuildingCollision(x, z, radius)) return true;
+
+    // Dynamic vehicle obstacles (other cars, buses, CNGs, police cruisers)
+    if (this.vehicles) {
+      for (const otherVeh of this.vehicles) {
+        if (ignoreVehicleId && otherVeh.id === ignoreVehicleId) continue;
+        const oStats = VEHICLE_STATS[otherVeh.type];
+        const otherRadius = Math.max(oStats.width, oStats.length) * 0.42;
+        const dx = x - otherVeh.x;
+        const dz = z - otherVeh.z;
+        const minDist = radius + otherRadius;
+        if (dx * dx + dz * dz < minDist * minDist) {
+          return true;
+        }
+      }
+    }
 
     // Buriganga River Southern Boundary
     if (z + radius > 294) return true;
