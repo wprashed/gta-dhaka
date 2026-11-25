@@ -4057,13 +4057,13 @@ export class DhakaCityEngine {
       isTraffic: boolean;
       color: string;
     }> = [
-      { type: 'cng', x: 3.5, z: 10, rot: Math.PI, isTraffic: false, color: '#15803d' },
-      { type: 'car', x: 6.8, z: 8, rot: Math.PI, isTraffic: false, color: '#f8fafc' },
-      { type: 'car', x: -6.5, z: 10, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
-      { type: 'rickshaw', x: 5.2, z: 3, rot: Math.PI, isTraffic: false, color: '#ec4899' },
-      { type: 'motorcycle', x: -6.8, z: 4, rot: Math.PI, isTraffic: false, color: '#e11d48' },
-      { type: 'bus', x: -4.2, z: -6, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
-      { type: 'cng', x: -7, z: 22, rot: 0, isTraffic: false, color: '#15803d' },
+      { type: 'cng', x: 8.5, z: 12, rot: 0, isTraffic: false, color: '#15803d' },
+      { type: 'car', x: 8.6, z: 8, rot: 0, isTraffic: false, color: '#f8fafc' },
+      { type: 'car', x: -8.6, z: 10, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
+      { type: 'rickshaw', x: 8.5, z: 2, rot: 0, isTraffic: false, color: '#ec4899' },
+      { type: 'motorcycle', x: -8.5, z: 4, rot: Math.PI, isTraffic: false, color: '#e11d48' },
+      { type: 'bus', x: -8.8, z: -18, rot: Math.PI, isTraffic: false, color: '#b91c1c' },
+      { type: 'cng', x: -8.6, z: 22, rot: Math.PI, isTraffic: false, color: '#15803d' },
 
       { type: 'cng', x: -165, z: 18, rot: 0, isTraffic: true, color: '#15803d' },
       { type: 'rickshaw', x: -68, z: 160, rot: 0, isTraffic: false, color: '#ec4899' },
@@ -4073,15 +4073,15 @@ export class DhakaCityEngine {
       { type: 'motorcycle', x: -12, z: -170, rot: Math.PI / 2, isTraffic: false, color: '#f43f5e' },
       { type: 'pickup', x: 88, z: 98, rot: 0, isTraffic: false, color: '#0284c7' },
 
-      { type: 'cng', x: 4, z: -60, rot: 0, isTraffic: true, color: '#15803d' },
-      { type: 'bus', x: -4, z: -110, rot: Math.PI, isTraffic: true, color: '#0f766e' },
-      { type: 'car', x: 4, z: 85, rot: 0, isTraffic: true, color: '#e2e8f0' },
-      { type: 'cng', x: -4, z: 130, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'rickshaw', x: 5, z: 210, rot: 0, isTraffic: true, color: '#ec4899' },
-      { type: 'bus', x: -60, z: 4, rot: Math.PI / 2, isTraffic: true, color: '#b91c1c' },
-      { type: 'cng', x: 75, z: -4, rot: -Math.PI / 2, isTraffic: true, color: '#15803d' },
-      { type: 'car', x: 145, z: 4, rot: Math.PI / 2, isTraffic: true, color: '#facc15' },
-      { type: 'motorcycle', x: -115, z: -4, rot: -Math.PI / 2, isTraffic: true, color: '#e11d48' },
+      { type: 'cng', x: 4.5, z: -60, rot: 0, isTraffic: true, color: '#15803d' },
+      { type: 'bus', x: -4.5, z: -110, rot: Math.PI, isTraffic: true, color: '#0f766e' },
+      { type: 'car', x: 4.5, z: 85, rot: 0, isTraffic: true, color: '#e2e8f0' },
+      { type: 'cng', x: -4.5, z: 130, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'rickshaw', x: 4.5, z: 210, rot: 0, isTraffic: true, color: '#ec4899' },
+      { type: 'bus', x: -60, z: 4.5, rot: Math.PI / 2, isTraffic: true, color: '#b91c1c' },
+      { type: 'cng', x: 75, z: -4.5, rot: -Math.PI / 2, isTraffic: true, color: '#15803d' },
+      { type: 'car', x: 145, z: 4.5, rot: Math.PI / 2, isTraffic: true, color: '#facc15' },
+      { type: 'motorcycle', x: -115, z: -4.5, rot: -Math.PI / 2, isTraffic: true, color: '#e11d48' },
       { type: 'cng', x: 224, z: -45, rot: 0, isTraffic: true, color: '#15803d' },
       { type: 'car', x: 216, z: 65, rot: Math.PI, isTraffic: true, color: '#f8fafc' },
       { type: 'pickup', x: -166, z: -90, rot: 0, isTraffic: true, color: '#0284c7' },
@@ -6797,72 +6797,102 @@ export class DhakaCityEngine {
       const stats = VEHICLE_STATS[veh.type];
       const cruiseSpeed = stats.maxSpeed * 0.36;
 
-      const distToPlayer = Math.hypot(
-        veh.x - this.playerPos.x,
-        veh.z - this.playerPos.z
+      // Traffic AI: Strictly align rotation to cardinal road grid direction (NEVER spin or oscillate)
+      const cardinalAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      let targetAngle = cardinalAngles[0];
+      let minAngleDiff = 999;
+      for (const ca of cardinalAngles) {
+        const d = Math.abs(normalizeAngle(veh.rotation - ca));
+        if (d < minAngleDiff) {
+          minAngleDiff = d;
+          targetAngle = ca;
+        }
+      }
+      veh.rotation = normalizeAngle(
+        veh.rotation + normalizeAngle(targetAngle - veh.rotation) * Math.min(1, dt * 8.0)
       );
-      if (distToPlayer < 6.5) {
+
+      const forwardX = Math.sin(veh.rotation);
+      const forwardZ = Math.cos(veh.rotation);
+      const rightX = Math.cos(veh.rotation);
+      const rightZ = -Math.sin(veh.rotation);
+
+      let blockedAhead = false;
+
+      // 1. Check distance to player directly ahead in this lane
+      const pDx = this.playerPos.x - veh.x;
+      const pDz = this.playerPos.z - veh.z;
+      const pForward = pDx * forwardX + pDz * forwardZ;
+      const pLateral = Math.abs(pDx * rightX + pDz * rightZ);
+
+      if (pForward > 0.2 && pForward < 8.0 && pLateral < 2.5) {
+        blockedAhead = true;
         if (Math.random() < 0.015) {
           dhakaAudio.playHorn(stats.hornType);
         }
-        veh.speed = 0;
-        this.animateVehicleWheels(mesh, 0, dt, 0);
-        continue;
       }
 
-      // Traffic forward lane queueing check (eliminates overlapping pileups)
-      let blockedAhead = false;
-      const forwardX = Math.sin(veh.rotation);
-      const forwardZ = Math.cos(veh.rotation);
+      // 2. Directional forward lane queueing check: checks only vehicles ahead in the SAME lane
+      if (!blockedAhead) {
+        for (const otherVeh of this.vehicles) {
+          if (otherVeh.id === veh.id) continue;
+          const dx = otherVeh.x - veh.x;
+          const dz = otherVeh.z - veh.z;
+          const forwardDist = dx * forwardX + dz * forwardZ;
+          const lateralDist = Math.abs(dx * rightX + dz * rightZ);
 
-      for (const otherVeh of this.vehicles) {
-        if (otherVeh.id === veh.id) continue;
-        const dx = otherVeh.x - veh.x;
-        const dz = otherVeh.z - veh.z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 < 64) {
-          const dist = Math.sqrt(d2);
-          const dot = (dx * forwardX + dz * forwardZ) / Math.max(0.01, dist);
-          if (dot > 0.45) {
+          const oStats = VEHICLE_STATS[otherVeh.type];
+          const safeFollowDist = (stats.length + oStats.length) * 0.5 + 2.8;
+
+          // Only vehicle directly ahead in our lane: forwardDist in (0.3, safeFollowDist), lateralDist < 2.4m
+          if (forwardDist > 0.3 && forwardDist < safeFollowDist && lateralDist < 2.4) {
             blockedAhead = true;
+            if (Math.random() < 0.008) {
+              dhakaAudio.playHorn(stats.hornType);
+            }
             break;
           }
         }
       }
 
-      if (blockedAhead) {
-        if (Math.random() < 0.006) {
-          dhakaAudio.playHorn(stats.hornType);
-        }
-        veh.speed = 0;
-        this.animateVehicleWheels(mesh, 0, dt, 0);
-        continue; // Wait behind car ahead in lane
-      }
-
-      const nx = veh.x + Math.sin(veh.rotation) * cruiseSpeed * dt;
-      const nz = veh.z + Math.cos(veh.rotation) * cruiseSpeed * dt;
-
-      // Check boundary or obstacle ahead - pass veh.id to avoid self-collision!
-      const isBlocked =
-        Math.abs(nx) > 740 ||
-        nz > 450 ||
-        nz < -690 ||
-        this.checkWorldObstacle(nx, nz, 1.4, veh.id);
-
-      if (isBlocked) {
-        // Clean 180° road lane reversal - NEVER spin continuously!
-        veh.rotation = normalizeAngle(veh.rotation + Math.PI);
-        veh.x += Math.sin(veh.rotation) * 1.5;
-        veh.z += Math.cos(veh.rotation) * 1.5;
-      } else {
-        veh.x = nx;
-        veh.z = nz;
-      }
+      // 3. Static building, median barrier or metro pillar collision directly ahead
       const elev = this.getRoadElevation(veh.x, veh.z);
+      if (!blockedAhead) {
+        const probeDist = stats.length * 0.5 + 2.2;
+        const probeX = veh.x + forwardX * probeDist;
+        const probeZ = veh.z + forwardZ * probeDist;
+        if (this.checkBuildingCollision(probeX, probeZ, 1.2, elev)) {
+          blockedAhead = true;
+        }
+      }
+
+      // Smooth deceleration to 0 when blocked, or smooth acceleration to cruise speed when clear
+      if (blockedAhead) {
+        veh.speed = Math.max(0, veh.speed - stats.braking * dt * 2.5);
+      } else {
+        veh.speed = Math.min(cruiseSpeed, veh.speed + stats.acceleration * dt * 1.2);
+        veh.x += forwardX * veh.speed * dt;
+        veh.z += forwardZ * veh.speed * dt;
+      }
+
+      // Seamless corridor boundary wrapping (continuous loop, never flip)
+      if (Math.abs(forwardZ) > 0.7) {
+        if (forwardZ > 0 && veh.z > 430) {
+          veh.z = -670;
+        } else if (forwardZ < 0 && veh.z < -675) {
+          veh.z = 425;
+        }
+      } else {
+        if (forwardX > 0 && veh.x > 660) {
+          veh.x = -660;
+        } else if (forwardX < 0 && veh.x < -660) {
+          veh.x = 660;
+        }
+      }
+
       mesh.position.set(veh.x, elev, veh.z);
       mesh.rotation.y = veh.rotation;
-      this.animateVehicleWheels(mesh, cruiseSpeed, dt, 0);
-      this.animateVehicleWheels(mesh, cruiseSpeed, dt, 0);
+      this.animateVehicleWheels(mesh, veh.speed, dt, 0);
     }
   }
 
