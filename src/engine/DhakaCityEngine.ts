@@ -3373,24 +3373,57 @@ export class DhakaCityEngine {
     this.scene.add(eastRamp);
 
     // 4. Solid Concrete Crash Barriers & Physics Colliders
-    const northBarrier = this.sharedBox(640, 1.15, 0.45, barrierMat, 0, 7.75, flyoverZ - flyoverW / 2 + 0.22);
+    // 4.1 Main Elevated Span Crash Barriers (X: -240 to 240) at Y = 7.75
+    const northBarrier = this.sharedBox(480, 1.15, 0.45, barrierMat, 0, 7.75, flyoverZ - flyoverW / 2 + 0.22);
     this.scene.add(northBarrier);
     this.buildingColliders.push({
-      minX: -320,
-      maxX: 320,
+      minX: -240,
+      maxX: 240,
       minZ: flyoverZ - flyoverW / 2 - 0.4,
       maxZ: flyoverZ - flyoverW / 2 + 0.4,
       tag: 'flyover_barrier',
     });
 
-    const southBarrier = this.sharedBox(640, 1.15, 0.45, barrierMat, 0, 7.75, flyoverZ + flyoverW / 2 - 0.22);
+    const southBarrier = this.sharedBox(480, 1.15, 0.45, barrierMat, 0, 7.75, flyoverZ + flyoverW / 2 - 0.22);
     this.scene.add(southBarrier);
     this.buildingColliders.push({
-      minX: -320,
-      maxX: 320,
+      minX: -240,
+      maxX: 240,
       minZ: flyoverZ + flyoverW / 2 - 0.4,
       maxZ: flyoverZ + flyoverW / 2 + 0.4,
       tag: 'flyover_barrier',
+    });
+
+    // 4.2 West Ramp Sloped Barriers (X: -320 to -240) Following Incline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.15, 0.45), barrierMat);
+      bMesh.position.set(-280, 4.18, flyoverZ + oz);
+      bMesh.rotation.z = rampSlopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: -320,
+        maxX: -240,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
+    });
+
+    // 4.3 East Ramp Sloped Barriers (X: 240 to 320) Following Decline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.15, 0.45), barrierMat);
+      bMesh.position.set(280, 4.18, flyoverZ + oz);
+      bMesh.rotation.z = -rampSlopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: 240,
+        maxX: 320,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
     });
 
     // Yellow hazard curb trims along the barriers
@@ -3550,7 +3583,8 @@ export class DhakaCityEngine {
     offRampMesh.receiveShadow = true;
     this.scene.add(offRampMesh);
 
-    // 4. Solid Concrete Crash Barriers & Physics Colliders on Outer Edges
+    // 4. Solid Concrete Crash Barriers & Physics Colliders
+    // 4.1 Continuous West Edge Crash Barrier (X = 6.9, Z: -340 to +240)
     const westBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX - flyoverW / 2 + 0.22, deckElev + 0.62, -50);
     this.scene.add(westBarrier);
     this.buildingColliders.push({
@@ -3561,13 +3595,83 @@ export class DhakaCityEngine {
       tag: 'flyover_barrier',
     });
 
-    const eastBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -50);
-    this.scene.add(eastBarrier);
+    // 4.2 East Edge Crash Barriers with Dedicated Openings for On-Ramp and Off-Ramp Merges
+    // North Segment: Z: -340 to -120 (ahead of Farmgate on-ramp)
+    const eastBarrierN = this.sharedBox(0.45, 1.25, 220, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -230);
+    this.scene.add(eastBarrierN);
     this.buildingColliders.push({
       minX: flyoverX + flyoverW / 2 - 0.4,
       maxX: flyoverX + flyoverW / 2 + 0.4,
       minZ: -340,
+      maxZ: -120,
+      tag: 'flyover_barrier',
+    });
+
+    // Middle Segment: Z: -40 to 40 (between on-ramp merge and off-ramp diverge)
+    const eastBarrierM = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
+    this.scene.add(eastBarrierM);
+    this.buildingColliders.push({
+      minX: flyoverX + flyoverW / 2 - 0.4,
+      maxX: flyoverX + flyoverW / 2 + 0.4,
+      minZ: -40,
+      maxZ: 40,
+      tag: 'flyover_barrier',
+    });
+
+    // South Segment: Z: 120 to 240 (past Farmgate off-ramp)
+    const eastBarrierS = this.sharedBox(0.45, 1.25, 120, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 180);
+    this.scene.add(eastBarrierS);
+    this.buildingColliders.push({
+      minX: flyoverX + flyoverW / 2 - 0.4,
+      maxX: flyoverX + flyoverW / 2 + 0.4,
+      minZ: 120,
       maxZ: 240,
+      tag: 'flyover_barrier',
+    });
+
+    // 4.3 Outer Guardrails for Farmgate On-Ramp & Off-Ramp
+    const onRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 80.5), barrierMat);
+    onRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, -80);
+    onRampOuterGuard.rotation.x = -onRampSlopeAngle;
+    this.scene.add(onRampOuterGuard);
+    this.buildingColliders.push({
+      minX: 21.7,
+      maxX: 22.5,
+      minZ: -120,
+      maxZ: -40,
+      tag: 'flyover_barrier',
+    });
+
+    const offRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 80.5), barrierMat);
+    offRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, 80);
+    offRampOuterGuard.rotation.x = onRampSlopeAngle;
+    this.scene.add(offRampOuterGuard);
+    this.buildingColliders.push({
+      minX: 21.7,
+      maxX: 22.5,
+      minZ: 40,
+      maxZ: 120,
+      tag: 'flyover_barrier',
+    });
+
+    // 4.4 Terminal End Crash Barriers with Warning Reflectors
+    const termNorth = this.sharedBox(flyoverW, 1.25, 0.45, barrierMat, flyoverX, deckElev + 0.62, -340);
+    this.scene.add(termNorth);
+    this.buildingColliders.push({
+      minX: flyoverX - flyoverW / 2,
+      maxX: flyoverX + flyoverW / 2,
+      minZ: -340.5,
+      maxZ: -339.5,
+      tag: 'flyover_barrier',
+    });
+
+    const termSouth = this.sharedBox(flyoverW, 1.25, 0.45, barrierMat, flyoverX, deckElev + 0.62, 240);
+    this.scene.add(termSouth);
+    this.buildingColliders.push({
+      minX: flyoverX - flyoverW / 2,
+      maxX: flyoverX + flyoverW / 2,
+      minZ: 239.5,
+      maxZ: 240.5,
       tag: 'flyover_barrier',
     });
 
@@ -3728,6 +3832,38 @@ export class DhakaCityEngine {
       tag: 'flyover_barrier',
     });
 
+    // 4.2 West Ramp Sloped Barriers (X: -440 to -360) Following Incline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
+      bMesh.position.set(-400, deckElev * 0.5 + 0.62, flyoverZ + oz);
+      bMesh.rotation.z = -westSlopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: -440,
+        maxX: -360,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
+    });
+
+    // 4.3 East Ramp Sloped Barriers (X: 360 to 440) Following Decline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
+      bMesh.position.set(400, deckElev * 0.5 + 0.62, flyoverZ + oz);
+      bMesh.rotation.z = westSlopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: 360,
+        maxX: 440,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
+    });
+
     // Yellow/Black Hazard Curb Trims along barriers
     for (let x = -350; x <= 350; x += 22) {
       const curbN = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
@@ -3884,6 +4020,38 @@ export class DhakaCityEngine {
       minZ: flyoverZ + flyoverW / 2 - 0.4,
       maxZ: flyoverZ + flyoverW / 2 + 0.4,
       tag: 'flyover_barrier',
+    });
+
+    // 4.2 West Ramp Sloped Barriers (X: 280 to 360) Following Incline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
+      bMesh.position.set(320, deckElev * 0.5 + 0.62, flyoverZ + oz);
+      bMesh.rotation.z = -slopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: 280,
+        maxX: 360,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
+    });
+
+    // 4.3 East Ramp Sloped Barriers (X: 720 to 800) Following Decline
+    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
+      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
+      bMesh.position.set(760, deckElev * 0.5 + 0.62, flyoverZ + oz);
+      bMesh.rotation.z = slopeAngle;
+      this.scene.add(bMesh);
+
+      this.buildingColliders.push({
+        minX: 720,
+        maxX: 800,
+        minZ: flyoverZ + oz - 0.4,
+        maxZ: flyoverZ + oz + 0.4,
+        tag: 'flyover_barrier',
+      });
     });
 
     // Yellow/Black Hazard Curb Trims
@@ -8553,6 +8721,14 @@ export class DhakaCityEngine {
       mesh.position.set(veh.x, elev, veh.z);
       mesh.rotation.y = veh.rotation;
 
+      // Realistic longitudinal road slope pitch: vehicles tilt naturally along ramp inclines
+      const probeDist = (stats.length || 4.2) * 0.45;
+      const fwdX = Math.sin(veh.rotation);
+      const fwdZ = Math.cos(veh.rotation);
+      const frontY = this.getRoadElevation(veh.x + fwdX * probeDist, veh.z + fwdZ * probeDist, veh.y);
+      const backY = this.getRoadElevation(veh.x - fwdX * probeDist, veh.z - fwdZ * probeDist, veh.y);
+      const roadPitch = Math.atan2(frontY - backY, probeDist * 2);
+
       // Motorcycle dynamic body roll, steerable handlebars, exhaust smoke & wheelie physics
       if (veh.type === 'motorcycle') {
         const isWheelie = isDrifting && throttle > 0 && veh.speed > 1.8;
@@ -8562,7 +8738,7 @@ export class DhakaCityEngine {
         const leanTarget =
           -steer * Math.min(1, Math.abs(veh.speed) / 5.2) * 0.44;
         mesh.rotation.z += (leanTarget - mesh.rotation.z) * Math.min(1, dt * 9);
-        mesh.rotation.x = -this.bikeWheeliePitch;
+        mesh.rotation.x = -this.bikeWheeliePitch + roadPitch;
 
         // Front handlebar & fork steering rotation
         const hGroup = mesh.getObjectByName('handlebar_group');
@@ -8578,7 +8754,7 @@ export class DhakaCityEngine {
         }
       } else {
         mesh.rotation.z = 0;
-        mesh.rotation.x = 0;
+        mesh.rotation.x = roadPitch;
       }
 
       // Both CarConcept.glb and ferrari.glb hubs use local X as the true axle.
@@ -8844,6 +9020,12 @@ export class DhakaCityEngine {
           veh.y = elev;
           mesh.position.set(veh.x, elev, veh.z);
           mesh.rotation.y = veh.rotation;
+          const pFwdX = Math.sin(veh.rotation);
+          const pFwdZ = Math.cos(veh.rotation);
+          const pProbeDist = 2.0;
+          const pFrontY = this.getRoadElevation(veh.x + pFwdX * pProbeDist, veh.z + pFwdZ * pProbeDist, veh.y);
+          const pBackY = this.getRoadElevation(veh.x - pFwdX * pProbeDist, veh.z - pFwdZ * pProbeDist, veh.y);
+          mesh.rotation.x = Math.atan2(pFrontY - pBackY, pProbeDist * 2);
           this.animateVehicleWheels(
             mesh,
             chaseSpeed,
@@ -8969,6 +9151,10 @@ export class DhakaCityEngine {
 
       mesh.position.set(veh.x, elev, veh.z);
       mesh.rotation.y = veh.rotation;
+      const tProbeDist = (stats.length || 4.2) * 0.45;
+      const tFrontY = this.getRoadElevation(veh.x + forwardX * tProbeDist, veh.z + forwardZ * tProbeDist, veh.y);
+      const tBackY = this.getRoadElevation(veh.x - forwardX * tProbeDist, veh.z - forwardZ * tProbeDist, veh.y);
+      mesh.rotation.x = Math.atan2(tFrontY - tBackY, tProbeDist * 2);
       this.animateVehicleWheels(mesh, veh.speed, dt, 0);
     }
   }
@@ -9341,7 +9527,7 @@ export class DhakaCityEngine {
     let occluded = false;
     for (const b of this.buildingColliders) {
       if (b.tag === 'road_median') continue;
-      if (b.tag === 'flyover_barrier' && targetY < 6.0) continue;
+      if (b.tag === 'flyover_barrier') continue;
       if (
         testCamX + 0.6 > b.minX &&
         testCamX - 0.6 < b.maxX &&
@@ -9434,24 +9620,22 @@ export class DhakaCityEngine {
     }
 
     // 2. Dhaka Elevated Expressway at Farmgate (X = 14, road width = 14.2m, Y = 9.2m)
-    // Farmgate Southbound On-Ramp (Z: -120 to -40, X curves 22 -> 14)
+    // Farmgate Southbound On-Ramp (Z: -120 to -40, X: 13.5 to 22.5)
     if (z >= -120 && z <= -40) {
-      const t = (z - (-120)) / 80;
-      const rampX = 22 - t * 8;
-      if (Math.abs(x - rampX) <= 4.2) {
+      if (x >= 13.2 && x <= 22.8) {
+        const t = (z - (-120)) / 80;
         const rampElev = 9.2 * Math.max(0, Math.min(1, t));
-        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.8 || currentY < 1.0) {
           return rampElev;
         }
       }
     }
-    // Farmgate Northbound Exit Off-Ramp (Z: 40 to 120, X curves 14 -> 22)
+    // Farmgate Northbound Exit Off-Ramp (Z: 40 to 120, X: 13.5 to 22.5)
     if (z >= 40 && z <= 120) {
-      const t = 1 - (z - 40) / 80;
-      const rampX = 14 + (1 - t) * 8;
-      if (Math.abs(x - rampX) <= 4.2) {
+      if (x >= 13.2 && x <= 22.8) {
+        const t = 1 - (z - 40) / 80;
         const rampElev = 9.2 * Math.max(0, Math.min(1, t));
-        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.8 || currentY < 1.0) {
           return rampElev;
         }
       }
