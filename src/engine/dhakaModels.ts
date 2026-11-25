@@ -2137,6 +2137,8 @@ export interface CharacterLimbs {
   rpmRig?: RpmBoneRig;
   driveRig?: RpmBoneRig;
   weaponHand?: THREE.Object3D;
+  leftHand?: THREE.Object3D;
+  spineBone?: THREE.Object3D;
   fingerBones?: Array<{ bone: THREE.Object3D; rest: THREE.Quaternion }>;
   gripAmount?: number;
   aimBones?: {
@@ -2617,16 +2619,23 @@ export function createCharacterMesh(
         }
       }
 
-      // Attach weapon to the RightHand bone so it tracks the hand exactly.
+      // Cache weapon hand, left hand, and upper spine bones for holster / slung weapon positioning
       {
         let rightHand: THREE.Object3D | undefined;
+        let leftHand: THREE.Object3D | undefined;
+        let spineBone: THREE.Object3D | undefined;
         clonedScene.traverse((node) => {
-          if (!rightHand && node.name.replace(/^mixamorig[:_]?/, '') === 'RightHand') {
-            rightHand = node;
-          }
+          const n = node.name.replace(/^mixamorig[:_]?/, '');
+          if (!rightHand && n === 'RightHand') rightHand = node;
+          if (!leftHand && n === 'LeftHand') leftHand = node;
+          if (!spineBone && (n === 'Spine2' || n === 'Spine1' || n === 'Spine')) spineBone = node;
         });
+
+        limbs.weaponHand = rightHand;
+        limbs.leftHand = leftHand;
+        limbs.spineBone = spineBone;
+
         if (rightHand) {
-          limbs.weaponHand = rightHand;
           // Cache every right-hand finger joint so the hand can close into a grip.
           const fingers: Array<{
             bone: THREE.Object3D;
@@ -2642,13 +2651,14 @@ export function createCharacterMesh(
             }
           });
           limbs.fingerBones = fingers;
-          rightHand.add(weaponMesh);
-          weaponMesh.position.set(0, 0, 0.06);
-          weaponMesh.rotation.set(0.22, 0, 0);
-        } else {
-          weaponMesh.position.set(-0.26, 1.02, 0.16);
-          group.add(weaponMesh);
         }
+
+        // Mount weapon directly to character group for rock-solid 1.0m scale
+        // and glitch-free slung back / holster / aiming transforms across all GLTF models
+        weaponMesh.scale.set(1.0, 1.0, 1.0);
+        weaponMesh.position.set(0.10, 1.28, -0.16);
+        weaponMesh.rotation.set(-Math.PI / 2 + 0.12, 0.14, -0.42);
+        group.add(weaponMesh);
       }
       group.add(clonedScene);
       limbs.gltfRoot = clonedScene;
@@ -2671,32 +2681,34 @@ export function createCharacterMesh(
 
 const _hwPos = new THREE.Vector3();
 const _hwQuat = new THREE.Quaternion();
-const _hwTmp = new THREE.Vector3();
+const _spPos = new THREE.Vector3();
+const _spQuat = new THREE.Quaternion();
+const _spTmp = new THREE.Vector3();
+const _invRootMat = new THREE.Matrix4();
+const _relMat = new THREE.Matrix4();
+
+// Authentic diagonal back-slung rifle orientation (GTA V / PUBG / The Last of Us):
+// Angled diagonally across the upper back from right shoulder to left lower back,
+// barrel pointing UP over right shoulder, completely clear of hips and pelvis.
+const _slungEuler = new THREE.Euler(-Math.PI / 2 + 0.12, 0.14, -0.42, 'YXZ');
+const _slungQuat = new THREE.Quaternion().setFromEuler(_slungEuler);
 
 /**
- * Accumulates the world position / rotation of `node` up to `root` without
- * touching matrixWorld (cheap enough to run per character, per frame).
+ * Computes the relative position and rotation of `node` inside `root`'s coordinate space,
+ * correctly taking into account all parent translations, rotations, and scales across any GLTF skeleton.
  */
-function accumulateTransform(
+function getNodeTransformInRoot(
   node: THREE.Object3D,
   root: THREE.Object3D,
   outPos: THREE.Vector3,
   outQuat: THREE.Quaternion
 ) {
-  const chain: THREE.Object3D[] = [];
-  let cur: THREE.Object3D | null = node;
-  while (cur && cur !== root) {
-    chain.push(cur);
-    cur = cur.parent;
-  }
-  outPos.set(0, 0, 0);
-  outQuat.identity();
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const n = chain[i];
-    _hwTmp.copy(n.position).applyQuaternion(outQuat);
-    outPos.add(_hwTmp);
-    outQuat.multiply(n.quaternion);
-  }
+  node.updateWorldMatrix(true, false);
+  root.updateWorldMatrix(true, false);
+  _invRootMat.copy(root.matrixWorld).invert();
+  _relMat.multiplyMatrices(_invRootMat, node.matrixWorld);
+  outPos.setFromMatrixPosition(_relMat);
+  outQuat.setFromRotationMatrix(_relMat);
 }
 
 const _axisX = new THREE.Vector3(1, 0, 0);
@@ -2732,74 +2744,6 @@ export function setCharacterAnimationState(
       const amount = next * (isThumb ? 0.45 : 1.15);
       _tmpQuat.setFromAxisAngle(_axisX, amount);
       f.bone.quaternion.copy(f.rest).multiply(_tmpQuat);
-    }
-  }
-
-  // Animate 3D weapon held in RightHand. When attached to the hand bone,
-  // positions are local to the hand; otherwise they are group-space.
-  if (limbs.weaponMesh) {
-    const attachedToHand =
-      limbs.weaponMesh.parent && limbs.weaponMesh.parent !== limbs.group;
-    if (attachedToHand) {
-      if (weaponCategory === 'rifle') {
-        if (isAimingGun || attackTimer > 0) {
-          const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.16 : 0;
-          limbs.weaponMesh.position.set(0.01, -0.01, 0.10 - recoil * 0.28);
-          limbs.weaponMesh.rotation.set(-recoil * 0.75, 0, 0);
-        } else {
-          // Low-ready patrol angle
-          limbs.weaponMesh.position.set(0.03, -0.04, 0.08);
-          limbs.weaponMesh.rotation.set(0.48, 0.12, 0);
-        }
-      } else if (weaponCategory === 'pistol') {
-        if (isAimingGun || attackTimer > 0) {
-          const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.22 : 0;
-          limbs.weaponMesh.position.set(0, 0, 0.07 - recoil * 0.25);
-          limbs.weaponMesh.rotation.set(-recoil * 1.1, 0, 0);
-        } else {
-          // Low-ready sidearm angle
-          limbs.weaponMesh.position.set(0, -0.02, 0.06);
-          limbs.weaponMesh.rotation.set(0.38, 0, 0);
-        }
-      } else if (attackTimer > 0) {
-        if (comboStep === 1) {
-          // Horizontal Cleave / Bat Swing
-          const sweep = Math.sin((1 - attackTimer / 0.35) * Math.PI);
-          limbs.weaponMesh.position.set(-sweep * 0.09, 0, 0.07 + sweep * 0.06);
-          limbs.weaponMesh.rotation.set(0.2, sweep * 1.8, -sweep * 0.5);
-        } else if (comboStep === 2) {
-          // Brutal Uppercut / Smash
-          const fin = Math.sin((1 - attackTimer / 0.35) * Math.PI);
-          limbs.weaponMesh.position.set(0, -0.04 + fin * 0.15, 0.07 + fin * 0.08);
-          limbs.weaponMesh.rotation.set(-fin * 1.4, 0, fin * 0.35);
-        } else {
-          // Diagonal / Overhead Chop
-          const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
-          limbs.weaponMesh.position.set(0, slash * 0.06, 0.07 + slash * 0.05);
-          limbs.weaponMesh.rotation.set(slash * 1.55, slash * 0.35, 0);
-        }
-      } else if (weaponCategory === 'melee') {
-        limbs.weaponMesh.position.set(0, 0, 0.07);
-        limbs.weaponMesh.rotation.set(0.32, 0.12, 0);
-      } else {
-        limbs.weaponMesh.position.set(0, 0, 0.06);
-        limbs.weaponMesh.rotation.set(0.22, 0, 0);
-      }
-    } else if (isAimingGun) {
-      const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) * 0.14 : 0;
-      limbs.weaponMesh.position.set(-0.25, 1.33, 0.46 - recoil * 0.5);
-      limbs.weaponMesh.rotation.set(-recoil, 0, 0);
-    } else if (attackTimer > 0) {
-      const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
-      limbs.weaponMesh.position.set(
-        -0.26 + slash * 0.18,
-        1.16 - slash * 0.22,
-        0.38 + slash * 0.28
-      );
-      limbs.weaponMesh.rotation.set(slash * 1.45, slash * 0.45, 0);
-    } else {
-      limbs.weaponMesh.position.set(-0.28, 1.0, 0.18);
-      limbs.weaponMesh.rotation.set(0.22, 0, 0);
     }
   }
 
@@ -2868,10 +2812,19 @@ export function setCharacterAnimationState(
           _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
           rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
         } else {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
+          // Slung on back: arms swing naturally with gait
+          _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
           rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.32);
-          rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+          const elbowBend =
+            targetState === 'run'
+              ? -0.65 - Math.max(0, s) * 0.35
+              : targetState === 'walk'
+              ? -0.28 - Math.max(0, s) * 0.22
+              : -0.12;
+          _tmpQuat.setFromAxisAngle(_axisZ, elbowBend);
+          rig.leftForeArm.bone.quaternion
+            .copy(rig.leftForeArm.rest)
+            .multiply(_tmpQuat);
         }
       } else if (weaponCategory === 'pistol' && (isAimingGun || attackTimer > 0)) {
         _tmpQuat.setFromAxisAngle(_axisZ, 0.85);
@@ -2915,10 +2868,19 @@ export function setCharacterAnimationState(
           _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
           rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
         } else {
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.55);
+          // Slung on back: arms swing naturally with gait
+          _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
           rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.32);
-          rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+          const rElbowBend =
+            targetState === 'run'
+              ? -0.65 - Math.max(0, -s) * 0.35
+              : targetState === 'walk'
+              ? -0.28 - Math.max(0, -s) * 0.22
+              : -0.12;
+          _tmpQuat.setFromAxisAngle(_axisZ, rElbowBend);
+          rig.rightForeArm.bone.quaternion
+            .copy(rig.rightForeArm.rest)
+            .multiply(_tmpQuat);
         }
       } else if (weaponCategory === 'pistol') {
         const recoilKick = attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.22 : 0;
@@ -2928,9 +2890,10 @@ export function setCharacterAnimationState(
           _tmpQuat.setFromAxisAngle(_axisZ, -0.15);
           rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
         } else {
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.42);
+          // Low-ready / Holster: relaxed arm posture
+          _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.5);
           rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.25);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.18);
           rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
         }
       } else if (attackTimer > 0) {
@@ -2961,9 +2924,9 @@ export function setCharacterAnimationState(
           rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
         }
       } else if (weaponCategory === 'melee') {
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.45);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.25 - s * 0.3);
         rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.28);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
         rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
       } else {
         _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
@@ -2980,169 +2943,227 @@ export function setCharacterAnimationState(
           .multiply(_tmpQuat);
       }
     }
-    return;
-  }
-
-  // 2. Drive native GLTF AnimationMixer for Soldier & mocap-retargeted humans
-  if (!limbs.mixer || !limbs.actions) return;
-  if (limbs.currentActionName !== targetState) {
-    const prev = limbs.currentActionName
-      ? limbs.actions[limbs.currentActionName]
-      : undefined;
-    const next = limbs.actions[targetState];
-    if (next) {
-      next.reset().fadeIn(0.18).play();
-      if (prev && prev !== next) {
-        prev.fadeOut(0.18);
+  } else if (limbs.mixer && limbs.actions) {
+    // 2. Drive native GLTF AnimationMixer for Soldier & mocap-retargeted humans
+    if (limbs.currentActionName !== targetState) {
+      const prev = limbs.currentActionName
+        ? limbs.actions[limbs.currentActionName]
+        : undefined;
+      const next = limbs.actions[targetState];
+      if (next) {
+        next.reset().fadeIn(0.18).play();
+        if (prev && prev !== next) {
+          prev.fadeOut(0.18);
+        }
+        limbs.currentActionName = targetState;
       }
-      limbs.currentActionName = targetState;
     }
-  }
-  // Sync the gait to the character's real ground speed so the feet stop
-  // sliding: crouch-walking plays slower, sprinting plays faster.
-  if (limbs.actions) {
+    // Sync the gait to the character's real ground speed so the feet stop
+    // sliding: crouch-walking plays slower, sprinting plays faster.
     const clampScale = Math.max(0.45, Math.min(1.9, speedScale));
     if (limbs.actions.walk) limbs.actions.walk.timeScale = 0.85 * clampScale;
     if (limbs.actions.run) limbs.actions.run.timeScale = 1.15 * clampScale;
-  }
-  limbs.mixer.update(dt);
+    limbs.mixer.update(dt);
 
-  // Upper-body aim / stance overrides applied AFTER the mixer so gun stances,
-  // low-ready carries and fighting combos read cleanly over the mocap base pose.
-  if (
-    limbs.aimBones &&
-    (isAimingGun || attackTimer > 0 || weaponCategory !== 'fists')
-  ) {
-    const ab = limbs.aimBones;
-    if (weaponCategory === 'rifle') {
-      const recoilKick =
-        attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
-      if (isAimingGun || attackTimer > 0) {
-        _tmpQuat.setFromAxisAngle(_axisZ, -1.22 + recoilKick);
-        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
-        ab.rightForeArm.quaternion
-          .copy(ab.rightForeArmRest)
-          .multiply(_tmpQuat);
-        if (ab.leftArm && ab.leftArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 1.15);
-          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
-        }
-        if (ab.leftForeArm && ab.leftForeArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
-          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
-        }
-        if (ab.spine && ab.spineRest) {
-          _tmpQuat.setFromAxisAngle(_axisX, -0.09 + recoilKick * 0.35);
-          ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
-        }
-      } else {
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.55);
-        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.32);
-        ab.rightForeArm.quaternion
-          .copy(ab.rightForeArmRest)
-          .multiply(_tmpQuat);
-        if (ab.leftArm && ab.leftArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
-          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
-        }
-        if (ab.leftForeArm && ab.leftForeArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.32);
-          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
-        }
-      }
-    } else if (weaponCategory === 'pistol') {
-      const recoilKick =
-        attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.22 : 0;
-      if (isAimingGun || attackTimer > 0) {
-        _tmpQuat.setFromAxisAngle(_axisZ, -1.15 + recoilKick);
-        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.15);
-        ab.rightForeArm.quaternion
-          .copy(ab.rightForeArmRest)
-          .multiply(_tmpQuat);
-        if (ab.leftArm && ab.leftArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.85);
-          ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
-        }
-        if (ab.leftForeArm && ab.leftForeArmRest) {
-          _tmpQuat.setFromAxisAngle(_axisZ, 0.55);
-          ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
-        }
-        if (ab.spine && ab.spineRest) {
-          _tmpQuat.setFromAxisAngle(_axisX, -0.06);
-          ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
-        }
-      } else {
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.42);
-        ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(_axisZ, -0.25);
-        ab.rightForeArm.quaternion
-          .copy(ab.rightForeArmRest)
-          .multiply(_tmpQuat);
-      }
-    } else if (attackTimer > 0) {
-      if (weaponCategory === 'fists') {
-        if (comboStep === 0) {
-          const p = Math.sin((attackTimer / 0.32) * Math.PI);
+    // Upper-body aim / stance overrides applied AFTER the mixer so gun stances,
+    // low-ready carries and fighting combos read cleanly over the mocap base pose.
+    if (
+      limbs.aimBones &&
+      (isAimingGun || attackTimer > 0 || weaponCategory === 'melee' || (weaponCategory === 'pistol' && isAimingGun))
+    ) {
+      const ab = limbs.aimBones;
+      if (weaponCategory === 'rifle') {
+        const recoilKick =
+          attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
+        if (isAimingGun || attackTimer > 0) {
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.22 + recoilKick);
+          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.22);
+          ab.rightForeArm.quaternion
+            .copy(ab.rightForeArmRest)
+            .multiply(_tmpQuat);
           if (ab.leftArm && ab.leftArmRest) {
-            _tmpQuat.setFromAxisAngle(_axisZ, 1.35 * p);
+            _tmpQuat.setFromAxisAngle(_axisZ, 1.15);
             ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
           }
           if (ab.leftForeArm && ab.leftForeArmRest) {
-            _tmpQuat.setFromAxisAngle(_axisZ, 0.25 * p);
+            _tmpQuat.setFromAxisAngle(_axisZ, 0.45);
             ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
           }
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.75);
+          if (ab.spine && ab.spineRest) {
+            _tmpQuat.setFromAxisAngle(_axisX, -0.09 + recoilKick * 0.35);
+            ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+          }
+        }
+      } else if (weaponCategory === 'pistol') {
+        const recoilKick =
+          attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.22 : 0;
+        if (isAimingGun || attackTimer > 0) {
+          _tmpQuat.setFromAxisAngle(_axisZ, -1.15 + recoilKick);
           ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        } else if (comboStep === 1) {
-          const p = Math.sin((attackTimer / 0.32) * Math.PI);
-          _tmpQuat.setFromAxisAngle(_axisZ, -1.45 * p);
-          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.25 * p);
-          ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(_axisZ, -0.15);
+          ab.rightForeArm.quaternion
+            .copy(ab.rightForeArmRest)
+            .multiply(_tmpQuat);
           if (ab.leftArm && ab.leftArmRest) {
-            _tmpQuat.setFromAxisAngle(_axisZ, 0.75);
+            _tmpQuat.setFromAxisAngle(_axisZ, 0.85);
             ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
           }
-        } else {
-          const p = Math.sin((attackTimer / 0.35) * Math.PI);
-          _tmpQuat.setFromAxisAngle(_axisZ, -1.25 * p);
-          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-          _tmpQuat.setFromAxisAngle(_axisZ, -0.75 * p);
-          ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+          if (ab.leftForeArm && ab.leftForeArmRest) {
+            _tmpQuat.setFromAxisAngle(_axisZ, 0.55);
+            ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+          }
+          if (ab.spine && ab.spineRest) {
+            _tmpQuat.setFromAxisAngle(_axisX, -0.06);
+            ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+          }
         }
-      } else {
-        const swingAngle = -1.35 * Math.sin((attackTimer / 0.35) * Math.PI);
-        _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+      } else if (attackTimer > 0) {
+        if (weaponCategory === 'fists') {
+          if (comboStep === 0) {
+            const p = Math.sin((attackTimer / 0.32) * Math.PI);
+            if (ab.leftArm && ab.leftArmRest) {
+              _tmpQuat.setFromAxisAngle(_axisZ, 1.35 * p);
+              ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+            }
+            if (ab.leftForeArm && ab.leftForeArmRest) {
+              _tmpQuat.setFromAxisAngle(_axisZ, 0.25 * p);
+              ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+            }
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.75);
+            ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+          } else if (comboStep === 1) {
+            const p = Math.sin((attackTimer / 0.32) * Math.PI);
+            _tmpQuat.setFromAxisAngle(_axisZ, -1.45 * p);
+            ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.25 * p);
+            ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+            if (ab.leftArm && ab.leftArmRest) {
+              _tmpQuat.setFromAxisAngle(_axisZ, 0.75);
+              ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+            }
+          } else {
+            const p = Math.sin((attackTimer / 0.35) * Math.PI);
+            _tmpQuat.setFromAxisAngle(_axisZ, -1.25 * p);
+            ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+            _tmpQuat.setFromAxisAngle(_axisZ, -0.75 * p);
+            ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+          }
+        } else {
+          const swingAngle = -1.35 * Math.sin((attackTimer / 0.35) * Math.PI);
+          _tmpQuat.setFromAxisAngle(_axisZ, swingAngle);
+          ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+          _tmpQuat.setFromAxisAngle(
+            _axisZ,
+            -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
+          );
+          ab.rightForeArm.quaternion
+            .copy(ab.rightForeArmRest)
+            .multiply(_tmpQuat);
+        }
+      } else if (weaponCategory === 'melee') {
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.25);
         ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-        _tmpQuat.setFromAxisAngle(
-          _axisZ,
-          -0.45 * Math.sin((attackTimer / 0.35) * Math.PI)
-        );
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.18);
         ab.rightForeArm.quaternion
           .copy(ab.rightForeArmRest)
           .multiply(_tmpQuat);
       }
-    } else if (weaponCategory === 'melee') {
-      _tmpQuat.setFromAxisAngle(_axisZ, -0.45);
-      ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
-      _tmpQuat.setFromAxisAngle(_axisZ, -0.28);
-      ab.rightForeArm.quaternion
-        .copy(ab.rightForeArmRest)
-        .multiply(_tmpQuat);
     }
+  }
 
-    // Point the gun along the character's facing (not the hand's twist) so it
-    // never aims sideways while the arm is raised.
+  // 3. Position and Orient 3D Weapon (Slung on Back / Hip Holster / Two-Handed Aiming)
+  // Ensures rifles are realistically slung diagonally on the back when not aiming,
+  // completely eliminating pelvic/hip clipping, and cleanly transitioning to hands when firing.
+  if (limbs.weaponMesh && limbs.weaponMesh.children.length > 0) {
     const wm = limbs.weaponMesh;
-    if (wm && limbs.weaponHand && limbs.group) {
-      accumulateTransform(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
-      wm.quaternion.copy(_hwQuat).invert();
-      _tmpQuat.setFromAxisAngle(_axisX, -0.04);
-      wm.quaternion.multiply(_tmpQuat);
-      wm.position.set(0, 0.02, 0.08).applyQuaternion(wm.quaternion);
+    const recoil = attackTimer > 0 ? Math.sin(attackTimer * 28) : 0;
+
+    if (weaponCategory === 'rifle') {
+      if (isAimingGun || attackTimer > 0) {
+        // TWO-HANDED AIMING & FIRING STANCE:
+        // Positioned at shoulder/chest height pointing forward (+Z), with realistic backward recoil
+        const recoilDist = recoil * 0.06;
+        const recoilPitch = -recoil * 0.18;
+
+        if (limbs.weaponHand) {
+          getNodeTransformInRoot(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
+          wm.position.set(_hwPos.x + 0.02, _hwPos.y + 0.04, _hwPos.z + 0.12 - recoilDist);
+        } else {
+          wm.position.set(0.18, 1.34, 0.42 - recoilDist);
+        }
+        wm.rotation.set(recoilPitch, 0, 0);
+      } else {
+        // AUTHENTIC SLUNG-ON-BACK STANCE (GTA V / PUBG / The Last of Us):
+        // Slung diagonally across the upper back from right shoulder to left lower back.
+        // Barrel extends UP past the right shoulder, stock rests against lower back.
+        // COMPLETELY CLEAR OF PELVIS, HIPS, AND LEGS!
+        if (limbs.spineBone) {
+          getNodeTransformInRoot(limbs.spineBone, limbs.group, _spPos, _spQuat);
+          _spTmp.set(0.10, 0.08, -0.16).applyQuaternion(_spQuat);
+          wm.position.copy(_spPos).add(_spTmp);
+
+          _slungQuat.setFromEuler(_slungEuler);
+          wm.quaternion.copy(_spQuat).multiply(_slungQuat);
+        } else {
+          wm.position.set(0.10, 1.28, -0.16);
+          wm.quaternion.copy(_slungQuat);
+        }
+      }
+    } else if (weaponCategory === 'pistol') {
+      if (isAimingGun || attackTimer > 0) {
+        // TWO-HANDED ISOSCELES / WEAVER STANCE:
+        const recoilDist = recoil * 0.04;
+        const recoilPitch = -recoil * 0.32;
+
+        if (limbs.weaponHand) {
+          getNodeTransformInRoot(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
+          wm.position.set(_hwPos.x, _hwPos.y + 0.04, _hwPos.z + 0.10 - recoilDist);
+        } else {
+          wm.position.set(0.04, 1.36, 0.46 - recoilDist);
+        }
+        wm.rotation.set(recoilPitch, 0, 0);
+      } else {
+        // HIP HOLSTER POSITION:
+        // Snug at right hip / outer thigh, pointing safely down into holster.
+        if (limbs.weaponHand) {
+          getNodeTransformInRoot(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
+          wm.position.set(_hwPos.x + 0.02, _hwPos.y + 0.05, _hwPos.z);
+        } else {
+          wm.position.set(0.22, 0.92, 0.02);
+        }
+        wm.rotation.set(Math.PI / 2 + 0.05, 0, -0.06);
+      }
+    } else if (weaponCategory === 'melee') {
+      if (attackTimer > 0) {
+        // DYNAMIC MELEE COMBOS:
+        if (comboStep === 1) {
+          // Horizontal Cleave / Swing
+          const sweep = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          wm.position.set(0.18 - sweep * 0.35, 1.18, 0.28 + sweep * 0.22);
+          wm.rotation.set(0.2, sweep * 1.8, -sweep * 0.5);
+        } else if (comboStep === 2) {
+          // Brutal Uppercut / Smash
+          const fin = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          wm.position.set(0.12, 0.85 + fin * 0.48, 0.24 + fin * 0.22);
+          wm.rotation.set(-fin * 1.6, 0, fin * 0.35);
+        } else {
+          // Overhead Chop / Slash
+          const slash = Math.sin((1 - attackTimer / 0.35) * Math.PI);
+          wm.position.set(0.22 - slash * 0.15, 1.45 - slash * 0.55, 0.22 + slash * 0.32);
+          wm.rotation.set(slash * 1.75, slash * 0.35, 0);
+        }
+      } else {
+        // SAFE RESTING CARRY:
+        // Held in right hand pointing safely down along the outer side of the right leg.
+        if (limbs.weaponHand) {
+          getNodeTransformInRoot(limbs.weaponHand, limbs.group, _hwPos, _hwQuat);
+          wm.position.set(_hwPos.x, _hwPos.y - 0.04, _hwPos.z);
+        } else {
+          wm.position.set(0.24, 0.76, 0.04);
+        }
+        wm.rotation.set(Math.PI / 2 + 0.15, 0, -0.12);
+      }
     }
   }
 }
