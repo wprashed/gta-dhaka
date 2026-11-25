@@ -1194,15 +1194,23 @@ export class DhakaCityEngine {
       ];
       let safeX = veh.x;
       let safeZ = veh.z;
+      let foundSafe = false;
       for (const [ox, oz] of candidateOffsets) {
         const tx = veh.x + ox;
         const tz = veh.z + oz;
         const te = this.getRoadElevation(tx, tz, veh.y);
-        if (!this.checkWorldObstacle(tx, tz, 0.55, veh.id, te)) {
+        // Ensure exit spot is on the same road deck elevation level (not off edge of flyover)
+        if (Math.abs(te - veh.y) <= 1.4 && !this.checkWorldObstacle(tx, tz, 0.55, veh.id, veh.y)) {
           safeX = tx;
           safeZ = tz;
+          foundSafe = true;
           break;
         }
+      }
+      if (!foundSafe) {
+        // Fallback: stay right on the vehicle's road position
+        safeX = veh.x;
+        safeZ = veh.z;
       }
       const exitElev = this.getRoadElevation(safeX, safeZ, veh.y);
       this.playerPos.set(safeX, exitElev, safeZ);
@@ -7653,7 +7661,9 @@ export class DhakaCityEngine {
         if (this.activeVehicleId) {
           this.exitCurrentVehicle();
         }
-        setCharacterAnimationState(this.playerLimbs, 'idle', dt);
+        const activeTool = store.tools.find((t) => t.id === store.equippedToolId);
+        const wCat = activeTool?.isFirearm ? (activeTool.id === 'pistol_9mm' || activeTool.id === 'smg_uzi' ? 'pistol' : 'rifle') : activeTool?.category === 'local_arm' ? 'melee' : 'fists';
+        setCharacterAnimationState(this.playerLimbs, 'idle', dt, 0, false, 1.0, wCat);
         this.playerLimbs.group.position.set(this.playerPos.x, 0, this.playerPos.z);
         this.playerLimbs.group.rotation.x = 0;
       } else if (this.activeVehicleId) {
@@ -7687,7 +7697,9 @@ export class DhakaCityEngine {
       this.updateRadiatorSteam(dt);
       this.updateMissionAndInteractionChecks(dt);
     } else if (!this.activeVehicleId) {
-      setCharacterAnimationState(this.playerLimbs, 'idle', dt);
+      const activeTool = store.tools.find((t) => t.id === store.equippedToolId);
+      const wCat = activeTool?.isFirearm ? (activeTool.id === 'pistol_9mm' || activeTool.id === 'smg_uzi' ? 'pistol' : 'rifle') : activeTool?.category === 'local_arm' ? 'melee' : 'fists';
+      setCharacterAnimationState(this.playerLimbs, 'idle', dt, 0, false, 1.0, wCat);
       this.playerLimbs.group.position.copy(this.playerPos);
       this.playerLimbs.group.rotation.y = this.playerRotation;
     }
@@ -8314,17 +8326,23 @@ export class DhakaCityEngine {
       const nextX = this.playerPos.x + vx;
       const nextZ = this.playerPos.z + vz;
 
-      const elevX = this.getRoadElevation(nextX, this.playerPos.z, this.playerPos.y);
+      const curElev = this.playerPos.y;
+      const elevX = this.getRoadElevation(nextX, this.playerPos.z, curElev);
+      const elevZ = this.getRoadElevation(this.playerPos.x, nextZ, curElev);
+
+      // Prevent walking through flyover barriers or stepping off elevated decks into empty air
+      const safeElevX = curElev > 2.0 && elevX < 1.0 ? false : (elevX - curElev <= 0.6);
       if (
-        elevX - this.playerPos.y <= 0.6 &&
-        !this.checkWorldObstacle(nextX, this.playerPos.z, 0.48, this.activeVehicleId, elevX)
+        safeElevX &&
+        !this.checkWorldObstacle(nextX, this.playerPos.z, 0.48, this.activeVehicleId, Math.max(curElev, elevX))
       ) {
         this.playerPos.x = clampWorldCoord(nextX);
       }
-      const elevZ = this.getRoadElevation(this.playerPos.x, nextZ, this.playerPos.y);
+
+      const safeElevZ = curElev > 2.0 && elevZ < 1.0 ? false : (elevZ - curElev <= 0.6);
       if (
-        elevZ - this.playerPos.y <= 0.6 &&
-        !this.checkWorldObstacle(this.playerPos.x, nextZ, 0.48, this.activeVehicleId, elevZ)
+        safeElevZ &&
+        !this.checkWorldObstacle(this.playerPos.x, nextZ, 0.48, this.activeVehicleId, Math.max(curElev, elevZ))
       ) {
         this.playerPos.z = clampWorldCoord(nextZ);
       }
@@ -8336,7 +8354,7 @@ export class DhakaCityEngine {
 
     // Resolve any clipping / penetration with obstacle colliders (AABB buildings, medians & flyover barriers)
     const onFlyover = this.playerPos.y > 2.0;
-    const pRad = 0.48;
+    const pRad = 0.52;
     for (const b of this.buildingColliders) {
       if (onFlyover && b.tag !== 'flyover_barrier') continue;
       if (!onFlyover && b.tag === 'flyover_barrier') continue;
@@ -8350,7 +8368,7 @@ export class DhakaCityEngine {
       if (distSq < pRad * pRad) {
         if (distSq > 0.0001) {
           const dist = Math.sqrt(distSq);
-          const push = pRad - dist + 0.03;
+          const push = pRad - dist + 0.04;
           this.playerPos.x += (dx / dist) * push;
           this.playerPos.z += (dz / dist) * push;
         } else {
@@ -8360,10 +8378,10 @@ export class DhakaCityEngine {
           const dMinZ = this.playerPos.z - b.minZ;
           const dMaxZ = b.maxZ - this.playerPos.z;
           const minPen = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-          if (minPen === dMinX) this.playerPos.x = b.minX - (pRad + 0.03);
-          else if (minPen === dMaxX) this.playerPos.x = b.maxX + (pRad + 0.03);
-          else if (minPen === dMinZ) this.playerPos.z = b.minZ - (pRad + 0.03);
-          else this.playerPos.z = b.maxZ + (pRad + 0.03);
+          if (minPen === dMinX) this.playerPos.x = b.minX - (pRad + 0.04);
+          else if (minPen === dMaxX) this.playerPos.x = b.maxX + (pRad + 0.04);
+          else if (minPen === dMinZ) this.playerPos.z = b.minZ - (pRad + 0.04);
+          else this.playerPos.z = b.maxZ + (pRad + 0.04);
         }
       }
     }
@@ -8779,9 +8797,9 @@ export class DhakaCityEngine {
         this.playerLimbs.group.rotation.set(0, 0, 0);
         this.playerLimbs.group.scale.set(0.78, 0.78, 0.78);
       } else if (veh.type === 'car' || veh.type === 'police') {
-        this.playerLimbs.group.position.set(-0.35, 0.22, 0.08);
+        this.playerLimbs.group.position.set(-0.35, -0.06, 0.12);
         this.playerLimbs.group.rotation.set(0, 0, 0);
-        this.playerLimbs.group.scale.set(0.72, 0.72, 0.72);
+        this.playerLimbs.group.scale.set(0.65, 0.65, 0.65);
       } else if (veh.type === 'pickup') {
         this.playerLimbs.group.position.set(-0.38, 0.35, 0.35);
         this.playerLimbs.group.rotation.set(0, 0, 0);
