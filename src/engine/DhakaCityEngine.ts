@@ -334,19 +334,20 @@ export class DhakaCityEngine {
   }
 
   private buildDhakaWorld() {
-    // 1. Authentic Dhaka Interlocking Terracotta & Concrete Footpath Plaza Ground Skin
-    const dhakaSidewalkBaseTex = loadRealTexture(
-      '/textures/dhaka_ground_sidewalk.jpg',
-      380,
-      380,
+    // 1. Realistic Dhaka Urban Terrain Roadbed & Ground Foundation (No Endless Red Pavers)
+    const groundAsphaltTex = loadRealTexture(
+      '/textures/dhaka_asphalt.jpg',
+      160,
+      160,
       true
     );
     const groundGeo = new THREE.PlaneGeometry(5000, 5000);
     groundGeo.rotateX(-Math.PI / 2);
     const groundMat = new THREE.MeshStandardMaterial({
-      map: dhakaSidewalkBaseTex,
-      color: '#e2e8f0',
-      roughness: 0.84,
+      map: groundAsphaltTex,
+      color: '#334155',
+      roughness: 0.88,
+      metalness: 0.08,
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.receiveShadow = true;
@@ -503,54 +504,62 @@ export class DhakaCityEngine {
       // Central National Spine: Airport Highway -> Farmgate -> Sadarghat & Buriganga
       { x: 0, width: 22, zMin: -1400, zMax: 800 },
       // Dhanmondi / Asad Gate / Agargaon Avenue
-      { x: -170, width: 18, zMin: -1300, zMax: 700 },
+      { x: -170, width: 18, zMin: -1400, zMax: 800 },
       // Mirpur 10 Circle & Sher-e-Bangla Stadium Avenue
-      { x: -380, width: 18, zMin: -1300, zMax: 700 },
+      { x: -380, width: 18, zMin: -1400, zMax: 800 },
       // Mirpur-12 / DOHS Avenue
-      { x: -480, width: 16, zMin: -1300, zMax: 500 },
+      { x: -480, width: 16, zMin: -1400, zMax: 800 },
       // Gabtoli & Kalyanpur Bus Expressway
-      { x: -580, width: 20, zMin: -1300, zMax: 700 },
+      { x: -580, width: 20, zMin: -1400, zMax: 800 },
       // Savar & Hemayetpur Outer Highway
-      { x: -780, width: 20, zMin: -1100, zMax: 600 },
+      { x: -780, width: 20, zMin: -1400, zMax: 800 },
+      // Western Outer Ring Road Link
+      { x: -950, width: 22, zMin: -1400, zMax: 800 },
       // Gulshan Avenue & Motijheel Financial Spine
-      { x: 220, width: 18, zMin: -1300, zMax: 700 },
+      { x: 220, width: 18, zMin: -1400, zMax: 800 },
       // Badda / Rampura / Bashundhara Link Avenue
-      { x: 440, width: 18, zMin: -1300, zMax: 700 },
+      { x: 440, width: 18, zMin: -1400, zMax: 800 },
       // Purbachal 300 Feet Grand Expressway
-      { x: 640, width: 24, zMin: -1100, zMax: 600 },
+      { x: 640, width: 24, zMin: -1400, zMax: 800 },
       // Purbachal Smart City East Boulevard
-      { x: 840, width: 22, zMin: -900, zMax: 500 },
+      { x: 840, width: 22, zMin: -1400, zMax: 800 },
+      // Eastern Outer Ring Road Link
+      { x: 950, width: 22, zMin: -1400, zMax: 800 },
       // Old Dhaka Chawkbazar Historical Street
       { x: -70, width: 14, zMin: 60, zMax: 580 },
     ];
 
     const ewRoads = [
+      // Northern Outer Ring Road (Tongi - Ashulia - Diabari Expressway)
+      { z: -1400, width: 22, xMin: -950, xMax: 950 },
       // Uttara Sector 18 & Diabari Metro Depot Expressway
-      { z: -1100, width: 20, xMin: -1200, xMax: 1200 },
+      { z: -1100, width: 20, xMin: -950, xMax: 950 },
       // Tongi & Gazipur Industrial Boulevard
-      { z: -850, width: 20, xMin: -1200, xMax: 1200 },
+      { z: -850, width: 20, xMin: -950, xMax: 950 },
       // Uttara North & Airport Runway Road
-      { z: -620, width: 20, xMin: -1200, xMax: 1200 },
+      { z: -620, width: 20, xMin: -950, xMax: 950 },
       // Uttara South & Airport Terminal Boulevard
-      { z: -460, width: 20, xMin: -1200, xMax: 1200 },
+      { z: -460, width: 20, xMin: -950, xMax: 950 },
       // Banani / Airport Flyover & 300ft Entry
-      { z: -315, width: 20, xMin: -1200, xMax: 1200 },
+      { z: -315, width: 20, xMin: -950, xMax: 950 },
       // Mirpur 10 / Mohakhali Flyover / Gulshan-2
-      { z: -175, width: 18, xMin: -1200, xMax: 1200 },
+      { z: -175, width: 18, xMin: -950, xMax: 950 },
       // Manik Mia Avenue / Farmgate / Karwan Bazar
-      { z: 0, width: 22, xMin: -1200, xMax: 1200 },
+      { z: 0, width: 22, xMin: -950, xMax: 950 },
       // Shahbagh / TSC / Motijheel Commercial District
-      { z: 175, width: 18, xMin: -1200, xMax: 1200 },
+      { z: 175, width: 18, xMin: -950, xMax: 950 },
       // Lalbagh Fort / Chawkbazar / Sadarghat Riverfront
-      { z: 285, width: 18, xMin: -1200, xMax: 1200 },
+      { z: 285, width: 18, xMin: -950, xMax: 950 },
       // Mayor Hanif Expressway Corridor
-      { z: 360, width: 18, xMin: -1200, xMax: 1200 },
+      { z: 360, width: 18, xMin: -950, xMax: 950 },
       // Buriganga 2nd Bridge / Postogola / Keraniganj Highway
-      { z: 460, width: 20, xMin: -1200, xMax: 1200 },
+      { z: 460, width: 20, xMin: -950, xMax: 950 },
       // Jatrabari & Sayedabad Bus Expressway
-      { z: 620, width: 20, xMin: -1000, xMax: 1000 },
+      { z: 620, width: 20, xMin: -950, xMax: 950 },
       // Keraniganj South Link Highway
-      { z: 760, width: 18, xMin: -900, xMax: 900 },
+      { z: 760, width: 18, xMin: -950, xMax: 950 },
+      // Southern Outer Ring Road (Postogola - Keraniganj - Babubazar Southern Bypass)
+      { z: 800, width: 22, xMin: -950, xMax: 950 },
     ];
 
     // Build seamless junction patches at every intersection point
@@ -664,8 +673,10 @@ export class DhakaCityEngine {
           addZebraCrossing(ns.x, c.zMin - 1.8, true, ns.width);
         }
         curZ = c.zMax;
-        // Zebra crosswalk leaving cross street
-        addZebraCrossing(ns.x, curZ + 1.8, true, ns.width);
+        // Zebra crosswalk leaving cross street (only if the road continues forward)
+        if (ns.zMax > curZ + 4) {
+          addZebraCrossing(ns.x, curZ + 1.8, true, ns.width);
+        }
       });
 
       if (ns.zMax > curZ + 3) {
@@ -764,8 +775,10 @@ export class DhakaCityEngine {
           addZebraCrossing(c.xMin - 1.8, ew.z, false, ew.width);
         }
         curX = c.xMax;
-        // Zebra crosswalk leaving cross street
-        addZebraCrossing(curX + 1.8, ew.z, false, ew.width);
+        // Zebra crosswalk leaving cross street (only if the road continues forward)
+        if (ew.xMax > curX + 4) {
+          addZebraCrossing(curX + 1.8, ew.z, false, ew.width);
+        }
       });
 
       if (ew.xMax > curX + 3) {
@@ -4709,35 +4722,35 @@ export class DhakaCityEngine {
       { type: 'motorcycle', x: -12, z: -170, rot: Math.PI / 2, isTraffic: false, color: '#f43f5e' },
       { type: 'pickup', x: 88, z: 98, rot: 0, isTraffic: false, color: '#0284c7' },
 
-      { type: 'cng', x: 4.5, z: -60, rot: 0, isTraffic: true, color: '#15803d' },
-      { type: 'bus', x: -4.5, z: -110, rot: Math.PI, isTraffic: true, color: '#0f766e' },
-      { type: 'car', x: 4.5, z: 85, rot: 0, isTraffic: true, color: '#e2e8f0' },
-      { type: 'cng', x: -4.5, z: 130, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'rickshaw', x: 4.5, z: 210, rot: 0, isTraffic: true, color: '#ec4899' },
-      { type: 'bus', x: -60, z: 4.5, rot: Math.PI / 2, isTraffic: true, color: '#b91c1c' },
-      { type: 'cng', x: 75, z: -4.5, rot: -Math.PI / 2, isTraffic: true, color: '#15803d' },
-      { type: 'car', x: 145, z: 4.5, rot: Math.PI / 2, isTraffic: true, color: '#facc15' },
-      { type: 'motorcycle', x: -115, z: -4.5, rot: -Math.PI / 2, isTraffic: true, color: '#e11d48' },
+      { type: 'cng', x: 5.5, z: -60, rot: 0, isTraffic: true, color: '#15803d' },
+      { type: 'bus', x: -5.5, z: -110, rot: Math.PI, isTraffic: true, color: '#0f766e' },
+      { type: 'car', x: 5.5, z: 85, rot: 0, isTraffic: true, color: '#e2e8f0' },
+      { type: 'cng', x: -5.5, z: 130, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'rickshaw', x: 5.5, z: 210, rot: 0, isTraffic: true, color: '#ec4899' },
+      { type: 'bus', x: -60, z: -5.5, rot: Math.PI / 2, isTraffic: true, color: '#b91c1c' },
+      { type: 'cng', x: 75, z: 5.5, rot: -Math.PI / 2, isTraffic: true, color: '#15803d' },
+      { type: 'car', x: 145, z: -5.5, rot: Math.PI / 2, isTraffic: true, color: '#facc15' },
+      { type: 'motorcycle', x: -115, z: 5.5, rot: -Math.PI / 2, isTraffic: true, color: '#e11d48' },
       { type: 'cng', x: 224, z: -45, rot: 0, isTraffic: true, color: '#15803d' },
       { type: 'car', x: 216, z: 65, rot: Math.PI, isTraffic: true, color: '#f8fafc' },
       { type: 'pickup', x: -166, z: -90, rot: 0, isTraffic: true, color: '#0284c7' },
 
-      { type: 'police', x: 62, z: -10, rot: -Math.PI / 2, isTraffic: true, color: '#1e3a8a' },
+      { type: 'police', x: 62, z: 5.5, rot: -Math.PI / 2, isTraffic: true, color: '#1e3a8a' },
       { type: 'police', x: 215, z: -95, rot: 0, isTraffic: true, color: '#1e3a8a' },
       { type: 'police', x: -165, z: 110, rot: 0, isTraffic: true, color: '#1e3a8a' },
 
       // Mirpur-10 & Cricket Stadium Sector Spawns (Avenue at X = -380)
-      { type: 'rickshaw', x: -376.5, z: -170, rot: 0, isTraffic: true, color: '#f59e0b' },
-      { type: 'cng', x: -383.5, z: -210, rot: Math.PI, isTraffic: true, color: '#15803d' },
-      { type: 'bus', x: -376.5, z: -120, rot: 0, isTraffic: true, color: '#b91c1c' },
-      { type: 'motorcycle', x: -383.5, z: -175, rot: Math.PI, isTraffic: false, color: '#ef4444' },
-      { type: 'police', x: -383.5, z: -260, rot: Math.PI, isTraffic: true, color: '#1e3a8a' },
+      { type: 'rickshaw', x: -375.5, z: -170, rot: 0, isTraffic: true, color: '#f59e0b' },
+      { type: 'cng', x: -384.5, z: -210, rot: Math.PI, isTraffic: true, color: '#15803d' },
+      { type: 'bus', x: -375.5, z: -120, rot: 0, isTraffic: true, color: '#b91c1c' },
+      { type: 'motorcycle', x: -384.5, z: -175, rot: Math.PI, isTraffic: false, color: '#ef4444' },
+      { type: 'police', x: -384.5, z: -260, rot: Math.PI, isTraffic: true, color: '#1e3a8a' },
 
       // Purbachal 300ft High-Speed Expressway Spawns (Expressway at Z = -315, NS at X = 640)
-      { type: 'car', x: 480, z: -318.5, rot: -Math.PI / 2, isTraffic: true, color: '#ef4444' },
-      { type: 'motorcycle', x: 540, z: -311.5, rot: Math.PI / 2, isTraffic: true, color: '#f97316' },
+      { type: 'car', x: 480, z: -320.5, rot: Math.PI / 2, isTraffic: true, color: '#ef4444' },
+      { type: 'motorcycle', x: 540, z: -309.5, rot: -Math.PI / 2, isTraffic: true, color: '#f97316' },
       { type: 'car', x: 644, z: -250, rot: 0, isTraffic: false, color: '#38bdf8' },
-      { type: 'pickup', x: 420, z: -311.5, rot: Math.PI / 2, isTraffic: true, color: '#0284c7' },
+      { type: 'pickup', x: 420, z: -320.5, rot: Math.PI / 2, isTraffic: true, color: '#0284c7' },
 
       // Bashundhara R/A & Jamuna Future Park Spawns (Avenue at X = 440)
       { type: 'car', x: 443.5, z: -320, rot: 0, isTraffic: false, color: '#f8fafc' },
@@ -7201,9 +7214,9 @@ export class DhakaCityEngine {
 
       // Position the player in the exact driver seat in vehicle-local coordinates
       if (veh.type === 'motorcycle') {
-        this.playerLimbs.group.position.set(0, 0.26, -0.14);
+        this.playerLimbs.group.position.set(0, 0.16, -0.30);
         this.playerLimbs.group.rotation.set(-this.bikeWheeliePitch, 0, 0);
-        this.playerLimbs.group.scale.set(0.84, 0.84, 0.84);
+        this.playerLimbs.group.scale.set(0.92, 0.92, 0.92);
       } else if (veh.type === 'rickshaw') {
         this.playerLimbs.group.position.set(0, 0.22, 0.34);
         this.playerLimbs.group.rotation.set(0, 0, 0);
@@ -7526,9 +7539,31 @@ export class DhakaCityEngine {
         const probeDist = stats.length * 0.5 + 2.2;
         const probeX = veh.x + forwardX * probeDist;
         const probeZ = veh.z + forwardZ * probeDist;
-        if (this.checkBuildingCollision(probeX, probeZ, 1.2, elev)) {
-          blockedAhead = true;
+
+        // Check building colliders (excluding medians when crossing an intersection on East-West road)
+        for (const b of this.buildingColliders) {
+          if (elev <= 2.0 && b.tag === 'flyover_barrier') continue;
+          if (elev > 2.0 && b.tag !== 'flyover_barrier') continue;
+          if (veh.roadAxis === 'ew' && b.tag === 'road_median') continue;
+
+          if (
+            probeX + 1.2 > b.minX &&
+            probeX - 1.2 < b.maxX &&
+            probeZ + 1.2 > b.minZ &&
+            probeZ - 1.2 < b.maxZ
+          ) {
+            blockedAhead = true;
+            break;
+          }
         }
+      }
+
+      // Intersection anti-gridlock rule: If vehicle is currently within an intersection,
+      // it must keep moving forward to clear the cross-street box and avoid blocking traffic sideways.
+      const isInsideJunction = Math.abs(veh.x) < 14 && Math.abs(veh.z) < 14;
+      if (isInsideJunction && blockedAhead && pForward > 4.0) {
+        // Only yield if player is directly inches in front; otherwise cruise through junction
+        blockedAhead = false;
       }
 
       // Smooth deceleration to 0 when blocked, or smooth acceleration to cruise speed when clear

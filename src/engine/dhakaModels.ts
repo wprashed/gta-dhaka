@@ -1625,41 +1625,70 @@ export function createVehicleMesh(
         try {
           const rider = SkeletonUtils.clone(gltf.scene);
           rider.name = 'npc_driver';
-          rider.scale.setScalar(0.84);
-          rider.position.set(0, 0.26, -0.14);
+          rider.scale.setScalar(0.92);
+          // Seat coordinates: sits flush on seat cushion at z = -0.30, y = 0.16
+          rider.position.set(0, 0.16, -0.30);
 
-          const hipBendQuat = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(1, 0, 0),
-            1.05
-          );
+          // Authentic human motorcycle riding posture:
+          // Thighs rotated forward hugging fuel tank (-1.05 rad) with outward splay (±0.22 rad)
+          const leftThighQuat = new THREE.Quaternion()
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -1.05)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.22));
+          const rightThighQuat = new THREE.Quaternion()
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -1.05)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.22));
+          // Knees bent backward (+1.25 rad) angling shins down and back to footpegs
           const kneeBendQuat = new THREE.Quaternion().setFromAxisAngle(
             new THREE.Vector3(1, 0, 0),
-            -1.15
+            1.25
           );
+          // Feet flexed flat on footpegs
+          const footFlatQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            -0.25
+          );
+          // Arms reach forward and slightly outward to grip handlebars at (±0.30, 1.16, 0.56)
           const leftArmQuat = new THREE.Quaternion()
-            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
-            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.45));
+            .setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.82)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.38));
           const rightArmQuat = new THREE.Quaternion()
-            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
-            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45));
+            .setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.82)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.38));
+          // Forearms angled inward toward handlebar grips
+          const leftForeArmQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 0, 1),
+            -0.35
+          );
+          const rightForeArmQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 0, 1),
+            0.35
+          );
 
           rider.traverse((c) => {
             // Hide any fedora hat / headwear so traffic bikers have realistic hair/helmets
-            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear' || c.name.toLowerCase().includes('headwear')) {
               c.visible = false;
             }
-            if (c.name === 'Spine' || c.name === 'Spine1') {
+            if (c.name === 'Spine' || c.name === 'Spine1' || c.name === 'Spine2') {
               c.quaternion.multiply(
-                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.22)
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.38)
               );
             } else if (c.name === 'LeftArm') {
               c.quaternion.multiply(leftArmQuat);
             } else if (c.name === 'RightArm') {
               c.quaternion.multiply(rightArmQuat);
-            } else if (c.name === 'LeftUpLeg' || c.name === 'RightUpLeg') {
-              c.quaternion.multiply(hipBendQuat);
+            } else if (c.name === 'LeftForeArm') {
+              c.quaternion.multiply(leftForeArmQuat);
+            } else if (c.name === 'RightForeArm') {
+              c.quaternion.multiply(rightForeArmQuat);
+            } else if (c.name === 'LeftUpLeg') {
+              c.quaternion.multiply(leftThighQuat);
+            } else if (c.name === 'RightUpLeg') {
+              c.quaternion.multiply(rightThighQuat);
             } else if (c.name === 'LeftLeg' || c.name === 'RightLeg') {
               c.quaternion.multiply(kneeBendQuat);
+            } else if (c.name === 'LeftFoot' || c.name === 'RightFoot') {
+              c.quaternion.multiply(footFlatQuat);
             }
 
             // Dress biker in dark leather biker jacket and dark denim jeans
@@ -3213,49 +3242,90 @@ export function setDrivingPose(
 
   if (vehicleType === 'motorcycle') {
     // MOTORCYCLE BIKER POSE:
-    // Hips bent forward, knees bent back, feet planted on footpegs, spine leaning forward over tank,
-    // arms reaching forward holding handlebars, banking into turns and leaning into wheelies
+    // Both thighs rotate forward hugging fuel tank (-1.05 rad on axisX), splayed outward (±0.22 rad on axisZ)
+    // Both knees bend back (+1.25 rad on axisX) so lower legs angle down & back to footpegs
+    // Feet flex flat on footpegs (-0.25 rad on axisX)
+    // Spine leans forward over fuel tank (0.38 rad) + banking into steer & wheelie
+    // Arms reach forward to handlebars (axisZ: ±0.82 rad, axisX: +0.38 rad)
+    // Forearms bend elbows inward (axisZ: ∓0.35 rad) to grip handlebar ends
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.15).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.2));
+      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.22));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.15).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.2));
+      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.22));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.25);
+      tmpQ.setFromAxisAngle(axisX, 1.25);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
     }
     if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.25);
+      tmpQ.setFromAxisAngle(axisX, 1.25);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
     }
     if (rig.leftFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.35);
+      tmpQ.setFromAxisAngle(axisX, -0.25);
       rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
     }
     if (rig.rightFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.35);
+      tmpQ.setFromAxisAngle(axisX, -0.25);
       rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
     }
     if (rig.spine) {
-      const speedLean = Math.min(0.25, Math.abs(speed) * 0.012);
-      const forwardLean = 0.32 + speedLean + wheeliePitch * 0.45;
-      const turnLean = -steer * 0.28;
+      const speedLean = Math.min(0.22, Math.abs(speed) * 0.012);
+      const forwardLean = 0.38 + speedLean + wheeliePitch * 0.45;
+      const turnLean = -steer * 0.25;
       tmpQ.setFromAxisAngle(axisX, forwardLean).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, turnLean));
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.52)
-        .multiply(new THREE.Quaternion().setFromAxisAngle(axisY, -0.22))
-        .multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.45));
+      tmpQ.setFromAxisAngle(axisZ, 0.82).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.52)
-        .multiply(new THREE.Quaternion().setFromAxisAngle(axisY, 0.22))
-        .multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.45));
+      tmpQ.setFromAxisAngle(axisZ, -0.82).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+    if (rig.leftForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, -0.35);
+      rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, 0.35);
+      rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
+    }
+  } else if (vehicleType === 'rickshaw') {
+    // RICKSHAW PULLER STANDING & PEDALING POSE:
+    const pedalTime = performance.now() * 0.008 * (speed || 0.6);
+    const leftPedal = Math.sin(pedalTime);
+    const rightPedal = Math.sin(pedalTime + Math.PI);
+    if (rig.leftUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.45 - leftPedal * 0.25);
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.45 - rightPedal * 0.25);
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.55 + Math.max(0, leftPedal) * 0.45);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.55 + Math.max(0, rightPedal) * 0.45);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
+    }
+    if (rig.spine) {
+      tmpQ.setFromAxisAngle(axisX, 0.28);
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
+    }
+    if (rig.leftArm) {
+      tmpQ.setFromAxisAngle(axisZ, 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.35));
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightArm) {
+      tmpQ.setFromAxisAngle(axisZ, -0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.35));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
     }
     if (rig.leftForeArm) {
@@ -3266,69 +3336,56 @@ export function setDrivingPose(
       tmpQ.setFromAxisAngle(axisZ, 0.25);
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
-  } else if (vehicleType === 'rickshaw') {
-    // RICKSHAW PULLER STANDING & PEDALING POSE:
-    const pedalTime = performance.now() * 0.008 * (speed || 0.6);
-    const leftPedal = Math.sin(pedalTime);
-    const rightPedal = Math.sin(pedalTime + Math.PI);
-    if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 0.65 + leftPedal * 0.35);
-      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
-    }
-    if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 0.65 + rightPedal * 0.35);
-      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
-    }
-    if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, -0.55 - Math.max(0, leftPedal) * 0.65);
-      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
-    }
-    if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, -0.55 - Math.max(0, rightPedal) * 0.65);
-      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
-    }
-    if (rig.spine) {
-      tmpQ.setFromAxisAngle(axisX, 0.22);
-      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
-    }
-    if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.35));
-      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
-    }
-    if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.35));
-      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
-    }
   } else {
     // CAR, CNG, POLICE CRUISER, PICKUP, BUS SEATED DRIVER:
-    // Sitting with legs bent ~90 degrees, hands holding steering wheel or handlebars
+    // Thighs angled forward (-1.35 rad) with slight splay
+    // Knees bent down (+1.40 rad) towards floor pedals
+    // Feet flat (-0.20 rad)
+    // Arms reach forward to steering wheel (axisZ: ±0.72 rad, axisX: 0.42 rad)
+    // Forearms bent inward (axisZ: ∓0.38 rad) with hands gripping steering wheel
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.12));
+      tmpQ.setFromAxisAngle(axisX, -1.35).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.12));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.12));
+      tmpQ.setFromAxisAngle(axisX, -1.35).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.12));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.35);
+      tmpQ.setFromAxisAngle(axisX, 1.40);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
     }
     if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.35);
+      tmpQ.setFromAxisAngle(axisX, 1.40);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
     }
+    if (rig.leftFoot) {
+      tmpQ.setFromAxisAngle(axisX, -0.20);
+      rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
+    }
+    if (rig.rightFoot) {
+      tmpQ.setFromAxisAngle(axisX, -0.20);
+      rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
+    }
     if (rig.spine) {
-      tmpQ.setFromAxisAngle(axisX, 0.08);
+      tmpQ.setFromAxisAngle(axisX, 0.12);
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.48).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.28));
+      tmpQ.setFromAxisAngle(axisZ, 0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisX, 0.48).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.28));
+      tmpQ.setFromAxisAngle(axisZ, -0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+    if (rig.leftForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, -0.38);
+      rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, 0.38);
+      rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
   }
 
