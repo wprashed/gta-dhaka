@@ -4169,3 +4169,88 @@ export function createMallSignboardTexture(
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+export function createHeritageSignboardTexture(
+  titleBn: string,
+  titleEn: string,
+  subtitle: string,
+  bgColor = '#7f1d1d',
+  accentColor = '#facc15'
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  // Mughal arch-inspired decorative border
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(16, 16, 992, 288);
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(26, 26, 972, 268);
+
+  ctx.fillStyle = accentColor;
+  ctx.font = 'bold 50px "Noto Sans Bengali", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(titleBn, 512, 95);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText(titleEn, 512, 170);
+
+  ctx.fillStyle = '#fde68a';
+  ctx.font = 'italic 26px sans-serif';
+  ctx.fillText(subtitle, 512, 240);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function createHighwaySpeedSignTexture(
+  speedLimit = 100,
+  textBn = 'সর্বোচ্চ গতিসীমা ১০০ কিমি/ঘণ্টা'
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Red circle speed limit sign
+  ctx.beginPath();
+  ctx.arc(256, 200, 170, 0, Math.PI * 2);
+  ctx.fillStyle = '#dc2626';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(256, 200, 135, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 130px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(speedLimit.toString(), 256, 205);
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.fillText('SPEEDWAY 300FT', 256, 410);
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 24px "Noto Sans Bengali", sans-serif';
+  ctx.fillText(textBn, 256, 455);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+

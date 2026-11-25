@@ -25,6 +25,8 @@ import {
   createFobBillboardTexture,
   createStadiumScoreboardTexture,
   createMallSignboardTexture,
+  createHeritageSignboardTexture,
+  createHighwaySpeedSignTexture,
   loadCustomGLBFromUrl,
   setCharacterAnimationState,
   setDrivingPose,
@@ -2599,6 +2601,8 @@ export class DhakaCityEngine {
     this.buildMirpurCricketStadium();
     this.buildDhakaMegaShoppingMalls();
     this.buildHatirjheelArchedBridgeAndPromenade();
+    this.buildOldDhakaHeritageDistrict();
+    this.buildPurbachalSmartCityAndExpressway();
 
     // Realistic Multi-Tiered Tropical Dhaka Trees: Krishnachura (কৃষ্ণচূড়া) & Banyan (বটগাছ)
     const trunkMat = new THREE.MeshStandardMaterial({
@@ -4427,6 +4431,1076 @@ export class DhakaCityEngine {
     this.scene.add(bridgeGroup);
   }
 
+  /**
+   * Old Dhaka (Puran Dhaka - পুরান ঢাকা) Historic Mughal Citadel & Heritage Market
+   * Authentic Mughal architecture and bustling streetlife:
+   * 1. Historic Lalbagh Fort (Fort Aurangabad - লালবাগ কেল্লা):
+   *    - South Gateway (দক্ষিণ তোরণ): 3-storey grand red terracotta Mughal fortified gateway
+   *      with central scalloped multi-foil archway opening (w: 8m, h: 7m), flanked by two 22m octagonal
+   *      minarets topped with pillared chhatri kiosks, copper domes, and kalasha finials.
+   *    - Courtyard Charbagh gardens with 4 grass quadrants, red brick walkways, and stone fountain pond.
+   *    - Tomb of Pari Bibi (পরী বিবির মাজার): raised square marble plinth, central chamber,
+   *      ribbed white marble dome (13m), octagonal turrets.
+   *    - Fortress rampart walls (কেল্লার প্রাচীর) enclosing the citadel with corner bastions and colliders.
+   *    - Historic Mughal cast-iron cannons mounted on wooden carriage wheels.
+   * 2. Ahsan Manzil Pink Palace (আহসান মঞ্জিল):
+   *    - Waterfront palace facing Buriganga River (X: -10, Z: 312).
+   *    - Coral pink / rose terracotta facade, octagonal drum, majestic ribbed central dome (22m).
+   *    - Two-storey arcade wings with classical arches, Corinthian fluted columns, balustrades.
+   *    - Monumental 14m-wide central ceremonial stone staircase descending to riverfront garden.
+   *    - National flag flying on palace flagpole.
+   * 3. Chawkbazar & Shakhari Bazar Heritage Market:
+   *    - Heritage shophouses with cantilevered wooden verandas, louvered shutters, and red brick textures.
+   *    - Shahi Haji Kacchi Biriyani: giant polished brass cauldrons (শাহী ডেগ) wrapped in crimson cloth
+   *      over hearth fire with steam particles.
+   *    - Bakarkhani tandoori bakery with glowing clay oven and crispy bread stacks.
+   *    - Cycle rickshaw workshop with painted rickshaw art plates and parked rickshaws.
+   *    - Overhead tangled utility wires & vintage amber street bracket lanterns.
+   */
+  private buildOldDhakaHeritageDistrict() {
+    const mughalBrickMat = new THREE.MeshStandardMaterial({
+      map: loadRealTexture('/textures/brick_diffuse.jpg', 3, 3),
+      bumpMap: loadRealTexture('/textures/brick_bump.jpg', 3, 3, false),
+      bumpScale: 0.08,
+      color: '#991b1b',
+      roughness: 0.82,
+    });
+    const marbleWhiteMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.28,
+      metalness: 0.12,
+    });
+    const ahsanPinkMat = new THREE.MeshStandardMaterial({
+      color: '#f472b6',
+      roughness: 0.75,
+    });
+    const ahsanDarkPinkMat = new THREE.MeshStandardMaterial({
+      color: '#be185d',
+      roughness: 0.78,
+    });
+    const brassGoldMat = new THREE.MeshStandardMaterial({
+      color: '#f59e0b',
+      metalness: 0.9,
+      roughness: 0.22,
+    });
+    const copperMat = new THREE.MeshStandardMaterial({
+      color: '#b45309',
+      metalness: 0.8,
+      roughness: 0.35,
+    });
+    const woodTimberMat = new THREE.MeshStandardMaterial({
+      map: loadRealTexture('/textures/hardwood2_diffuse.jpg', 1, 2),
+      color: '#573010',
+      roughness: 0.88,
+    });
+    const ironCannonMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      metalness: 0.85,
+      roughness: 0.3,
+    });
+    const steamMat = new THREE.MeshBasicMaterial({
+      color: '#f8fafc',
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    });
+    const charcoalEmberMat = new THREE.MeshStandardMaterial({
+      color: '#ea580c',
+      emissive: new THREE.Color('#ea580c'),
+      emissiveIntensity: 0.8,
+      roughness: 0.9,
+    });
+    const clothRedMat = new THREE.MeshStandardMaterial({
+      color: '#dc2626',
+      roughness: 0.92,
+    });
+    const grassGardenMat = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      roughness: 0.9,
+    });
+    const waterBasinMat = new THREE.MeshStandardMaterial({
+      color: '#0e7490',
+      roughness: 0.15,
+      metalness: 0.7,
+    });
+    const rickshawArtTex = loadRealTexture(
+      '/textures/rickshaw_art_realistic.jpg',
+      1,
+      1
+    );
+    const rickshawArtMat = new THREE.MeshStandardMaterial({
+      map: rickshawArtTex,
+      roughness: 0.5,
+    });
+
+    // -----------------------------------------------------------------------
+    // 1. HISTORIC LALBAGH FORT COMPLEX (Fort Aurangabad - ১৬৭৮ খ্রিস্টাব্দ)
+    // -----------------------------------------------------------------------
+    const fortGroup = new THREE.Group();
+
+    // 1.1 South Gateway (প্রধান দক্ষিণ তোরণ - X = -110, Z = 236)
+    // Central Arch Gateway structure: two massive flanking pylons with overhead arch span
+    const gatePylonLeft = this.sharedBox(6, 15, 10, mughalBrickMat, -118, 7.5, 236);
+    const gatePylonRight = this.sharedBox(6, 15, 10, mughalBrickMat, -102, 7.5, 236);
+    const gateArchSpan = this.sharedBox(10, 5, 10, mughalBrickMat, -110, 12.5, 236);
+    fortGroup.add(gatePylonLeft, gatePylonRight, gateArchSpan);
+
+    // Decorative Mughal Scalloped Arch Profile in Gate Opening
+    const archFoil = new THREE.Mesh(this.boxCache(9.6, 0.4, 9.8), marbleWhiteMat);
+    archFoil.position.set(-110, 9.8, 236);
+    fortGroup.add(archFoil);
+
+    // Flanking 4-Stage Octagonal Minarets (Height: 22m)
+    [-122, -98].forEach((mx) => {
+      const minaretShaft = new THREE.Mesh(
+        this.cylCache(1.4, 1.6, 18, 8),
+        mughalBrickMat
+      );
+      minaretShaft.position.set(mx, 9, 236);
+      fortGroup.add(minaretShaft);
+
+      // Cornice Ring
+      const ring = new THREE.Mesh(this.cylCache(1.8, 1.8, 0.6, 8), marbleWhiteMat);
+      ring.position.set(mx, 18.3, 236);
+      fortGroup.add(ring);
+
+      // Pillared Chhatri Kiosk
+      for (let p = 0; p < 8; p++) {
+        const ang = (p * Math.PI) / 4;
+        const pillar = new THREE.Mesh(this.cylCache(0.08, 0.08, 2.4, 6), marbleWhiteMat);
+        pillar.position.set(mx + Math.cos(ang) * 1.3, 19.5, 236 + Math.sin(ang) * 1.3);
+        fortGroup.add(pillar);
+      }
+
+      // Ribbed Copper Dome & Kalasha Finial
+      const dome = new THREE.Mesh(this.cylCache(0.1, 1.5, 2.2, 8), copperMat);
+      dome.position.set(mx, 21.8, 236);
+      fortGroup.add(dome);
+
+      const finial = new THREE.Mesh(this.cylCache(0.04, 0.12, 1.2, 6), brassGoldMat);
+      finial.position.set(mx, 23.4, 236);
+      fortGroup.add(finial);
+    });
+
+    // Parapet Crenellations (কঙ্গুরা) along Gateway Roofline
+    for (let c = -14; c <= 14; c += 2) {
+      const cren = this.sharedBox(1.2, 1.1, 0.5, mughalBrickMat, -110 + c, 15.5, 231.2);
+      fortGroup.add(cren);
+    }
+
+    // Heritage Plaque Signboard over Gateway Arch
+    const gateSignTex = createHeritageSignboardTexture(
+      'ঐতিহাসিক লালবাগ কেল্লা (১৬৭৮)',
+      'HISTORIC LALBAGH FORT SOUTH GATE',
+      'Mughal Fortress Built by Shaista Khan & Prince Azam',
+      '#7f1d1d',
+      '#fde047'
+    );
+    const gateSign = new THREE.Mesh(
+      this.boxCache(8.4, 2.4, 0.25),
+      new THREE.MeshStandardMaterial({ map: gateSignTex, roughness: 0.4 })
+    );
+    gateSign.position.set(-110, 12.8, 230.8);
+    fortGroup.add(gateSign);
+
+    // Colliders for Gateway Pylons
+    this.buildingColliders.push({
+      minX: -122,
+      maxX: -115,
+      minZ: 231,
+      maxZ: 241,
+      tag: 'lalbagh_gate_pylon_west',
+    });
+    this.buildingColliders.push({
+      minX: -105,
+      maxX: -98,
+      minZ: 231,
+      maxZ: 241,
+      tag: 'lalbagh_gate_pylon_east',
+    });
+
+    // 1.2 Lalbagh Fort Rampart Walls (কেল্লার প্রাচীর) & Bastions
+    // West Rampart Wall (X: -150, Z: 236 to 285)
+    fortGroup.add(this.sharedBox(1.4, 4.2, 49, mughalBrickMat, -150, 2.1, 260.5));
+    this.buildingColliders.push({
+      minX: -151,
+      maxX: -149,
+      minZ: 236,
+      maxZ: 285,
+      tag: 'lalbagh_west_wall',
+    });
+
+    // East Rampart Wall (X: -70, Z: 236 to 285)
+    fortGroup.add(this.sharedBox(1.4, 4.2, 49, mughalBrickMat, -70, 2.1, 260.5));
+    this.buildingColliders.push({
+      minX: -71,
+      maxX: -69,
+      minZ: 236,
+      maxZ: 285,
+      tag: 'lalbagh_east_wall',
+    });
+
+    // North Rampart Wall (Z: 285, X: -150 to -70)
+    fortGroup.add(this.sharedBox(80, 4.2, 1.4, mughalBrickMat, -110, 2.1, 285));
+    this.buildingColliders.push({
+      minX: -150,
+      maxX: -70,
+      minZ: 284,
+      maxZ: 286,
+      tag: 'lalbagh_north_wall',
+    });
+
+    // South Rampart Wall segments left and right of gateway
+    fortGroup.add(this.sharedBox(28, 4.2, 1.4, mughalBrickMat, -136, 2.1, 236));
+    fortGroup.add(this.sharedBox(28, 4.2, 1.4, mughalBrickMat, -84, 2.1, 236));
+    this.buildingColliders.push({
+      minX: -150,
+      maxX: -122,
+      minZ: 235,
+      maxZ: 237,
+      tag: 'lalbagh_south_wall_west',
+    });
+    this.buildingColliders.push({
+      minX: -98,
+      maxX: -70,
+      minZ: 235,
+      maxZ: 237,
+      tag: 'lalbagh_south_wall_east',
+    });
+
+    // Corner Bastions with Copper Domes
+    [
+      [-150, 236],
+      [-70, 236],
+      [-150, 285],
+      [-70, 285],
+    ].forEach(([bx, bz]) => {
+      const bastion = new THREE.Mesh(this.cylCache(2.2, 2.4, 6, 8), mughalBrickMat);
+      bastion.position.set(bx, 3, bz);
+      const bDome = new THREE.Mesh(this.cylCache(0.1, 2.3, 2, 8), copperMat);
+      bDome.position.set(bx, 7, bz);
+      fortGroup.add(bastion, bDome);
+      this.circleColliders.push({
+        x: bx,
+        z: bz,
+        radius: 2.4,
+        tag: 'lalbagh_bastion',
+      });
+    });
+
+    // Historic Mughal Cast-Iron Cannons at Entrance
+    [
+      [-116, 231, -0.2],
+      [-104, 231, 0.2],
+    ].forEach(([cx, cz, crot]) => {
+      const cannon = new THREE.Group();
+      cannon.position.set(cx, 0, cz);
+      cannon.rotation.y = crot;
+      // Barrel
+      const barrel = new THREE.Mesh(this.cylCache(0.18, 0.28, 2.6, 10), ironCannonMat);
+      barrel.rotation.x = Math.PI / 2 + 0.15;
+      barrel.position.set(0, 0.65, 0);
+      cannon.add(barrel);
+      // Carriage
+      const carriage = this.sharedBox(0.9, 0.5, 1.8, woodTimberMat, 0, 0.35, 0);
+      cannon.add(carriage);
+      // Wooden wheels
+      [-0.55, 0.55].forEach((wx) => {
+        const wheel = new THREE.Mesh(this.cylCache(0.48, 0.48, 0.12, 12), woodTimberMat);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(wx, 0.48, 0);
+        cannon.add(wheel);
+      });
+      fortGroup.add(cannon);
+    });
+
+    // 1.3 Tomb of Pari Bibi (পরী বিবির মাজার - X: -110, Z: 262)
+    // Raised Marble Plinth (16m x 16m x 1.2m)
+    const plinth = this.sharedBox(16, 1.2, 16, marbleWhiteMat, -110, 0.6, 262);
+    fortGroup.add(plinth);
+
+    // Central Tomb Chamber (10m x 10m x 7m)
+    const chamber = this.sharedBox(10, 7, 10, marbleWhiteMat, -110, 4.7, 262);
+    fortGroup.add(chamber);
+
+    // Arched Entrance Portals on 4 Sides
+    [
+      [0, 5.05],
+      [0, -5.05],
+      [5.05, 0],
+      [-5.05, 0],
+    ].forEach(([dx, dz]) => {
+      const archFrame = this.sharedBox(
+        dx !== 0 ? 0.25 : 3.8,
+        5.2,
+        dz !== 0 ? 0.25 : 3.8,
+        mughalBrickMat,
+        -110 + dx,
+        3.8,
+        262 + dz
+      );
+      fortGroup.add(archFrame);
+    });
+
+    // Four Corner Turrets
+    [
+      [-4.6, -4.6],
+      [4.6, -4.6],
+      [-4.6, 4.6],
+      [4.6, 4.6],
+    ].forEach(([tx, tz]) => {
+      const turret = new THREE.Mesh(this.cylCache(0.65, 0.75, 9, 8), marbleWhiteMat);
+      turret.position.set(-110 + tx, 4.5, 262 + tz);
+      const tDome = new THREE.Mesh(this.cylCache(0.08, 0.72, 1.2, 8), copperMat);
+      tDome.position.set(-110 + tx, 9.6, 262 + tz);
+      fortGroup.add(turret, tDome);
+    });
+
+    // Grand Fluted White Marble Central Dome (Radius: 3.6m, Kalasha Finial: Y = 13.8m)
+    const centralDome = new THREE.Mesh(
+      this.cylCache(0.2, 3.8, 4.8, 16),
+      marbleWhiteMat
+    );
+    centralDome.position.set(-110, 10.6, 262);
+    const kalasha = new THREE.Mesh(this.cylCache(0.06, 0.25, 2.2, 8), brassGoldMat);
+    kalasha.position.set(-110, 13.8, 262);
+    fortGroup.add(centralDome, kalasha);
+
+    this.buildingColliders.push({
+      minX: -118,
+      maxX: -102,
+      minZ: 254,
+      maxZ: 270,
+      tag: 'tomb_of_pari_bibi',
+    });
+
+    // Charbagh 4-Quadrant Gardens surrounding the Tomb
+    [
+      [-128, 248],
+      [-92, 248],
+      [-128, 276],
+      [-92, 276],
+    ].forEach(([gx, gz]) => {
+      const lawn = new THREE.Mesh(
+        new THREE.BoxGeometry(15, 0.14, 15),
+        grassGardenMat
+      );
+      lawn.position.set(gx, 0.07, gz);
+      lawn.receiveShadow = true;
+      fortGroup.add(lawn);
+    });
+
+    // Central Stone Water Basin Pond
+    const pond = this.sharedBox(6, 0.45, 6, marbleWhiteMat, -110, 0.22, 247);
+    const pondWater = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.2, 5.2),
+      waterBasinMat
+    );
+    pondWater.rotation.x = -Math.PI / 2;
+    pondWater.position.set(-110, 0.46, 247);
+    fortGroup.add(pond, pondWater);
+
+    // -----------------------------------------------------------------------
+    // 2. AHSAN MANZIL PINK PALACE (আহসান মঞ্জিল - বুড়িগঙ্গা রিভারফ্রন্ট)
+    // -----------------------------------------------------------------------
+    const ahsanGroup = new THREE.Group();
+    const ahx = -10;
+    const ahz = 312;
+
+    // Main 2-Storey Palace Body (48m Wide x 18m Deep x 12m Tall)
+    const palaceMain = this.sharedBox(48, 12, 18, ahsanPinkMat, ahx, 6, ahz);
+    ahsanGroup.add(palaceMain);
+
+    // Central Octagonal Drum for Grand Dome
+    const octDrum = new THREE.Mesh(this.cylCache(5.2, 5.5, 4.5, 8), ahsanDarkPinkMat);
+    octDrum.position.set(ahx, 14.25, ahz);
+    ahsanGroup.add(octDrum);
+
+    // Majestic Indo-Saracenic Ribbed Central Dome (Height: 22m)
+    const palaceDome = new THREE.Mesh(this.cylCache(0.3, 5.4, 6.5, 16), ahsanPinkMat);
+    palaceDome.position.set(ahx, 19.5, ahz);
+    const palaceFinial = new THREE.Mesh(
+      this.cylCache(0.06, 0.35, 2.6, 8),
+      brassGoldMat
+    );
+    palaceFinial.position.set(ahx, 23.8, ahz);
+    ahsanGroup.add(palaceDome, palaceFinial);
+
+    // Colonnaded Front Arcade Wings: Classical Classical Pillars & Archways
+    for (let col = -22; col <= 22; col += 4) {
+      if (Math.abs(col) < 6) continue; // Central portal
+      const pillar1 = new THREE.Mesh(this.cylCache(0.32, 0.36, 5.2, 8), marbleWhiteMat);
+      pillar1.position.set(ahx + col, 2.6, ahz - 9.2);
+      const pillar2 = new THREE.Mesh(this.cylCache(0.3, 0.34, 5.2, 8), marbleWhiteMat);
+      pillar2.position.set(ahx + col, 8.4, ahz - 9.2);
+      ahsanGroup.add(pillar1, pillar2);
+    }
+
+    // Monumental 14m Wide Ceremonial Stone Flight of Stairs (বিশাল রাজকীয় সিঁড়ি)
+    for (let s = 0; s < 10; s++) {
+      const step = this.sharedBox(
+        14 - s * 0.25,
+        0.3,
+        1.0,
+        marbleWhiteMat,
+        ahx,
+        0.15 + s * 0.3,
+        ahz - 9.5 - (9 - s) * 0.95
+      );
+      ahsanGroup.add(step);
+    }
+
+    // Balustraded Parapet along Roofline
+    const balustrade = this.sharedBox(49, 1.2, 0.45, marbleWhiteMat, ahx, 12.6, ahz - 8.8);
+    ahsanGroup.add(balustrade);
+
+    // National Flag Flying High on Palace Mast
+    const flagPole = new THREE.Mesh(this.cylCache(0.06, 0.08, 16, 8), ironCannonMat);
+    flagPole.position.set(ahx - 18, 14, ahz - 8.6);
+    const bdFlag = new THREE.Mesh(
+      this.boxCache(2.4, 1.4, 0.04),
+      new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.8 })
+    );
+    bdFlag.position.set(ahx - 16.7, 21.2, ahz - 8.6);
+    const redCircle = new THREE.Mesh(
+      this.cylCache(0.48, 0.48, 0.06, 12),
+      new THREE.MeshStandardMaterial({ color: '#dc2626', roughness: 0.8 })
+    );
+    redCircle.rotation.x = Math.PI / 2;
+    redCircle.position.set(ahx - 16.7, 21.2, ahz - 8.58);
+    ahsanGroup.add(flagPole, bdFlag, redCircle);
+
+    // Heritage Signboard
+    const ahsanSignTex = createHeritageSignboardTexture(
+      'আহসান মঞ্জিল পিংক প্যালেস',
+      'AHSAN MANZIL PALACE MUSEUM',
+      'Historic Seat of the Nawabs of Dhaka (Buriganga Riverfront)',
+      '#831843',
+      '#fde047'
+    );
+    const ahsanSign = new THREE.Mesh(
+      this.boxCache(10.5, 2.4, 0.25),
+      new THREE.MeshStandardMaterial({ map: ahsanSignTex, roughness: 0.4 })
+    );
+    ahsanSign.position.set(ahx, 10.5, ahz - 9.15);
+    ahsanGroup.add(ahsanSign);
+
+    this.buildingColliders.push({
+      minX: ahx - 25,
+      maxX: ahx + 25,
+      minZ: ahz - 10,
+      maxZ: ahz + 10,
+      tag: 'ahsan_manzil_palace',
+    });
+
+    // -----------------------------------------------------------------------
+    // 3. CHAWKBAZAR & SHAKHARI BAZAR HERITAGE MARKET (X = -70, Z = 140 to 220)
+    // -----------------------------------------------------------------------
+    const marketGroup = new THREE.Group();
+
+    // 3.1 Shahi Haji Kacchi Biriyani Hearth with Giant Cauldrons (শাহী ডেগ)
+    const kacchiPlatform = this.sharedBox(5.8, 0.65, 2.8, mughalBrickMat, -66.5, 0.32, 175);
+    marketGroup.add(kacchiPlatform);
+
+    // 3 Giant Polished Brass Cauldrons Wrapped in Crimson Cloth (লাল শালু মোড়ানো ডেগ)
+    [-1.8, 0, 1.8].forEach((dx) => {
+      const degGroup = new THREE.Group();
+      degGroup.position.set(-66.5 + dx, 0.65, 175);
+
+      // Wood fire hearth glowing underneath
+      const fireEmber = new THREE.Mesh(this.cylCache(0.5, 0.6, 0.25, 8), charcoalEmberMat);
+      fireEmber.position.y = 0.12;
+      degGroup.add(fireEmber);
+
+      // Red cloth skirt (শালু)
+      const clothSkirt = new THREE.Mesh(this.cylCache(0.72, 0.68, 0.55, 12), clothRedMat);
+      clothSkirt.position.y = 0.45;
+      degGroup.add(clothSkirt);
+
+      // Polished brass upper cauldron (ডেগ)
+      const brassDeg = new THREE.Mesh(this.cylCache(0.78, 0.65, 0.6, 12), brassGoldMat);
+      brassDeg.position.y = 0.95;
+      degGroup.add(brassDeg);
+
+      // Steaming brass lid
+      const degLid = new THREE.Mesh(this.cylCache(0.12, 0.8, 0.22, 12), brassGoldMat);
+      degLid.position.y = 1.32;
+      degGroup.add(degLid);
+
+      // Rising steam puff particles
+      for (let s = 0; s < 3; s++) {
+        const steam = new THREE.Mesh(this.cylCache(0.15 + s * 0.1, 0.1, 0.3, 6), steamMat);
+        steam.position.set(0, 1.6 + s * 0.35, 0);
+        degGroup.add(steam);
+      }
+
+      marketGroup.add(degGroup);
+    });
+
+    // Signboard for Shahi Kacchi Biriyani
+    const kacchiSignTex = createHeritageSignboardTexture(
+      'শাহী হাজী কাচ্চি বিরিয়ানি ঘর',
+      'SHAHI HAJI KACCHI BIRIYANI',
+      'Pure Mutton Kacchi with Saffron & Cold Borhani',
+      '#991b1b',
+      '#facc15'
+    );
+    const kacchiSign = new THREE.Mesh(
+      this.boxCache(4.8, 1.4, 0.16),
+      new THREE.MeshStandardMaterial({ map: kacchiSignTex, roughness: 0.4 })
+    );
+    kacchiSign.position.set(-66.5, 2.9, 173.8);
+    marketGroup.add(kacchiSign);
+
+    this.circleColliders.push({
+      x: -66.5,
+      z: 175,
+      radius: 2.2,
+      tag: 'chawkbazar_kacchi_stall',
+    });
+
+    // 3.2 Bakarkhani Tandoori Bakery (X: -73.5, Z: 188)
+    const tandoorGroup = new THREE.Group();
+    tandoorGroup.position.set(-73.5, 0, 188);
+
+    const tandoorOven = new THREE.Mesh(
+      this.cylCache(0.65, 0.8, 1.25, 10),
+      new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 })
+    );
+    tandoorOven.position.y = 0.62;
+    tandoorGroup.add(tandoorOven);
+
+    const glowingOpening = new THREE.Mesh(
+      this.cylCache(0.42, 0.42, 0.1, 10),
+      charcoalEmberMat
+    );
+    glowingOpening.position.y = 1.26;
+    tandoorGroup.add(glowingOpening);
+
+    // Crispy golden Bakarkhani breads in display baskets
+    const breadMat = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.7 });
+    for (let b = 0; b < 6; b++) {
+      const bread = new THREE.Mesh(this.cylCache(0.24, 0.24, 0.05, 8), breadMat);
+      bread.position.set(-0.7 + (b % 3) * 0.5, 0.8 + Math.floor(b / 3) * 0.1, 0.6);
+      tandoorGroup.add(bread);
+    }
+    marketGroup.add(tandoorGroup);
+
+    // 3.3 Rickshaw Art Workshop (X: -66.5, Z: 205)
+    const garageGroup = new THREE.Group();
+    garageGroup.position.set(-66.5, 0, 205);
+
+    const shedRoof = new THREE.Mesh(
+      this.boxCache(6.5, 0.1, 4.2),
+      new THREE.MeshStandardMaterial({ color: '#047857', roughness: 0.75 })
+    );
+    shedRoof.position.set(0, 2.7, 0);
+    shedRoof.rotation.z = -0.12;
+    garageGroup.add(shedRoof);
+
+    // Display wall of painted Rickshaw Art tin backplates
+    for (let r = 0; r < 4; r++) {
+      const plate = new THREE.Mesh(this.boxCache(1.1, 0.8, 0.06), rickshawArtMat);
+      plate.position.set(-1.8 + r * 1.2, 1.4, 1.8);
+      garageGroup.add(plate);
+    }
+    marketGroup.add(garageGroup);
+
+    // Vintage amber street bracket lanterns
+    [
+      [-63, 145],
+      [-63, 175],
+      [-63, 205],
+      [-77, 145],
+      [-77, 175],
+      [-77, 205],
+    ].forEach(([lx, lz]) => {
+      const lamp = new THREE.Mesh(
+        this.boxCache(0.35, 0.55, 0.35),
+        new THREE.MeshStandardMaterial({
+          color: '#fbbf24',
+          emissive: new THREE.Color('#fbbf24'),
+          emissiveIntensity: 0.85,
+        })
+      );
+      lamp.position.set(lx, 4.2, lz);
+      marketGroup.add(lamp);
+    });
+
+    this.scene.add(fortGroup);
+    this.scene.add(ahsanGroup);
+    this.scene.add(marketGroup);
+  }
+
+  /**
+   * Purbachal 300 Feet Grand Expressway & Smart City Hub
+   * Authentic high-speed highway and food village:
+   * 1. Balu River 3-Span Cable-Stayed Suspension Bridge:
+   *    - Spanning X = 535 to 645 over the Balu River canal at Z = -315.
+   *    - Dual 32m soaring white A-frame suspension pylon towers with stay-cables.
+   *    - Cyan & electric blue architectural LED illumination for night cruising.
+   *    - Highway crash barriers with yellow reflector studs and gantry sign.
+   *    - Balu River waterway under the bridge with realistic water ripples.
+   * 2. Purbachal Food Village (পূর্বাচল ফুড ভিলেজ - রাজহাঁস ও চুইঝাল ধাবা):
+   *    - 4 rustic open-air thatched dhabas with timber posts and pitched roofs.
+   *    - Outdoor dining with wooden picnic tables and rustic string cots (খাটিয়া).
+   *    - Outdoor barbecue firepits with glowing red embers and Seekh Kebab skewers.
+   *    - Slow-cooked duck curry cauldrons (রাজহাঁসের মাংস ভুনা) and tea tong stalls.
+   *    - Glowing neon Bangla signs (হাঁসের মাংস • চুইঝাল • স্পেশাল নান).
+   *    - Paved parking lot with parked tuned sports cars and motorbikes.
+   * 3. Bangabandhu Bangladesh-China Friendship Exhibition Center (BBCFEC):
+   *    - At X = 740 to 860, Z = -240 to -140.
+   *    - Massive undulating wave-shaped white aluminium canopy roof (78m x 50m x 26m).
+   *    - Curved reflective glass curtain wall facade, steel space-frame colonnade.
+   *    - Ceremonial entrance plaza with geometric fountains and Bangladesh flag plaza.
+   * 4. 8-Lane Expressway Highway Infrastructure:
+   *    - Speed limit radar gantries with digital displays (SPEED LIMIT 100 KM/H).
+   *    - Modern double-arm curved highway streetlights with high-lumen LED luminaires.
+   *    - Green median with planted date palms and manicured hedges along X = 640.
+   */
+  private buildPurbachalSmartCityAndExpressway() {
+    const whitePylonMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.22,
+      metalness: 0.25,
+    });
+    const steelCableMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      metalness: 0.95,
+      roughness: 0.15,
+    });
+    const ledCyanMat = new THREE.MeshStandardMaterial({
+      color: '#06b6d4',
+      emissive: new THREE.Color('#06b6d4'),
+      emissiveIntensity: 0.9,
+      roughness: 0.2,
+    });
+    const ledBlueMat = new THREE.MeshStandardMaterial({
+      color: '#2563eb',
+      emissive: new THREE.Color('#2563eb'),
+      emissiveIntensity: 0.9,
+      roughness: 0.2,
+    });
+    const thatchedRoofMat = new THREE.MeshStandardMaterial({
+      color: '#92400e',
+      roughness: 0.95,
+      flatShading: true,
+    });
+    const bambooMat = new THREE.MeshStandardMaterial({
+      color: '#b45309',
+      roughness: 0.82,
+    });
+    const woodDeckMat = new THREE.MeshStandardMaterial({
+      map: loadRealTexture('/textures/hardwood2_diffuse.jpg', 1, 3),
+      color: '#78350f',
+      roughness: 0.85,
+    });
+    const khatiyaRopeMat = new THREE.MeshStandardMaterial({
+      color: '#d97706',
+      roughness: 0.75,
+    });
+    const bbqEmberMat = new THREE.MeshStandardMaterial({
+      color: '#ea580c',
+      emissive: new THREE.Color('#ea580c'),
+      emissiveIntensity: 0.85,
+      roughness: 0.9,
+    });
+    const bbcfecRoofMat = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.18,
+      metalness: 0.35,
+    });
+    const reflectiveGlassMat = new THREE.MeshStandardMaterial({
+      color: '#0369a1',
+      roughness: 0.08,
+      metalness: 0.88,
+    });
+    const barrierMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      roughness: 0.65,
+    });
+    const yellowStripeMat = new THREE.MeshStandardMaterial({
+      color: '#facc15',
+      roughness: 0.45,
+    });
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: '#0e7490',
+      normalMap: this.waterNormalTex,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      roughness: 0.14,
+      metalness: 0.75,
+    });
+
+    // -----------------------------------------------------------------------
+    // 1. BALU RIVER WATERWAY & 3-SPAN CABLE-STAYED SUSPENSION BRIDGE
+    // -----------------------------------------------------------------------
+    const bridgeGroup = new THREE.Group();
+
+    // 1.1 Balu River Waterway (Width: 38m, Length: 700m running NS along X: 590)
+    const baluRiver = new THREE.Mesh(new THREE.PlaneGeometry(38, 700), waterMat);
+    baluRiver.rotation.x = -Math.PI / 2;
+    baluRiver.position.set(590, 0.05, -250);
+    this.scene.add(baluRiver);
+
+    // River embankment grass strips
+    const riverGrassMat = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      roughness: 0.9,
+    });
+    [569, 611].forEach((gx) => {
+      const bank = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.2, 700), riverGrassMat);
+      bank.position.set(gx, 0.1, -250);
+      this.scene.add(bank);
+    });
+
+    // 1.2 Elevated 8-Lane Bridge Deck (X: 535 to 645, Z: -315, Width: 22m)
+    const bridgeDeck = this.sharedBox(110, 0.8, 22, whitePylonMat, 590, 0.4, -315);
+    bridgeGroup.add(bridgeDeck);
+
+    // Bridge Side Crash Barriers with Yellow Warning Reflectors
+    [-11.2, 11.2].forEach((bz) => {
+      const barrier = this.sharedBox(110, 1.1, 0.45, barrierMat, 590, 0.95, -315 + bz);
+      bridgeGroup.add(barrier);
+
+      // Yellow Reflector Studs along the barrier
+      for (let rx = -50; rx <= 50; rx += 8) {
+        const stud = new THREE.Mesh(this.boxCache(0.4, 0.2, 0.1), yellowStripeMat);
+        stud.position.set(590 + rx, 1.15, -315 + bz + (bz > 0 ? -0.25 : 0.25));
+        bridgeGroup.add(stud);
+      }
+    });
+
+    // 1.3 Dual A-Frame Pylon Towers (West Tower at X = 565, East Tower at X = 615)
+    [565, 615].forEach((px) => {
+      const pylonGroup = new THREE.Group();
+      pylonGroup.position.set(px, 0, -315);
+
+      // Tower Legs angled inward to form soaring A-frame
+      [-11, 11].forEach((lz) => {
+        const leg = new THREE.Mesh(this.cylCache(0.85, 1.4, 32, 8), whitePylonMat);
+        leg.position.set(0, 16, lz);
+        leg.rotation.x = lz > 0 ? -0.18 : 0.18;
+        pylonGroup.add(leg);
+
+        // Architectural Cyan LED light channel along tower leg
+        const ledStrip = new THREE.Mesh(this.boxCache(0.12, 31, 0.15), ledCyanMat);
+        ledStrip.position.set(0.9, 16, lz * 0.95);
+        ledStrip.rotation.x = lz > 0 ? -0.18 : 0.18;
+        pylonGroup.add(ledStrip);
+      });
+
+      // Upper Cross-Strut Beam
+      const crossStrut = this.sharedBox(1.8, 1.2, 14, whitePylonMat, 0, 18, 0);
+      pylonGroup.add(crossStrut);
+
+      // Tower Peak Crown
+      const crown = this.sharedBox(2.2, 3.2, 3.6, whitePylonMat, 0, 32, 0);
+      const crownBeacon = new THREE.Mesh(this.cylCache(0.15, 0.35, 1.4, 8), ledBlueMat);
+      crownBeacon.position.set(0, 34.2, 0);
+      pylonGroup.add(crown, crownBeacon);
+
+      // Symmetrical High-Tensile Stay Cables fanning down from Pylon Peak
+      for (let c = -42; c <= 42; c += 7) {
+        if (Math.abs(c) < 4) continue;
+        const targetX = px + c;
+        if (targetX < 535 || targetX > 645) continue;
+
+        [-10.8, 10.8].forEach((cz) => {
+          const cableLen = Math.hypot(c, 31, cz);
+          const cable = new THREE.Mesh(
+            this.cylCache(0.045, 0.045, cableLen, 6),
+            steelCableMat
+          );
+          cable.position.set(c / 2, 16, cz / 2);
+          cable.lookAt(new THREE.Vector3(c, 0.8, cz));
+          cable.rotateX(Math.PI / 2);
+          pylonGroup.add(cable);
+        });
+      }
+
+      bridgeGroup.add(pylonGroup);
+    });
+
+    // 1.4 Grand Overhead Highway Gantry Sign
+    const gantrySignTex = createFlyoverGantryTexture(
+      'পূর্বাচল ৩০০ ফিট এক্সপ্রেসওয়ে',
+      'PURBACHAL 300FT GRAND SPEEDWAY',
+      'কাঞ্চন সেতু ও ঢাকা বাইপাস',
+      'KANCHAN BRIDGE & DHAKA BYPASS'
+    );
+    const gantryBoard = new THREE.Mesh(
+      this.boxCache(14, 3.2, 0.35),
+      new THREE.MeshStandardMaterial({ map: gantrySignTex, roughness: 0.35 })
+    );
+    gantryBoard.position.set(542, 6.2, -315);
+    bridgeGroup.add(gantryBoard);
+
+    // Gantry Support Posts
+    [-10.8, 10.8].forEach((gz) => {
+      const gPost = new THREE.Mesh(this.cylCache(0.35, 0.4, 7.2, 8), barrierMat);
+      gPost.position.set(542, 3.6, -315 + gz);
+      bridgeGroup.add(gPost);
+    });
+
+    this.scene.add(bridgeGroup);
+
+    // -----------------------------------------------------------------------
+    // 2. PURBACHAL FOOD VILLAGE (পূর্বাচল ফুড ভিলেজ - রাজহাঁস ও চুইঝাল ধাবা)
+    // -----------------------------------------------------------------------
+    const foodVillage = new THREE.Group();
+    const fvx = 695;
+    const fvz = -295;
+
+    // Paved Parking Lot & Outdoor Courtyard
+    const foodPlaza = this.sharedBox(64, 0.12, 68, woodDeckMat, fvx, 0.06, fvz);
+    foodVillage.add(foodPlaza);
+
+    // 4 Open-Air Thatched Bamboo Dhabas (ছন ও বাঁশের রেস্তোরাঁ)
+    [
+      { dx: -18, dz: -18, w: 18, d: 14, name: 'রাজহাঁসের মাংস ও চাপ ঘর' },
+      { dx: 18, dz: -18, w: 18, d: 14, name: 'পূর্বাচল চুইঝাল ডাইনিং' },
+      { dx: -18, dz: 18, w: 18, d: 14, name: '৩০০ ফিট স্পেশাল তন্দুর নান' },
+      { dx: 18, dz: 18, w: 18, d: 14, name: 'হাইওয়ে মালাই চা ও ডাব কর্নার' },
+    ].forEach((dhaba) => {
+      const dhabaGroup = new THREE.Group();
+      dhabaGroup.position.set(fvx + dhaba.dx, 0, fvz + dhaba.dz);
+
+      // Raised Wooden Deck
+      const deck = this.sharedBox(dhaba.w, 0.4, dhaba.d, woodDeckMat, 0, 0.2, 0);
+      dhabaGroup.add(deck);
+
+      // Bamboo Corner Posts
+      [
+        [-dhaba.w / 2 + 0.6, -dhaba.d / 2 + 0.6],
+        [dhaba.w / 2 - 0.6, -dhaba.d / 2 + 0.6],
+        [-dhaba.w / 2 + 0.6, dhaba.d / 2 - 0.6],
+        [dhaba.w / 2 - 0.6, dhaba.d / 2 - 0.6],
+      ].forEach(([px, pz]) => {
+        const post = new THREE.Mesh(this.cylCache(0.14, 0.16, 4.2, 8), bambooMat);
+        post.position.set(px, 2.1, pz);
+        dhabaGroup.add(post);
+      });
+
+      // Pitched Thatched Roof (ছন ও বাঁশের চাল)
+      const roof = new THREE.Mesh(
+        new THREE.ConeGeometry(Math.max(dhaba.w, dhaba.d) * 0.72, 3.2, 4),
+        thatchedRoofMat
+      );
+      roof.rotation.y = Math.PI / 4;
+      roof.position.set(0, 5.2, 0);
+      dhabaGroup.add(roof);
+
+      foodVillage.add(dhabaGroup);
+    });
+
+    // Traditional Bengali String Cots (খাটিয়া) for Open-Air Lounging
+    [
+      [-10, -6],
+      [10, -6],
+      [-10, 6],
+      [10, 6],
+      [0, -18],
+      [0, 18],
+    ].forEach(([kx, kz]) => {
+      const khatiya = new THREE.Group();
+      khatiya.position.set(fvx + kx, 0, fvz + kz);
+
+      // Wooden Frame
+      const frame = this.sharedBox(2.2, 0.12, 1.3, woodDeckMat, 0, 0.48, 0);
+      // Woven Orange Rope Mattress (দড়ি দিয়ে বোনা বিছানা)
+      const mat = this.sharedBox(2.0, 0.08, 1.1, khatiyaRopeMat, 0, 0.52, 0);
+      khatiya.add(frame, mat);
+
+      // 4 Wooden legs
+      [
+        [-0.95, -0.5],
+        [0.95, -0.5],
+        [-0.95, 0.5],
+        [0.95, 0.5],
+      ].forEach(([lx, lz]) => {
+        const leg = new THREE.Mesh(this.cylCache(0.08, 0.08, 0.48, 6), bambooMat);
+        leg.position.set(lx, 0.24, lz);
+        khatiya.add(leg);
+      });
+      foodVillage.add(khatiya);
+    });
+
+    // Outdoor Barbecue Pits with Glowing Coals (শিক কাবাব ও কয়লার আগুন)
+    [-8, 8].forEach((bx) => {
+      const bbq = new THREE.Group();
+      bbq.position.set(fvx + bx, 0, fvz);
+
+      const pit = this.sharedBox(2.4, 0.75, 1.2, barrierMat, 0, 0.38, 0);
+      const ember = new THREE.Mesh(this.boxCache(2.1, 0.15, 0.9), bbqEmberMat);
+      ember.position.set(0, 0.78, 0);
+      bbq.add(pit, ember);
+
+      // Metal Seekh skewers with grilled meat
+      for (let k = -0.8; k <= 0.8; k += 0.35) {
+        const skewer = new THREE.Mesh(
+          this.cylCache(0.03, 0.03, 1.1, 6),
+          new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.8 })
+        );
+        skewer.rotation.x = Math.PI / 2;
+        skewer.position.set(k, 0.88, 0);
+        bbq.add(skewer);
+      }
+      foodVillage.add(bbq);
+    });
+
+    // Giant Iron Pots for Duck Meat Curry (রাজহাঁসের মাংসের ডেগ)
+    [
+      [-4, 2],
+      [4, 2],
+    ].forEach(([dx, dz]) => {
+      const pot = new THREE.Mesh(
+        this.cylCache(0.65, 0.5, 0.8, 10),
+        new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8 })
+      );
+      pot.position.set(fvx + dx, 0.5, fvz + dz);
+      foodVillage.add(pot);
+    });
+
+    // Glowing Neon Signboard for Food Village
+    const neonVillageTex = createHeritageSignboardTexture(
+      'পূর্বাচল ফুড ভিলেজ',
+      'PURBACHAL FOOD VILLAGE',
+      'Famous 300ft Duck Curry, Chuijhal & Tandoori Naan',
+      '#b45309',
+      '#fde047'
+    );
+    const villageSign = new THREE.Mesh(
+      this.boxCache(12.5, 2.6, 0.35),
+      new THREE.MeshStandardMaterial({ map: neonVillageTex, roughness: 0.3 })
+    );
+    villageSign.position.set(fvx, 4.8, fvz - 34);
+    foodVillage.add(villageSign);
+
+    this.scene.add(foodVillage);
+
+    // -----------------------------------------------------------------------
+    // 3. BANGABANDHU BANGLADESH-CHINA FRIENDSHIP EXHIBITION CENTER (BBCFEC)
+    // -----------------------------------------------------------------------
+    const bbcfecGroup = new THREE.Group();
+    const bx = 800;
+    const bz = -190;
+
+    // Grand Undulating Aerodynamic Wave Canopy Roof (78m Wide x 50m Deep x 24m Tall)
+    const waveCanopy = this.sharedBox(78, 3.5, 50, bbcfecRoofMat, bx, 22, bz);
+    bbcfecGroup.add(waveCanopy);
+
+    // Reflective Tinted Glass Curtain Wall Main Exhibition Hall
+    const glassHall = this.sharedBox(72, 19, 44, reflectiveGlassMat, bx, 10, bz);
+    bbcfecGroup.add(glassHall);
+
+    // Modern Space-Frame Entrance Colonnade Pillars
+    for (let col = -32; col <= 32; col += 8) {
+      const pillar = new THREE.Mesh(this.cylCache(0.55, 0.65, 20, 8), whitePylonMat);
+      pillar.position.set(bx + col, 10, bz - 24);
+      bbcfecGroup.add(pillar);
+    }
+
+    // Ceremonial Entrance Plaza (40m x 25m) with Water Fountain Basin
+    const plazaMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      roughness: 0.5,
+    });
+    const entrancePlaza = this.sharedBox(60, 0.15, 30, plazaMat, bx, 0.08, bz - 38);
+    bbcfecGroup.add(entrancePlaza);
+
+    // Geometric Fountain Basin
+    const fountainBasin = this.sharedBox(24, 0.6, 12, whitePylonMat, bx, 0.3, bz - 38);
+    const fountainWater = new THREE.Mesh(new THREE.PlaneGeometry(22, 10), waterMat);
+    fountainWater.rotation.x = -Math.PI / 2;
+    fountainWater.position.set(bx, 0.62, bz - 38);
+    bbcfecGroup.add(fountainBasin, fountainWater);
+
+    // Symmetrical Flagpoles flying national flags
+    [-18, -6, 6, 18].forEach((fx) => {
+      const pole = new THREE.Mesh(this.cylCache(0.06, 0.08, 14, 6), steelCableMat);
+      pole.position.set(bx + fx, 7, bz - 46);
+      const flag = new THREE.Mesh(
+        this.boxCache(2.2, 1.3, 0.03),
+        new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.8 })
+      );
+      flag.position.set(bx + fx + 1.15, 13, bz - 46);
+      bbcfecGroup.add(pole, flag);
+    });
+
+    // Grand Facade Signboard
+    const bbcfecSignTex = createHeritageSignboardTexture(
+      'বঙ্গবন্ধু বাংলাদেশ-চীন মৈত্রী প্রদর্শনী কেন্দ্র',
+      'BANGLADESH-CHINA FRIENDSHIP EXHIBITION CENTER',
+      'Purbachal Smart City International Convention Pavilion',
+      '#0369a1',
+      '#e0f2fe'
+    );
+    const bbcfecSign = new THREE.Mesh(
+      this.boxCache(16, 2.8, 0.35),
+      new THREE.MeshStandardMaterial({ map: bbcfecSignTex, roughness: 0.3 })
+    );
+    bbcfecSign.position.set(bx, 17.5, bz - 24.2);
+    bbcfecGroup.add(bbcfecSign);
+
+    this.buildingColliders.push({
+      minX: bx - 40,
+      maxX: bx + 40,
+      minZ: bz - 26,
+      maxZ: bz + 26,
+      tag: 'bbcfec_exhibition_hall',
+    });
+
+    this.scene.add(bbcfecGroup);
+
+    // -----------------------------------------------------------------------
+    // 4. 8-LANE EXPRESSWAY RADAR SPEED TRAP & HIGHWAY STREETLIGHTS
+    // -----------------------------------------------------------------------
+    const speedwayGroup = new THREE.Group();
+
+    // Overhead Radar Speed Trap Gantry across 8-Lane Expressway at X = 640, Z = -210
+    const radarGantry = this.sharedBox(28, 1.4, 1.2, whitePylonMat, 640, 7.8, -210);
+    speedwayGroup.add(radarGantry);
+
+    [-13.5, 13.5].forEach((gx) => {
+      const post = new THREE.Mesh(this.cylCache(0.35, 0.45, 8.5, 8), whitePylonMat);
+      post.position.set(640 + gx, 4.25, -210);
+      speedwayGroup.add(post);
+    });
+
+    // Digital Speed Limit Display
+    const speedSignTex = createHighwaySpeedSignTexture(
+      100,
+      'সর্বোচ্চ গতিসীমা ১০০ কিমি/ঘণ্টা'
+    );
+    const speedSign = new THREE.Mesh(
+      this.boxCache(4.2, 4.2, 0.25),
+      new THREE.MeshStandardMaterial({ map: speedSignTex, roughness: 0.3 })
+    );
+    speedSign.position.set(640, 7.8, -209.2);
+    speedwayGroup.add(speedSign);
+
+    // Modern Double-Arm Curved Highway Streetlights along Median (X = 640)
+    for (let lz = -520; lz <= 0; lz += 45) {
+      const pole = new THREE.Mesh(this.cylCache(0.18, 0.24, 10.5, 8), whitePylonMat);
+      pole.position.set(640, 5.25, lz);
+      speedwayGroup.add(pole);
+
+      // Double-arm horizontal crossbar
+      const crossbar = this.sharedBox(6.5, 0.15, 0.2, whitePylonMat, 640, 10.4, lz);
+      speedwayGroup.add(crossbar);
+
+      // High-lumen LED luminaires
+      [-3.1, 3.1].forEach((lx) => {
+        const luminaire = new THREE.Mesh(this.boxCache(0.9, 0.18, 0.45), ledCyanMat);
+        luminaire.position.set(640 + lx, 10.3, lz);
+        speedwayGroup.add(luminaire);
+      });
+    }
+
+    this.scene.add(speedwayGroup);
+  }
+
+
   private buildAuthenticDhakaStreetInfrastructure() {
     const blackCurbMat = new THREE.MeshStandardMaterial({
       color: '#0f172a',
@@ -4912,6 +5986,16 @@ export class DhakaCityEngine {
       { type: 'rickshaw', x: -166.5, z: 270, rot: 0, isTraffic: true, color: '#ec4899' },
       { type: 'rickshaw', x: -173.5, z: 240, rot: Math.PI, isTraffic: true, color: '#f59e0b' },
       { type: 'pickup', x: -67.5, z: 200, rot: 0, isTraffic: false, color: '#d97706' },
+      { type: 'rickshaw', x: -110, z: 228, rot: 0, isTraffic: false, color: '#ec4899' },
+      { type: 'rickshaw', x: -115, z: 228, rot: 0, isTraffic: false, color: '#f59e0b' },
+      { type: 'rickshaw', x: -10, z: 295, rot: 0, isTraffic: false, color: '#10b981' },
+      { type: 'car', x: 8, z: 295, rot: 0, isTraffic: false, color: '#f8fafc' },
+
+      // Purbachal Food Village & 300ft Supercar Meet Spawns
+      { type: 'car', x: 672, z: -270, rot: Math.PI / 2, isTraffic: false, color: '#dc2626' },
+      { type: 'motorcycle', x: 676, z: -270, rot: Math.PI / 2, isTraffic: false, color: '#f97316' },
+      { type: 'car', x: 755, z: -190, rot: -Math.PI / 2, isTraffic: false, color: '#0284c7' },
+      { type: 'car', x: 644, z: -420, rot: 0, isTraffic: true, color: '#38bdf8' },
 
       // Keraniganj & Buriganga South Bank Spawns (Highway at Z = 440)
       { type: 'pickup', x: 120, z: 436.5, rot: -Math.PI / 2, isTraffic: true, color: '#475569' },
@@ -5961,6 +7045,77 @@ export class DhakaCityEngine {
     const store = useGameStore.getState();
     const poi = POINTS_OF_INTEREST.find((p) => p.id === poiId);
     if (!poi) return;
+
+    if (poiId === 'poi_ahsan_manzil_palace') {
+      store.healPlayer(100, 100);
+      store.setWantedLevel(0);
+      store.saveGameToStorage();
+      dhakaAudio.playSfx('eat');
+      store.showBanner({
+        titleEn: 'AHSAN MANZIL: NAWABI PALACE REST (+100 HP & FULL ARMOR)',
+        titleBn: 'আহসান মঞ্জিল: নবাবী প্রাসাদে বিশ্রাম (+১০০ হেলথ ও পূর্ণ আর্মার)',
+        subtitleEn: 'Historic riverfront breeze from the Buriganga cleared your wanted status!',
+        subtitleBn: 'বুড়িগঙ্গার মৃদুমন্দ বাতাসে আপনার সব ক্লান্তি ও পুলিশের ওয়ান্টেড মুছে গেল!',
+        tone: 'gold',
+      });
+      return;
+    }
+
+    if (poiId === 'poi_chawkbazar_kacchi_deg') {
+      if (
+        store.spendTaka(
+          260,
+          'Chawkbazar Royal Deg Kacchi & Borhani',
+          'চকবাজার রয়েল শাহী কাচ্চি ও বোরহানি'
+        )
+      ) {
+        store.healPlayer(100, 60);
+        this.playerStamina = 100;
+        dhakaAudio.playSfx('eat');
+        store.showBanner({
+          titleEn: 'ROYAL CHAWKBAZAR KACCHI & BORHANI (+100 HP & +60 ARMOR)',
+          titleBn: 'চকবাজার রয়েল শাহী কাচ্চি ও বোরহানি (+১০০ হেলথ ও +৬০ আর্মার)',
+          subtitleEn: 'Fragrant saffron rice, tender mutton & chilled spicy borhani!',
+          subtitleBn: 'জাফরানি পোলাও, খাসির মাংস আর পুদিনার ঝাঁঝালো বোরহানি!',
+          tone: 'gold',
+        });
+      }
+      return;
+    }
+
+    if (poiId === 'poi_purbachal_bbcfec') {
+      store.healPlayer(100, 50);
+      store.setWantedLevel(0);
+      store.saveGameToStorage();
+      store.showBanner({
+        titleEn: 'BBCFEC EXHIBITION CENTER VISIT (WANTED LEVEL CLEARED)',
+        titleBn: 'বঙ্গবন্ধু প্রদর্শনী কেন্দ্র পরিদর্শন (ওয়ান্টেড লেভেল মুক্ত)',
+        subtitleEn: 'Futuristic architectural pavilion in Purbachal Smart City.',
+        subtitleBn: 'পূর্বাচল স্মার্ট সিটির আধুনিক আন্তর্জাতিক সম্মেলন কেন্দ্র।',
+        tone: 'blue',
+      });
+      return;
+    }
+
+    if (poiId === 'poi_purbachal_bridge') {
+      if (
+        store.spendTaka(
+          500,
+          'Purbachal 300ft Supercar Tune',
+          'পূর্বাচল হাই-স্পিড কার টিউনিং'
+        )
+      ) {
+        this.spawnPlayerVehicleNear('car');
+        store.showBanner({
+          titleEn: '300FT SPEEDWAY: SUPERCHARGED CAR SPAWNED',
+          titleBn: 'পূর্বাচল ৩০০ ফিট: সুপারচার্জড স্পোর্টস কার প্রস্তুত!',
+          subtitleEn: 'Tuned for max acceleration along the 8-lane expressway.',
+          subtitleBn: '৮ লেনের মহাসড়কে ফুল স্পিডে চালানোর জন্য প্রস্তুত!',
+          tone: 'gold',
+        });
+      }
+      return;
+    }
 
     if (poi.type === 'tea_stall') {
       if (
