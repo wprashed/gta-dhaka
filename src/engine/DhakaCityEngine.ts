@@ -89,6 +89,7 @@ export class DhakaCityEngine {
   private circleColliders: CircleCollider[] = [];
   private cashDrops: CashPickupDrop[] = [];
   private metroTrainGroup: THREE.Group | null = null;
+  private metroTrainGroup2: THREE.Group | null = null;
   private skidDecals: Array<{ mesh: THREE.Mesh; life: number }> = [];
   private bloodDecals: Array<{ mesh: THREE.Mesh; life: number }> = [];
   private glassShards: Array<{
@@ -214,7 +215,7 @@ export class DhakaCityEngine {
       60,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.4,
-      2200
+      2800
     );
 
     this.renderer = new THREE.WebGLRenderer({
@@ -336,11 +337,11 @@ export class DhakaCityEngine {
     // 1. Authentic Dhaka Interlocking Terracotta & Concrete Footpath Plaza Ground Skin
     const dhakaSidewalkBaseTex = loadRealTexture(
       '/textures/dhaka_ground_sidewalk.jpg',
-      200,
-      200,
+      380,
+      380,
       true
     );
-    const groundGeo = new THREE.PlaneGeometry(2800, 2800);
+    const groundGeo = new THREE.PlaneGeometry(5000, 5000);
     groundGeo.rotateX(-Math.PI / 2);
     const groundMat = new THREE.MeshStandardMaterial({
       map: dhakaSidewalkBaseTex,
@@ -500,40 +501,56 @@ export class DhakaCityEngine {
 
     const nsRoads = [
       // Central National Spine: Airport Highway -> Farmgate -> Sadarghat & Buriganga
-      { x: 0, width: 20, zMin: -700, zMax: 440 },
+      { x: 0, width: 22, zMin: -1400, zMax: 800 },
       // Dhanmondi / Asad Gate / Agargaon Avenue
-      { x: -170, width: 16, zMin: -680, zMax: 440 },
+      { x: -170, width: 18, zMin: -1300, zMax: 700 },
       // Mirpur 10 Circle & Sher-e-Bangla Stadium Avenue
-      { x: -380, width: 18, zMin: -680, zMax: 440 },
+      { x: -380, width: 18, zMin: -1300, zMax: 700 },
+      // Mirpur-12 / DOHS Avenue
+      { x: -480, width: 16, zMin: -1300, zMax: 500 },
       // Gabtoli & Kalyanpur Bus Expressway
-      { x: -580, width: 18, zMin: -680, zMax: 440 },
+      { x: -580, width: 20, zMin: -1300, zMax: 700 },
+      // Savar & Hemayetpur Outer Highway
+      { x: -780, width: 20, zMin: -1100, zMax: 600 },
       // Gulshan Avenue & Motijheel Financial Spine
-      { x: 220, width: 18, zMin: -680, zMax: 440 },
+      { x: 220, width: 18, zMin: -1300, zMax: 700 },
       // Badda / Rampura / Bashundhara Link Avenue
-      { x: 440, width: 18, zMin: -680, zMax: 440 },
+      { x: 440, width: 18, zMin: -1300, zMax: 700 },
       // Purbachal 300 Feet Grand Expressway
-      { x: 640, width: 22, zMin: -560, zMax: 220 },
+      { x: 640, width: 24, zMin: -1100, zMax: 600 },
+      // Purbachal Smart City East Boulevard
+      { x: 840, width: 22, zMin: -900, zMax: 500 },
       // Old Dhaka Chawkbazar Historical Street
-      { x: -70, width: 12, zMin: 80, zMax: 330 },
+      { x: -70, width: 14, zMin: 60, zMax: 580 },
     ];
 
     const ewRoads = [
+      // Uttara Sector 18 & Diabari Metro Depot Expressway
+      { z: -1100, width: 20, xMin: -1200, xMax: 1200 },
+      // Tongi & Gazipur Industrial Boulevard
+      { z: -850, width: 20, xMin: -1200, xMax: 1200 },
       // Uttara North & Airport Runway Road
-      { z: -620, width: 18, xMin: -680, xMax: 680 },
+      { z: -620, width: 20, xMin: -1200, xMax: 1200 },
       // Uttara South & Airport Terminal Boulevard
-      { z: -460, width: 18, xMin: -680, xMax: 680 },
+      { z: -460, width: 20, xMin: -1200, xMax: 1200 },
       // Banani / Airport Flyover & 300ft Entry
-      { z: -315, width: 18, xMin: -680, xMax: 680 },
+      { z: -315, width: 20, xMin: -1200, xMax: 1200 },
       // Mirpur 10 / Mohakhali Flyover / Gulshan-2
-      { z: -175, width: 16, xMin: -680, xMax: 680 },
+      { z: -175, width: 18, xMin: -1200, xMax: 1200 },
       // Manik Mia Avenue / Farmgate / Karwan Bazar
-      { z: 0, width: 20, xMin: -680, xMax: 680 },
+      { z: 0, width: 22, xMin: -1200, xMax: 1200 },
       // Shahbagh / TSC / Motijheel Commercial District
-      { z: 175, width: 16, xMin: -680, xMax: 680 },
+      { z: 175, width: 18, xMin: -1200, xMax: 1200 },
       // Lalbagh Fort / Chawkbazar / Sadarghat Riverfront
-      { z: 285, width: 16, xMin: -680, xMax: 680 },
+      { z: 285, width: 18, xMin: -1200, xMax: 1200 },
+      // Mayor Hanif Expressway Corridor
+      { z: 360, width: 18, xMin: -1200, xMax: 1200 },
       // Buriganga 2nd Bridge / Postogola / Keraniganj Highway
-      { z: 440, width: 18, xMin: -680, xMax: 680 },
+      { z: 460, width: 20, xMin: -1200, xMax: 1200 },
+      // Jatrabari & Sayedabad Bus Expressway
+      { z: 620, width: 20, xMin: -1000, xMax: 1000 },
+      // Keraniganj South Link Highway
+      { z: 760, width: 18, xMin: -900, xMax: 900 },
     ];
 
     // Build seamless junction patches at every intersection point
@@ -1220,13 +1237,24 @@ export class DhakaCityEngine {
       mesh.userData.noDriver = true;
 
       // Find and purge any driver model in top-level or descendants
-      let driverObj = mesh.getObjectByName('npc_driver');
-      while (driverObj) {
+      const driversToRemove: THREE.Object3D[] = [];
+      mesh.traverse((c) => {
+        if (
+          c.name &&
+          (c.name === 'npc_driver' ||
+            c.name.startsWith('npc_driver') ||
+            c.name.includes('driver') ||
+            c.name.includes('puller') ||
+            c.name.includes('rider'))
+        ) {
+          driversToRemove.push(c);
+        }
+      });
+      driversToRemove.forEach((d) => {
         hadDriver = true;
-        driverObj.visible = false;
-        driverObj.parent?.remove(driverObj);
-        driverObj = mesh.getObjectByName('npc_driver');
-      }
+        d.visible = false;
+        d.parent?.remove(d);
+      });
     }
 
     // If it was traffic or had a driver, drop the driver out onto the street!
@@ -1663,14 +1691,11 @@ export class DhakaCityEngine {
       roughness: 0.85,
     });
 
-    for (let z = -580; z <= 220; z += 45) {
-      if (
-        Math.abs(z) < 18 ||
-        Math.abs(z + 175) < 18 ||
-        Math.abs(z + 315) < 18 ||
-        Math.abs(z + 460) < 18
-      )
-        continue;
+    // 1. Concrete Metro Viaduct Piers along Central MRT Line-6 Corridor (X = -10.5, Z: -1100 to +360)
+    const ewCrossRoads = [-1100, -850, -620, -460, -315, -175, 0, 175, 285, 360];
+    for (let z = -1100; z <= 360; z += 42) {
+      if (ewCrossRoads.some((cr) => Math.abs(z - cr) < 18)) continue;
+
       this.circleColliders.push({
         x: -10.5,
         z,
@@ -1678,7 +1703,7 @@ export class DhakaCityEngine {
         tag: 'metro_pillar',
       });
       const pier = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.1, 1.25, 11.5, 12),
+        new THREE.CylinderGeometry(1.15, 1.35, 11.5, 14),
         concreteMat
       );
       pier.position.set(-10.5, 5.75, z);
@@ -1686,85 +1711,139 @@ export class DhakaCityEngine {
       this.scene.add(pier);
 
       const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(6.5, 1.4, 3.2),
+        new THREE.BoxGeometry(6.6, 1.4, 3.4),
         concreteMat
       );
       cap.position.set(-10.5, 11.5, z);
       this.scene.add(cap);
     }
 
+    // 2. Continuous Pre-Stressed Concrete Box Girder (1480m length, Z: -1110 to +370)
     const girder = new THREE.Mesh(
-      new THREE.BoxGeometry(5.2, 1.2, 840),
+      new THREE.BoxGeometry(5.4, 1.25, 1480),
       concreteMat
     );
-    girder.position.set(-10.5, 12.6, -180);
+    girder.position.set(-10.5, 12.6, -370);
     girder.castShadow = true;
     this.scene.add(girder);
 
-    // Farmgate & Uttara North Elevated Metro Station Canopies
-    [-32, -540].forEach((sz) => {
-      const stationCanopy = new THREE.Mesh(
-        new THREE.CylinderGeometry(6.8, 6.8, 38, 12, 1, false, 0, Math.PI).rotateX(
-          Math.PI / 2
-        ),
-        new THREE.MeshStandardMaterial({
-          color: '#0f766e',
-          metalness: 0.4,
-          roughness: 0.3,
-          side: THREE.DoubleSide,
-        })
-      );
-      stationCanopy.position.set(-10.5, 15.2, sz);
-      this.scene.add(stationCanopy);
+    // Dual Steel Track Rails with Timber Sleepers
+    [-11.6, -9.4].forEach((trackX) => {
+      [-0.45, 0.45].forEach((railOffsetX) => {
+        const rail = this.sharedBox(
+          0.12,
+          0.14,
+          1480,
+          new THREE.MeshStandardMaterial({ color: '#475569', metalness: 0.9, roughness: 0.2 }),
+          trackX + railOffsetX,
+          13.28,
+          -370
+        );
+        this.scene.add(rail);
+      });
     });
 
-    // Build Animated 4-Coach MRT Line-6 Dhaka Metro Rail Train (ঢাকা মেট্রোরেল)
-    const trainGroup = new THREE.Group();
-    const coachBodyMat = new THREE.MeshPhysicalMaterial({
-      color: '#f8fafc',
-      metalness: 0.35,
-      roughness: 0.2,
-      clearcoat: 0.8,
+    // 3. Four Major 3D Elevated Metro Stations: Uttara North, Mirpur-10, Farmgate & Motijheel Terminal
+    const stations = [
+      { nameBn: 'উত্তরা উত্তর মেট্রো স্টেশন', nameEn: 'UTTARA NORTH METRO STATION', sz: -850 },
+      { nameBn: 'মিরপুর-১০ মেট্রো স্টেশন', nameEn: 'MIRPUR-10 METRO STATION', sz: -175 },
+      { nameBn: 'ফার্মগেট মেট্রো স্টেশন', nameEn: 'FARMGATE METRO STATION', sz: -15 },
+      { nameBn: 'মতিঝিল টার্মিনাল স্টেশন', nameEn: 'MOTIJHEEL TERMINAL STATION', sz: 320 },
+    ];
+
+    const canopyMat = new THREE.MeshStandardMaterial({
+      color: '#0f766e',
+      metalness: 0.45,
+      roughness: 0.25,
+      side: THREE.DoubleSide,
     });
-    const greenStripeMat = new THREE.MeshBasicMaterial({ color: '#16a34a' });
-    const redDotMat = new THREE.MeshBasicMaterial({ color: '#dc2626' });
-    const winMat = new THREE.MeshBasicMaterial({ color: '#bae6fd' });
+    const concourseMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      roughness: 0.72,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: '#bae6fd',
+      transmission: 0.8,
+      roughness: 0.1,
+      transparent: true,
+      opacity: 0.85,
+    });
 
-    for (let c = 0; c < 4; c++) {
-      const cz = c * 11.2 - 16.8;
-      const coach = new THREE.Mesh(
-        new THREE.BoxGeometry(3.1, 3.1, 10.4),
-        coachBodyMat
+    stations.forEach((st) => {
+      // Station Concourse & Platform Box
+      const platform = this.sharedBox(14.5, 4.2, 58, concourseMat, -10.5, 14.5, st.sz);
+      platform.castShadow = true;
+      this.scene.add(platform);
+
+      // Curved Teal Vaulted Roof Canopy
+      const canopy = new THREE.Mesh(
+        new THREE.CylinderGeometry(8.2, 8.2, 58, 16, 1, false, 0, Math.PI).rotateX(Math.PI / 2),
+        canopyMat
       );
-      coach.position.set(0, 1.65, cz);
-      coach.castShadow = true;
-      trainGroup.add(coach);
+      canopy.position.set(-10.5, 18.2, st.sz);
+      this.scene.add(canopy);
 
-      const stripe = new THREE.Mesh(
-        new THREE.BoxGeometry(3.16, 0.48, 10.44),
-        greenStripeMat
+      // Glass Curtain Wall Windows along Platform Edge
+      [-17.6, -3.4].forEach((wx) => {
+        const winWall = this.sharedBox(0.2, 3.4, 56, glassMat, wx, 15.2, st.sz);
+        this.scene.add(winWall);
+      });
+
+      // Illuminated Station Bilingual Signboard Gantry
+      const signTex = createFlyoverGantryTexture(st.nameBn, st.nameEn, 'ঢাকা ম্যাস ট্রানজিট (MRT-6)', 'DHAKA MASS TRANSIT CO.');
+      const signBoard = new THREE.Mesh(
+        new THREE.PlaneGeometry(10.5, 2.4),
+        new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide })
       );
-      stripe.position.set(0, 1.55, cz);
-      trainGroup.add(stripe);
+      signBoard.position.set(-10.5, 17.5, st.sz + 29.2);
+      this.scene.add(signBoard);
+    });
 
-      const redStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(3.18, 0.16, 10.46),
-        redDotMat
-      );
-      redStripe.position.set(0, 1.32, cz);
-      trainGroup.add(redStripe);
+    // 4. Build Animated 4-Coach MRT Line-6 Dhaka Metro Rail Trains (Dual Southbound & Northbound)
+    const createTrainMesh = () => {
+      const trainGroup = new THREE.Group();
+      const coachBodyMat = new THREE.MeshPhysicalMaterial({
+        color: '#f8fafc',
+        metalness: 0.42,
+        roughness: 0.18,
+        clearcoat: 0.85,
+      });
+      const greenStripeMat = new THREE.MeshBasicMaterial({ color: '#16a34a' });
+      const redDotMat = new THREE.MeshBasicMaterial({ color: '#dc2626' });
+      const winMat = new THREE.MeshBasicMaterial({ color: '#bae6fd' });
 
-      const windows = new THREE.Mesh(
-        new THREE.BoxGeometry(3.15, 0.78, 9.2),
-        winMat
-      );
-      windows.position.set(0, 2.15, cz);
-      trainGroup.add(windows);
-    }
+      for (let c = 0; c < 4; c++) {
+        const cz = c * 11.2 - 16.8;
+        const coach = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.9, 10.4), coachBodyMat);
+        coach.position.set(0, 1.6, cz);
+        coach.castShadow = true;
+        trainGroup.add(coach);
 
-    trainGroup.position.set(-10.5, 13.2, -25);
-    this.metroTrainGroup = trainGroup;
-    this.scene.add(trainGroup);
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.45, 10.44), greenStripeMat);
+        stripe.position.set(0, 1.5, cz);
+        trainGroup.add(stripe);
+
+        const redStripe = new THREE.Mesh(new THREE.BoxGeometry(2.88, 0.16, 10.46), redDotMat);
+        redStripe.position.set(0, 1.28, cz);
+        trainGroup.add(redStripe);
+
+        const windows = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.75, 9.2), winMat);
+        windows.position.set(0, 2.08, cz);
+        trainGroup.add(windows);
+      }
+      return trainGroup;
+    };
+
+    // Train 1: Southbound on Track 1 (X = -11.6)
+    this.metroTrainGroup = createTrainMesh();
+    this.metroTrainGroup.position.set(-11.6, 13.2, -25);
+    this.scene.add(this.metroTrainGroup);
+
+    // Train 2: Northbound on Track 2 (X = -9.4)
+    this.metroTrainGroup2 = createTrainMesh();
+    this.metroTrainGroup2.position.set(-9.4, 13.2, -450);
+    this.metroTrainGroup2.rotation.y = Math.PI;
+    this.scene.add(this.metroTrainGroup2);
   }
 
   private buildDistrictHighwaySigns() {
@@ -2501,6 +2580,8 @@ export class DhakaCityEngine {
     this.buildDistant3DSkyline();
     this.buildMohakhaliFlyover();
     this.buildFarmgateElevatedExpressway();
+    this.buildMayorHanifFlyover();
+    this.buildKurilFlyoverInterchange();
     this.buildDhakaFootOverBridges();
     this.buildMirpurCricketStadium();
     this.buildDhakaMegaShoppingMalls();
@@ -2943,11 +3024,11 @@ export class DhakaCityEngine {
     };
 
     const towerRings = [
-      { minR: 95, maxR: 240, count: 75, baseH: 22, maxH: 52 },
-      { minR: 240, maxR: 430, count: 95, baseH: 30, maxH: 80 },
-      { minR: 430, maxR: 580, count: 90, baseH: 45, maxH: 120 },
-      { minR: 580, maxR: 740, count: 85, baseH: 55, maxH: 150 },
-      { minR: 740, maxR: 950, count: 80, baseH: 68, maxH: 180 },
+      { minR: 95, maxR: 240, count: 90, baseH: 26, maxH: 60 },
+      { minR: 240, maxR: 450, count: 120, baseH: 36, maxH: 95 },
+      { minR: 450, maxR: 750, count: 140, baseH: 52, maxH: 140 },
+      { minR: 750, maxR: 1150, count: 130, baseH: 68, maxH: 190 },
+      { minR: 1150, maxR: 1600, count: 110, baseH: 80, maxH: 220 },
     ];
 
     towerRings.forEach((ring) => {
@@ -2957,9 +3038,13 @@ export class DhakaCityEngine {
         const bx = Math.cos(angle) * radius;
         const bz = Math.sin(angle) * radius;
 
-        // Keep all active road corridors and flyovers unobstructed
-        const onNsRoad = [0, 14, -170, -380, -580, 220, 440, 640, -70].some((rx) => Math.abs(bx - rx) < 14.5);
-        const onEwRoad = [-620, -460, -315, -175, 0, 175, 285, 440].some((rz) => Math.abs(bz - rz) < 14.5);
+        // Keep all active road corridors and flyovers unobstructed across 5000m metropolitan grid
+        const onNsRoad = [0, 14, -170, -380, -480, -580, -780, 220, 440, 640, 840, -70].some(
+          (rx) => Math.abs(bx - rx) < 16.5
+        );
+        const onEwRoad = [-1100, -850, -620, -460, -315, -175, 0, 175, 285, 360, 460, 620, 760].some(
+          (rz) => Math.abs(bz - rz) < 16.5
+        );
         if (onNsRoad || onEwRoad) continue;
 
         let deg = ((angle * 180) / Math.PI) % 360;
@@ -3384,6 +3469,320 @@ export class DhakaCityEngine {
 
       const luminaire = new THREE.Mesh(this.boxCache(0.35, 0.15, 0.8), lampLightMat);
       luminaire.position.set(flyoverX - flyoverW / 2 + 1.2, deckElev + 7.5, lz);
+      this.scene.add(luminaire);
+    }
+  }
+
+  /**
+   * Mayor Mohammad Hanif Flyover (মেয়র মোহাম্মদ হানিফ ফ্লাইওভার)
+   * The longest iconic elevated expressway in south Dhaka spanning 720m along Z = 360.
+   * Connects Old Dhaka, Chawkbazar, Sayedabad, Jatrabari, Postogola and Chittagong Highway.
+   * Elevation: Y = 8.8m, 4-lane concrete deck with drivable on/off ramps at X = -440 and X = 440.
+   */
+  private buildMayorHanifFlyover() {
+    const deckMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      roughness: 0.88,
+    });
+    const pierMat = new THREE.MeshStandardMaterial({
+      color: '#94a3b8',
+      roughness: 0.82,
+    });
+    const barrierMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.65,
+    });
+    const barrierYellowMat = new THREE.MeshStandardMaterial({
+      color: '#eab308',
+      roughness: 0.6,
+    });
+    const gantryFrameMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      metalness: 0.75,
+      roughness: 0.35,
+    });
+    const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
+
+    const flyoverZ = 360;
+    const flyoverW = 14.2;
+    const deckLen = 720; // X: -360 to +360
+    const deckElev = 8.8;
+
+    // 1. Main Elevated Span Deck (X: -360 to +360) at Y = 8.8m
+    const mainDeck = this.sharedBox(deckLen, 1.2, flyoverW, deckMat, 0, deckElev - 0.6, flyoverZ);
+    mainDeck.receiveShadow = true;
+    this.scene.add(mainDeck);
+
+    // Elevated Deck Center Striping (dashed white lane lines along X)
+    for (let x = -350; x <= 350; x += 14) {
+      [-3.2, 0, 3.2].forEach((oz) => {
+        const stripe = this.sharedBox(7.5, 0.04, 0.28, stripeWhiteMat, x, deckElev + 0.03, flyoverZ + oz);
+        this.scene.add(stripe);
+      });
+    }
+
+    // 2. West Approach Ramp (X: -440 to -360, Y: 0 -> 8.8)
+    const rampLen = 80;
+    const westSlopeAngle = Math.atan2(deckElev, rampLen);
+    const westRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
+    westRamp.position.set(-400, deckElev * 0.5, flyoverZ);
+    westRamp.rotation.z = -westSlopeAngle;
+    westRamp.receiveShadow = true;
+    this.scene.add(westRamp);
+
+    // 3. East Approach Ramp (X: 360 to 440, Y: 8.8 -> 0)
+    const eastRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
+    eastRamp.position.set(400, deckElev * 0.5, flyoverZ);
+    eastRamp.rotation.z = westSlopeAngle;
+    eastRamp.receiveShadow = true;
+    this.scene.add(eastRamp);
+
+    // 4. Solid Concrete Crash Barriers & Physics Colliders on North & South Edges
+    const northBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 0, deckElev + 0.62, flyoverZ - flyoverW / 2 + 0.22);
+    this.scene.add(northBarrier);
+    this.buildingColliders.push({
+      minX: -360,
+      maxX: 360,
+      minZ: flyoverZ - flyoverW / 2 - 0.4,
+      maxZ: flyoverZ - flyoverW / 2 + 0.4,
+      tag: 'flyover_barrier',
+    });
+
+    const southBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 0, deckElev + 0.62, flyoverZ + flyoverW / 2 - 0.22);
+    this.scene.add(southBarrier);
+    this.buildingColliders.push({
+      minX: -360,
+      maxX: 360,
+      minZ: flyoverZ + flyoverW / 2 - 0.4,
+      maxZ: flyoverZ + flyoverW / 2 + 0.4,
+      tag: 'flyover_barrier',
+    });
+
+    // Yellow/Black Hazard Curb Trims along barriers
+    for (let x = -350; x <= 350; x += 22) {
+      const curbN = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
+      const curbS = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ + flyoverW / 2 - 0.45);
+      this.scene.add(curbN);
+      this.scene.add(curbS);
+    }
+
+    // 5. Heavy Concrete Hammerhead Piers Spaced Every 38m
+    for (let px = -342; px <= 342; px += 38) {
+      if (Math.abs(px) < 18) continue; // Keep ground central spine clear
+      const pier = new THREE.Mesh(this.cylCache(1.35, 1.55, deckElev - 0.6, 14), pierMat);
+      pier.position.set(px, (deckElev - 0.6) / 2, flyoverZ);
+      pier.castShadow = true;
+      this.scene.add(pier);
+
+      this.circleColliders.push({
+        x: px,
+        z: flyoverZ,
+        radius: 1.6,
+        tag: 'flyover_pier',
+      });
+
+      const pierCap = this.sharedBox(3.2, 1.3, flyoverW + 0.8, pierMat, px, deckElev - 1.2, flyoverZ);
+      pierCap.castShadow = true;
+      this.scene.add(pierCap);
+    }
+
+    // 6. Overhead Highway Directional Sign Gantries
+    const signLocations = [
+      { x: -180, b1: 'মেয়র মোহাম্মদ হানিফ ফ্লাইওভার', e1: 'MAYOR MOHAMMAD HANIF FLYOVER', b2: 'যাত্রাবাড়ী / সায়েদাবাদ প্রস্থান', e2: 'JATRABARI / SAYEDABAD EXIT' },
+      { x: 0, b1: 'পোস্তগোলা / বুড়িগঙ্গা ২য় সেতু লিঙ্ক', e1: 'POSTOGOLA / BURIGANGA 2ND BRIDGE', b2: 'চট্টগ্রাম মহাসড়ক সংযোগ', e2: 'CHITTAGONG HIGHWAY LINK' },
+      { x: 180, b1: 'গুলিস্তান / মতিঝিল প্রস্থান', e1: 'GULISTAN / MOTIJHEEL EXIT', b2: 'যাত্রাবাড়ী ইন্টারচেঞ্জ', e2: 'JATRABARI INTERCHANGE' },
+    ];
+
+    signLocations.forEach((loc) => {
+      const gantryGroup = new THREE.Group();
+      gantryGroup.position.set(loc.x, deckElev, flyoverZ);
+
+      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gz) => {
+        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
+        leg.position.set(0, 3.1, gz);
+        gantryGroup.add(leg);
+      });
+
+      const gantryBeam = new THREE.Mesh(this.boxCache(0.4, 0.55, flyoverW), gantryFrameMat);
+      gantryBeam.position.set(0, 6.2, 0);
+      gantryGroup.add(gantryBeam);
+
+      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
+      const signBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 2.5, 10.2),
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
+      );
+      signBoard.position.set(0, 4.8, 0);
+      gantryGroup.add(signBoard);
+
+      this.scene.add(gantryGroup);
+    });
+
+    // 7. Highway Light Poles
+    for (let lx = -330; lx <= 330; lx += 44) {
+      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
+      pole.position.set(lx, deckElev + 3.75, flyoverZ - flyoverW / 2 + 0.35);
+      this.scene.add(pole);
+
+      const luminaire = new THREE.Mesh(this.boxCache(0.8, 0.15, 0.35), lampLightMat);
+      luminaire.position.set(lx, deckElev + 7.5, flyoverZ - flyoverW / 2 + 1.2);
+      this.scene.add(luminaire);
+    }
+  }
+
+  /**
+   * Kuril Interchange Flyover (কুড়িল ইন্টারচেঞ্জ ফ্লাইওভার)
+   * Multi-directional elevated highway interchange spanning 360m along Z = -315 from X = 360 to 720.
+   * Elevates over Airport Road and connects directly into the Purbachal 300 Feet Grand Expressway.
+   * Elevation: Y = 11.2m, 4-lane elevated deck with drivable on/off ramps.
+   */
+  private buildKurilFlyoverInterchange() {
+    const deckMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      roughness: 0.88,
+    });
+    const pierMat = new THREE.MeshStandardMaterial({
+      color: '#94a3b8',
+      roughness: 0.82,
+    });
+    const barrierMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.65,
+    });
+    const barrierYellowMat = new THREE.MeshStandardMaterial({
+      color: '#eab308',
+      roughness: 0.6,
+    });
+    const gantryFrameMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      metalness: 0.75,
+      roughness: 0.35,
+    });
+    const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
+
+    const flyoverZ = -315;
+    const flyoverW = 14.2;
+    const deckLen = 360; // X: 360 to 720
+    const deckElev = 11.2;
+
+    // 1. Main Elevated Span Deck (X: 360 to 720) at Y = 11.2m
+    const mainDeck = this.sharedBox(deckLen, 1.2, flyoverW, deckMat, 540, deckElev - 0.6, flyoverZ);
+    mainDeck.receiveShadow = true;
+    this.scene.add(mainDeck);
+
+    // Elevated Deck Center Striping
+    for (let x = 370; x <= 710; x += 14) {
+      [-3.2, 0, 3.2].forEach((oz) => {
+        const stripe = this.sharedBox(7.5, 0.04, 0.28, stripeWhiteMat, x, deckElev + 0.03, flyoverZ + oz);
+        this.scene.add(stripe);
+      });
+    }
+
+    // 2. West Approach On-Ramp (X: 280 to 360, Y: 0 -> 11.2)
+    const rampLen = 80;
+    const slopeAngle = Math.atan2(deckElev, rampLen);
+    const westRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
+    westRamp.position.set(320, deckElev * 0.5, flyoverZ);
+    westRamp.rotation.z = -slopeAngle;
+    westRamp.receiveShadow = true;
+    this.scene.add(westRamp);
+
+    // 3. East Off-Ramp (X: 720 to 800, Y: 11.2 -> 0)
+    const eastRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
+    eastRamp.position.set(760, deckElev * 0.5, flyoverZ);
+    eastRamp.rotation.z = slopeAngle;
+    eastRamp.receiveShadow = true;
+    this.scene.add(eastRamp);
+
+    // 4. Outer Concrete Crash Barriers & Physics Colliders
+    const northBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 540, deckElev + 0.62, flyoverZ - flyoverW / 2 + 0.22);
+    this.scene.add(northBarrier);
+    this.buildingColliders.push({
+      minX: 360,
+      maxX: 720,
+      minZ: flyoverZ - flyoverW / 2 - 0.4,
+      maxZ: flyoverZ - flyoverW / 2 + 0.4,
+      tag: 'flyover_barrier',
+    });
+
+    const southBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 540, deckElev + 0.62, flyoverZ + flyoverW / 2 - 0.22);
+    this.scene.add(southBarrier);
+    this.buildingColliders.push({
+      minX: 360,
+      maxX: 720,
+      minZ: flyoverZ + flyoverW / 2 - 0.4,
+      maxZ: flyoverZ + flyoverW / 2 + 0.4,
+      tag: 'flyover_barrier',
+    });
+
+    // Yellow/Black Hazard Curb Trims
+    for (let x = 370; x <= 710; x += 22) {
+      const curbN = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
+      const curbS = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ + flyoverW / 2 - 0.45);
+      this.scene.add(curbN);
+      this.scene.add(curbS);
+    }
+
+    // 5. Tall Concrete Interchange Piers Spaced Every 38m
+    for (let px = 380; px <= 700; px += 38) {
+      const pier = new THREE.Mesh(this.cylCache(1.4, 1.65, deckElev - 0.6, 14), pierMat);
+      pier.position.set(px, (deckElev - 0.6) / 2, flyoverZ);
+      pier.castShadow = true;
+      this.scene.add(pier);
+
+      this.circleColliders.push({
+        x: px,
+        z: flyoverZ,
+        radius: 1.7,
+        tag: 'flyover_pier',
+      });
+
+      const pierCap = this.sharedBox(3.4, 1.4, flyoverW + 0.8, pierMat, px, deckElev - 1.2, flyoverZ);
+      pierCap.castShadow = true;
+      this.scene.add(pierCap);
+    }
+
+    // 6. Kuril Interchange Highway Directional Gantries
+    const signLocations = [
+      { x: 440, b1: 'কুড়িল ইন্টারচেঞ্জ ফ্লাইওভার', e1: 'KURIL INTERCHANGE FLYOVER', b2: 'পূর্বাচল ৩০০ ফিট এক্সপ্রেসওয়ে', e2: 'PURBACHAL 300FT EXPRESSWAY' },
+      { x: 620, b1: 'বিমানবন্দর ও উত্তরা লিঙ্ক', e1: 'AIRPORT & UTTARA LINK', b2: 'নিকুঞ্জ ও বারিধারা প্রস্থান', e2: 'NIKUNJA & BARIDHARA EXIT' },
+    ];
+
+    signLocations.forEach((loc) => {
+      const gantryGroup = new THREE.Group();
+      gantryGroup.position.set(loc.x, deckElev, flyoverZ);
+
+      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gz) => {
+        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
+        leg.position.set(0, 3.1, gz);
+        gantryGroup.add(leg);
+      });
+
+      const gantryBeam = new THREE.Mesh(this.boxCache(0.4, 0.55, flyoverW), gantryFrameMat);
+      gantryBeam.position.set(0, 6.2, 0);
+      gantryGroup.add(gantryBeam);
+
+      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
+      const signBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 2.5, 10.2),
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
+      );
+      signBoard.position.set(0, 4.8, 0);
+      gantryGroup.add(signBoard);
+
+      this.scene.add(gantryGroup);
+    });
+
+    // 7. High-mast LED Street Light Poles
+    for (let lx = 370; lx <= 710; lx += 42) {
+      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
+      pole.position.set(lx, deckElev + 3.75, flyoverZ - flyoverW / 2 + 0.35);
+      this.scene.add(pole);
+
+      const luminaire = new THREE.Mesh(this.boxCache(0.8, 0.15, 0.35), lampLightMat);
+      luminaire.position.set(lx, deckElev + 7.5, flyoverZ - flyoverW / 2 + 1.2);
       this.scene.add(luminaire);
     }
   }
@@ -4379,6 +4778,12 @@ export class DhakaCityEngine {
       const stats = VEHICLE_STATS[p.type];
       const id = `veh_${idx}_${p.type}`;
       const elev = this.getRoadElevation(p.x, p.z);
+      const isEW = Math.abs(Math.sin(p.rot)) > 0.7;
+      const roadAxis: 'ns' | 'ew' = isEW ? 'ew' : 'ns';
+      const laneDirection: 1 | -1 = isEW
+        ? Math.sin(p.rot) > 0 ? 1 : -1
+        : Math.cos(p.rot) >= 0 ? 1 : -1;
+
       const entity: VehicleEntity = {
         id,
         type: p.type,
@@ -4394,6 +4799,8 @@ export class DhakaCityEngine {
         isTraffic: p.isTraffic,
         isPolice: p.type === 'police',
         plateNumber: `ঢাকা মেট্রো-${11 + (idx % 9)}-${2040 + idx}`,
+        roadAxis,
+        laneDirection,
       };
       this.vehicles.push(entity);
 
@@ -5658,7 +6065,7 @@ export class DhakaCityEngine {
         isHigh ? Math.min(window.devicePixelRatio, 1.35) : 1
       );
       this.renderer.shadowMap.enabled = isHigh;
-      this.camera.far = isHigh ? 2200 : 1500;
+      this.camera.far = isHigh ? 2800 : 1800;
       this.camera.updateProjectionMatrix();
     }
 
@@ -6370,9 +6777,15 @@ export class DhakaCityEngine {
 
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara, Farmgate & Motijheel
     if (this.metroTrainGroup) {
-      const trainSpeed = Math.cos(t * 0.15);
-      this.metroTrainGroup.position.z = -180 + Math.sin(t * 0.15) * 360;
+      const trainSpeed = Math.cos(t * 0.08);
+      // Sweeps smoothly between Z = -1050 (Uttara North) and Z = 330 (Motijheel)
+      this.metroTrainGroup.position.z = -360 + Math.sin(t * 0.08) * 690;
       this.metroTrainGroup.rotation.y = trainSpeed >= 0 ? 0 : Math.PI;
+    }
+    if (this.metroTrainGroup2) {
+      const trainSpeed2 = Math.cos(t * 0.08 + Math.PI);
+      this.metroTrainGroup2.position.z = -360 + Math.sin(t * 0.08 + Math.PI) * 690;
+      this.metroTrainGroup2.rotation.y = trainSpeed2 >= 0 ? 0 : Math.PI;
     }
   }
 
@@ -7053,19 +7466,15 @@ export class DhakaCityEngine {
       const stats = VEHICLE_STATS[veh.type];
       const cruiseSpeed = stats.maxSpeed * 0.36;
 
-      // Traffic AI: Strictly align rotation to cardinal road grid direction (NEVER spin or oscillate)
-      const cardinalAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
-      let targetAngle = cardinalAngles[0];
-      let minAngleDiff = 999;
-      for (const ca of cardinalAngles) {
-        const d = Math.abs(normalizeAngle(veh.rotation - ca));
-        if (d < minAngleDiff) {
-          minAngleDiff = d;
-          targetAngle = ca;
-        }
+      // Traffic AI: Strictly lock rotation to assigned road axis & lane direction (NEVER spin or turn sideways into medians)
+      let targetAngle: number;
+      if (veh.roadAxis === 'ew') {
+        targetAngle = (veh.laneDirection ?? 1) > 0 ? Math.PI / 2 : -Math.PI / 2;
+      } else {
+        targetAngle = (veh.laneDirection ?? 1) > 0 ? 0 : Math.PI;
       }
       veh.rotation = normalizeAngle(
-        veh.rotation + normalizeAngle(targetAngle - veh.rotation) * Math.min(1, dt * 8.0)
+        veh.rotation + normalizeAngle(targetAngle - veh.rotation) * Math.min(1, dt * 10.0)
       );
 
       const forwardX = Math.sin(veh.rotation);
@@ -7131,18 +7540,18 @@ export class DhakaCityEngine {
         veh.z += forwardZ * veh.speed * dt;
       }
 
-      // Seamless corridor boundary wrapping (continuous loop, never flip)
-      if (Math.abs(forwardZ) > 0.7) {
-        if (forwardZ > 0 && veh.z > 430) {
-          veh.z = -670;
-        } else if (forwardZ < 0 && veh.z < -675) {
-          veh.z = 425;
+      // Seamless corridor boundary wrapping across expanded 5000m Dhaka world
+      if (veh.roadAxis === 'ew' || Math.abs(forwardX) > 0.7) {
+        if (forwardX > 0 && veh.x > 1180) {
+          veh.x = -1180;
+        } else if (forwardX < 0 && veh.x < -1180) {
+          veh.x = 1180;
         }
       } else {
-        if (forwardX > 0 && veh.x > 660) {
-          veh.x = -660;
-        } else if (forwardX < 0 && veh.x < -660) {
-          veh.x = 660;
+        if (forwardZ > 0 && veh.z > 780) {
+          veh.z = -1380;
+        } else if (forwardZ < 0 && veh.z < -1390) {
+          veh.z = 780;
         }
       }
 
@@ -7623,6 +8032,40 @@ export class DhakaCityEngine {
       }
     }
 
+    // 3. Mayor Mohammad Hanif Flyover (Z = 360, width 14.2m, Y = 8.8m)
+    if (Math.abs(z - 360) <= 7.1) {
+      if (x >= -360 && x <= 360) {
+        return 8.8;
+      }
+      // West Approach Ramp (X: -440 to -360)
+      if (x >= -440 && x < -360) {
+        const t = (x - (-440)) / 80;
+        return 8.8 * Math.max(0, Math.min(1, t));
+      }
+      // East Approach Ramp (X: 360 to 440)
+      if (x > 360 && x <= 440) {
+        const t = 1 - (x - 360) / 80;
+        return 8.8 * Math.max(0, Math.min(1, t));
+      }
+    }
+
+    // 4. Kuril Interchange Flyover (Z = -315, width 14.2m, Y = 11.2m)
+    if (Math.abs(z - (-315)) <= 7.1) {
+      if (x >= 360 && x <= 720) {
+        return 11.2;
+      }
+      // West Approach On-Ramp (X: 280 to 360)
+      if (x >= 280 && x < 360) {
+        const t = (x - 280) / 80;
+        return 11.2 * Math.max(0, Math.min(1, t));
+      }
+      // East Off-Ramp (X: 720 to 800)
+      if (x > 720 && x <= 800) {
+        const t = 1 - (x - 720) / 80;
+        return 11.2 * Math.max(0, Math.min(1, t));
+      }
+    }
+
     return 0;
   }
 
@@ -7699,5 +8142,5 @@ function normalizeAngle(a: number): number {
 }
 
 function clampWorldCoord(v: number): number {
-  return Math.max(-780, Math.min(780, v));
+  return Math.max(-1800, Math.min(1800, v));
 }

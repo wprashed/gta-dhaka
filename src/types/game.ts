@@ -76,6 +76,8 @@ export interface VehicleEntity {
   aiLaneOffset?: number;
   aiWaitTimer?: number;
   plateNumber: string;
+  roadAxis?: 'ns' | 'ew';
+  laneDirection?: 1 | -1;
 }
 
 export type NPCRole =

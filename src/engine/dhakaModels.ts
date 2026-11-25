@@ -2321,10 +2321,23 @@ export function createCharacterMesh(
             return;
           }
 
-          // Beard & headwear: readyplayerme1.glb uses 'Wolf3D_Beard' and
-          // 'Wolf3D_Headwear' / 'Mesh'. Women never get a beard.
+          // Player (Arif Rahman) is a young Dhaka hero: ALWAYS clean dark hair, NO fedora hat / headwear / beard
+          if (isPlayer) {
+            if (
+              m.name === 'Wolf3D_Headwear' ||
+              m.name === 'Mesh' ||
+              m.name === 'Wolf3D_Beard'
+            ) {
+              m.visible = false;
+              return;
+            }
+          }
+
+          // Beard & headwear for NPCs: readyplayerme1.glb uses 'Wolf3D_Beard' and
+          // 'Wolf3D_Headwear' / 'Mesh'. Women and player never get a beard.
           if (m.name === 'Wolf3D_Beard') {
             m.visible =
+              !isPlayer &&
               !isFemale &&
               (isKamal ||
                 isSikder ||
@@ -2334,6 +2347,7 @@ export function createCharacterMesh(
           }
           if (m.name === 'Mesh' || m.name === 'Wolf3D_Headwear') {
             m.visible =
+              !isPlayer &&
               !isFemale &&
               (isHajiElder || isKamal || (wearsLungi && seed % 2 === 0));
           }
@@ -2344,19 +2358,9 @@ export function createCharacterMesh(
               : (m.material as THREE.MeshStandardMaterial).clone()
           ) as THREE.MeshStandardMaterial;
           m.material = mat;
-          // Player keeps crisp original PBR colors, but materials are cloned so
-          // tintCharacterOutfit() never mutates the cached GLTF.
           if (modelKey === 'michelle') {
             mat.roughness = Math.min(0.85, Math.max(0.6, mat.roughness ?? 0.7));
             mat.metalness = 0;
-          }
-          if (isPlayer) {
-            // Keep the authored colours, but make cloth read as cloth.
-            if (/Outfit/i.test(mat.name || '')) {
-              mat.roughness = 0.86;
-              mat.metalness = 0.0;
-            }
-            return;
           }
           const matName = mat.name || '';
 
@@ -2366,7 +2370,6 @@ export function createCharacterMesh(
             matName === 'T-shirt'
           ) {
             mat.color.copy(brightTopTint);
-            // Cloth should not read as glossy plastic.
             mat.roughness = 0.88;
             mat.metalness = 0.0;
             if ('sheen' in mat) {
@@ -2394,21 +2397,14 @@ export function createCharacterMesh(
             matName === 'Wolf3D_Skin' ||
             matName === 'skin'
           ) {
-            // The RPM/ReadyPlayerMe base skin is very pale; pull it much
-            // closer to realistic Bangladeshi complexions.
             mat.color.set('#ffffff').lerp(skinTint, 0.55);
           } else if (m.name === 'Mesh' || matName === 'Wolf3D_Headwear') {
             mat.color.set(
               isHajiElder ? '#ffffff' : wearsLungi ? '#f87171' : '#93c5fd'
             );
           } else if (modelKey === 'soldier') {
-            // Soldier has separate body/visor materials; a light tint keeps the
-            // DMP uniform readable without destroying the baked detail.
             mat.color.set('#ffffff').lerp(brightTopTint, 0.18);
           }
-          // Michelle.glb packs skin, hair, glasses and clothing into one baked
-          // 'Ch03_Body' material, so tinting it darkened her skin to near-black.
-          // Her authored texture is kept intact and only made less glossy.
 
           m.material = mat;
         }
