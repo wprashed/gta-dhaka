@@ -586,4 +586,225 @@ export function createBlackWhiteCurbTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/**
+ * Authentic BRTC Bus Side Decal Coachwork Banner with Bangla & English Typography
+ */
+export function createBrtcSideDecalTexture(seed = 1): THREE.CanvasTexture {
+  const key = `brtc_side_decal_${seed}`;
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  // Crimson / Emerald background gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, '#991b1b');
+  grad.addColorStop(0.5, '#b91c1c');
+  grad.addColorStop(1, '#7f1d1d');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 128);
+
+  // Top & bottom golden yellow racing stripes
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(0, 0, 1024, 10);
+  ctx.fillRect(0, 118, 1024, 10);
+
+  // Emerald green accent band in center
+  ctx.fillStyle = '#065f46';
+  ctx.fillRect(0, 14, 1024, 32);
+
+  // BRTC Crest / Emblem on left & right
+  [-1, 1].forEach((dir) => {
+    const cx = dir === -1 ? 85 : 939;
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(cx, 64, 38, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(cx, 64, 32, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 20px "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BRTC', cx, 64);
+  });
+
+  // Main Bangla typography
+  ctx.fillStyle = '#fef08a';
+  ctx.font = 'bold 36px "Hind Siliguri", "Noto Sans Bengali", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('বিআরটিসি • ঢাকা মহানগরী পরিবহন', 512, 32);
+
+  // Subtitle English typography & Route
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 22px "Inter", sans-serif';
+  ctx.fillText('BANGLADESH ROAD TRANSPORT CORPORATION • AIR CONDITIONED', 512, 74);
+
+  const routes = [
+    'ফার্মগেট ⇄ শাহবাগ ⇄ প্রেস ক্লাব ⇄ পল্টন ⇄ মতিঝিল',
+    'উত্তরা এয়ারপোর্ট ⇄ বনানী ⇄ মহাখালী ⇄ ফার্মগেট',
+    'মিরপুর-১০ ⇄ কারওয়ান বাজার ⇄ শাহবাগ ⇄ গুলিস্তান',
+    'গাবতলী ⇄ আসাদগেট ⇄ সায়েন্স ল্যাব ⇄ নিউ মার্কেট',
+  ];
+  const routeText = routes[Math.abs(seed) % routes.length];
+  ctx.fillStyle = '#fde68a';
+  ctx.font = 'bold 20px "Hind Siliguri", sans-serif';
+  ctx.fillText(routeText, 512, 102);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Luminous Dhaka & Cyberpunk Neon Signs with Multi-layer Bloom & Glow Halo
+ */
+export function createNeonSignTexture(
+  textBn: string,
+  textEn: string,
+  neonColor = '#06b6d4',
+  bgHex = '#090d16'
+): THREE.CanvasTexture {
+  const key = `neon_${textBn}_${textEn}_${neonColor}`;
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Deep dark metal sign backing
+  ctx.fillStyle = bgHex;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Subtle acrylic gloss sheen
+  const gloss = ctx.createLinearGradient(0, 0, 512, 256);
+  gloss.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+  gloss.addColorStop(0.5, 'rgba(255, 255, 255, 0.02)');
+  gloss.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Outer Neon Tube Border Frame with Glow
+  ctx.save();
+  ctx.strokeStyle = neonColor;
+  ctx.shadowColor = neonColor;
+  ctx.shadowBlur = 24;
+  ctx.lineWidth = 6;
+  ctx.strokeRect(16, 16, 480, 224);
+
+  // Second pass: bright core of the tube frame
+  ctx.strokeStyle = '#ffffff';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(16, 16, 480, 224);
+  ctx.restore();
+
+  // Multi-pass glowing Bangla typography
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 44px "Hind Siliguri", "Noto Sans Bengali", sans-serif';
+
+  // Glow layer 1: wide soft bloom
+  ctx.shadowColor = neonColor;
+  ctx.shadowBlur = 28;
+  ctx.fillStyle = neonColor;
+  ctx.fillText(textBn, 256, 105);
+
+  // Glow layer 2: medium intense aura
+  ctx.shadowBlur = 14;
+  ctx.fillText(textBn, 256, 105);
+
+  // Core layer: pure brilliant white neon tube center
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(textBn, 256, 105);
+  ctx.restore();
+
+  // Multi-pass glowing English subtitle
+  if (textEn) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 24px "Inter", sans-serif';
+
+    ctx.shadowColor = neonColor;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = neonColor;
+    ctx.fillText(textEn.toUpperCase(), 256, 175);
+
+    ctx.shadowBlur = 3;
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillText(textEn.toUpperCase(), 256, 175);
+    ctx.restore();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Creates high-contrast illuminated night window grid textures for towers and apartments
+ */
+export function createEmissiveWindowGridTexture(seed = 1): THREE.CanvasTexture {
+  const key = `emissive_window_grid_${seed}`;
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Black dark facade background
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Grid of illuminated interior windows
+  const warmTints = ['#fde047', '#fef08a', '#fed7aa', '#67e8f9', '#bae6fd', '#fcd34d'];
+  const cols = 8;
+  const rows = 8;
+  const padX = 6;
+  const padY = 6;
+  const w = (256 - padX * (cols + 1)) / cols;
+  const h = (256 - padY * (rows + 1)) / rows;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c + seed * 17;
+      const isLit = (idx * 31) % 100 < 55; // 55% of windows illuminated
+      if (isLit) {
+        const tint = warmTints[(idx * 7) % warmTints.length];
+        ctx.fillStyle = tint;
+        ctx.fillRect(padX + c * (w + padX), padY + r * (h + padY), w, h);
+
+        // Blinds / curtain silhouette on some windows
+        if (idx % 3 === 0) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fillRect(padX + c * (w + padX), padY + r * (h + padY), w, h * 0.4);
+        }
+      }
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 4);
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+
 

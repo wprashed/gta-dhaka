@@ -330,6 +330,92 @@ export const MainMenuScreen: React.FC = () => {
             </div>
           )}
 
+          {subPanel === 'characters' && (
+            <div className="bg-slate-950/92 border border-emerald-400/50 rounded-2xl p-5 shadow-2xl space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                <div>
+                  <h3 className="text-base font-black text-emerald-400 flex items-center gap-2">
+                    <User className="w-5 h-5" />
+                    {language === 'en' ? 'Select Playable Character' : 'খেলার চরিত্র নির্বাচন করুন'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {language === 'en'
+                      ? 'Choose your protagonist. Each hero has customized stats & 3D abilities.'
+                      : 'আপনার মূল চরিত্র বেছে নিন। প্রত্যেকের নিজস্ব ড্রাইভিং ও অ্যাকশন দক্ষতা রয়েছে।'}
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+                  {PLAYABLE_CHARACTERS.length} Heroes
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {PLAYABLE_CHARACTERS.map((char) => {
+                  const isSelected = selectedCharacterId === char.id;
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => selectCharacter(char.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-emerald-950/50 border-emerald-400 ring-2 ring-emerald-500/40 shadow-lg scale-[1.01]'
+                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <img
+                          src={char.avatar}
+                          alt={char.nameEn}
+                          className={`w-12 h-12 rounded-xl object-cover border-2 shrink-0 ${
+                            isSelected ? 'border-emerald-400 shadow-md' : 'border-slate-700'
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <h4 className="text-xs font-black text-white truncate">
+                              {language === 'en' ? char.nameEn : char.nameBn}
+                            </h4>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-amber-300">
+                              {char.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                            {language === 'en' ? char.taglineEn : char.taglineBn}
+                          </p>
+                          <div className="mt-1.5 text-[9px] text-emerald-300 font-semibold bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/20 truncate">
+                            ⚡ {language === 'en' ? char.specialAbilityEn : char.specialAbilityBn}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stat Bars */}
+                      <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 mt-2 pt-2 border-t border-slate-800/80 text-[9px]">
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Speed</span>
+                            <span className="font-mono text-white">{char.stats.speed}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${char.stats.speed}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Driving</span>
+                            <span className="font-mono text-white">{char.stats.driving}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${char.stats.driving}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {subPanel === 'none' && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

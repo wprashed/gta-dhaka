@@ -46,6 +46,8 @@ import {
   createFountainWaterDropTexture,
   createAcUnitTexture,
   createBlackWhiteCurbTexture,
+  createEmissiveWindowGridTexture,
+  createNeonSignTexture,
 } from './dhakaTextures';
 import { NearbyPrompt, useGameStore } from '../store/useGameStore';
 import { dhakaAudio } from '../audio/dhakaAudioEngine';
@@ -142,6 +144,9 @@ export class DhakaCityEngine {
   private footstepRight = false;
   private lastEquippedOutfit = '';
   private lastEquippedTool = '';
+  private lastSelectedCharacterId: PlayableCharacterId = 'arif';
+  private buildingEmissiveMats: (THREE.MeshPhysicalMaterial | THREE.MeshStandardMaterial)[] = [];
+  private treeCanopies: THREE.Object3D[] = [];
 
   // Camera & Performance State
   private cameraYaw = 0;
@@ -2642,18 +2647,65 @@ export class DhakaCityEngine {
         b.style === 'old_dhaka'
           ? '#ffffff'
           : b.color;
-      const facadeKey = `facade|${b.style}|${tint}|${facadeTex.uuid}`;
-      let mat = this.matCache.get(facadeKey) as THREE.MeshStandardMaterial | undefined;
-      if (!mat) {
-        mat = new THREE.MeshStandardMaterial({
-          map: facadeTex,
-          color: tint,
-          bumpMap: brickBump,
-          bumpScale: b.style === 'modern_glass' ? 0.02 : 0.07,
-          roughness: b.style === 'modern_glass' ? 0.14 : 0.54,
-          metalness: b.style === 'modern_glass' ? 0.76 : 0.16,
-        });
-        this.matCache.set(facadeKey, mat);
+      let mat: THREE.Material;
+      if (b.style === 'modern_glass') {
+        const glassKey = `facade_glass|${b.color}|${facadeTex.uuid}|${b.x}_${b.z}`;
+        let glassMat = this.matCache.get(glassKey) as THREE.MeshPhysicalMaterial | undefined;
+        if (!glassMat) {
+          const windowTex = createEmissiveWindowGridTexture(Math.abs(Math.round(b.x * 7 + b.z * 13)));
+          glassMat = new THREE.MeshPhysicalMaterial({
+            map: facadeTex,
+            color: b.color || '#bae6fd',
+            bumpMap: brickBump,
+            bumpScale: 0.02,
+            roughness: 0.08,
+            metalness: 0.88,
+            reflectivity: 0.95,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.04,
+            emissive: new THREE.Color('#fef08a'),
+            emissiveMap: windowTex,
+            emissiveIntensity: 0.0,
+          });
+          this.matCache.set(glassKey, glassMat);
+          this.buildingEmissiveMats.push(glassMat);
+        }
+        mat = glassMat;
+      } else if (b.style === 'commercial') {
+        const commKey = `facade_comm|${b.color}|${facadeTex.uuid}|${b.x}_${b.z}`;
+        let commMat = this.matCache.get(commKey) as THREE.MeshStandardMaterial | undefined;
+        if (!commMat) {
+          const windowTex = createEmissiveWindowGridTexture(Math.abs(Math.round(b.x * 11 + b.z * 5)));
+          commMat = new THREE.MeshStandardMaterial({
+            map: facadeTex,
+            color: tint,
+            bumpMap: brickBump,
+            bumpScale: 0.05,
+            roughness: 0.35,
+            metalness: 0.45,
+            emissive: new THREE.Color('#fed7aa'),
+            emissiveMap: windowTex,
+            emissiveIntensity: 0.0,
+          });
+          this.matCache.set(commKey, commMat);
+          this.buildingEmissiveMats.push(commMat);
+        }
+        mat = commMat;
+      } else {
+        const facadeKey = `facade|${b.style}|${tint}|${facadeTex.uuid}`;
+        let stdMat = this.matCache.get(facadeKey) as THREE.MeshStandardMaterial | undefined;
+        if (!stdMat) {
+          stdMat = new THREE.MeshStandardMaterial({
+            map: facadeTex,
+            color: tint,
+            bumpMap: brickBump,
+            bumpScale: 0.07,
+            roughness: 0.54,
+            metalness: 0.16,
+          });
+          this.matCache.set(facadeKey, stdMat);
+        }
+        mat = stdMat;
       }
 
       const mesh = new THREE.Mesh(this.boxCache(b.w, b.h, b.d), mat);
@@ -2661,6 +2713,22 @@ export class DhakaCityEngine {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
+
+      // 3D Architectural Aluminum Mullions for Glass Towers
+      if (b.style === 'modern_glass' && b.h >= 22) {
+        const mullionMat = new THREE.MeshStandardMaterial({
+          color: '#0f172a',
+          metalness: 0.85,
+          roughness: 0.25,
+        });
+        const numFins = Math.floor(b.w / 4.2);
+        for (let fi = -numFins / 2; fi <= numFins / 2; fi++) {
+          const finX = b.x + fi * 4.2;
+          const fin = new THREE.Mesh(this.boxCache(0.14, b.h - 4.5, 0.24), mullionMat);
+          fin.position.set(finX, (b.h + 4.5) / 2, b.z + b.d / 2 + 0.1);
+          this.scene.add(fin);
+        }
+      }
 
       // Ground-Floor Authentic Dhaka Shopfront Arcade Skin (বিরিয়ানি হাউস | ড্রাগ ফার্মেসী)
       // Shared materials: one instance per style instead of one per building.
@@ -2811,6 +2879,33 @@ export class DhakaCityEngine {
         });
       }
 
+      // 3D Illuminated Neon Blade Signs projecting from commercial & glass buildings
+      if ((b.style === 'commercial' || b.style === 'modern_glass') && b.h >= 16) {
+        const neonPresets = [
+          { bn: 'ফার্মগেট ফার্মেসী ২৪/৭', en: 'FARMGATE PHARMACY', col: '#06b6d4', bg: '#030712' },
+          { bn: 'হাজী বিরিয়ানি হাউস', en: 'HAJI BIRIYANI MOTIJHEEL', col: '#f59e0b', bg: '#180400' },
+          { bn: 'সোনালী ব্যাংক এটিএম', en: 'SONALI BANK 24H ATM', col: '#10b981', bg: '#022c22' },
+          { bn: 'রূপালী ক্যাফে ও রেস্তোরাঁ', en: 'RUPALI CAFE & RESTORA', col: '#ec4899', bg: '#1f0014' },
+          { bn: 'স্টার কাবাব ও সুইটস', en: 'STAR KABAB DHAKA', col: '#ef4444', bg: '#1c0000' },
+          { bn: 'গ্র্যান্ড প্লাজা শপিং', en: 'GRAND PLAZA ARCADE', col: '#a855f7', bg: '#090014' },
+          { bn: 'মোবাইল ও গ্যাজেট পয়েন্ট', en: 'SMARTPHONE TECH LAB', col: '#38bdf8', bg: '#021526' },
+        ];
+        const np = neonPresets[Math.abs(Math.round(b.x * 3 + b.z * 7)) % neonPresets.length];
+        const neonTex = createNeonSignTexture(np.bn, np.en, np.col, np.bg);
+        const neonMat = new THREE.MeshBasicMaterial({ map: neonTex, side: THREE.DoubleSide });
+        const signMesh = new THREE.Mesh(this.boxCache(0.12, 2.4, 2.0), neonMat);
+        const sx = b.x + (b.x >= 0 ? -b.w / 2 - 1.05 : b.w / 2 + 1.05);
+        const sz = b.z + (b.z >= 0 ? b.d / 2 - 1.2 : -b.d / 2 + 1.2);
+        signMesh.position.set(sx, 5.8, sz);
+        this.scene.add(signMesh);
+
+        // Mounting steel bracket arm to facade
+        const bracketMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8, roughness: 0.3 });
+        const bracketArm = new THREE.Mesh(this.boxCache(2.1, 0.08, 0.08), bracketMat);
+        bracketArm.position.set(b.x + (b.x >= 0 ? -b.w / 2 - 1.0 : b.w / 2 + 1.0), 6.8, sz);
+        this.scene.add(bracketArm);
+      }
+
       this.buildingColliders.push({
         minX: b.x - b.w / 2 - 0.6,
         maxX: b.x + b.w / 2 + 0.6,
@@ -2844,7 +2939,7 @@ export class DhakaCityEngine {
     this.buildOldDhakaHeritageDistrict();
     this.buildPurbachalSmartCityAndExpressway();
 
-    // Realistic Multi-Tiered Tropical Dhaka Trees: Krishnachura (কৃষ্ণচূড়া) & Banyan (বটগাছ)
+    // Realistic Multi-Tiered Tropical Dhaka Trees: Krishnachura, Banyan, Radhachura & Coconut Palm
     const trunkMat = new THREE.MeshStandardMaterial({
       map: loadRealTexture('/textures/hardwood2_diffuse.jpg', 1, 3),
       color: '#38281d',
@@ -2880,20 +2975,63 @@ export class DhakaCityEngine {
       roughness: 0.85,
       flatShading: true,
     });
+    const radhachuraYellowMat = new THREE.MeshStandardMaterial({
+      color: '#eab308',
+      roughness: 0.82,
+      flatShading: true,
+    });
+    const radhachuraGreenMat = new THREE.MeshStandardMaterial({
+      color: '#22c55e',
+      roughness: 0.86,
+      flatShading: true,
+    });
+    const palmTrunkMat = new THREE.MeshStandardMaterial({
+      color: '#574636',
+      roughness: 0.95,
+      flatShading: true,
+    });
+    const palmFrondMat = new THREE.MeshStandardMaterial({
+      color: '#15803d',
+      roughness: 0.76,
+      side: THREE.DoubleSide,
+    });
+    const palmCrownMat = new THREE.MeshStandardMaterial({
+      color: '#166534',
+      roughness: 0.8,
+    });
+    const coconutMat = new THREE.MeshStandardMaterial({
+      color: '#713f12',
+      roughness: 0.88,
+    });
 
     const treeSpots = [
-      // Dhanmondi Lake & Park
+      // Dhanmondi Lake, Promenade & Park 32
       [-190, 10], [-190, 35], [-190, -15], [-152, 25], [-152, -10],
-      [-215, 60], [-200, -30], [-235, 15],
-      // Hatirjheel Promenade & Gulshan Greenery
+      [-215, 60], [-200, -30], [-235, 15], [-245, 45], [-175, 75],
+      [-225, -60], [-210, 95], [-180, -50], [-160, 45], [-250, -10],
+      // Hatirjheel Promenade & Waterfront
       [195, -25], [195, 15], [245, -25], [245, 15],
-      [205, 55], [235, -55], [185, -45],
+      [205, 55], [235, -55], [185, -45], [260, 35], [220, -75],
+      [175, 65], [270, -15], [255, 80], [210, 110], [180, -95],
       // Central Farmgate, Airport Road & Manik Mia Avenue
       [-15, -145], [15, -145], [-15, -205], [15, -205],
       [-15, -95], [15, -95], [-15, 95], [15, 95],
       [18, 22], [-22, 22], [22, -22], [-22, -22],
+      [-18, -45], [18, -45], [-18, 45], [18, 45],
+      [-25, -270], [25, -270], [-25, -340], [25, -340],
+      [-28, -420], [28, -420], [-28, -500], [28, -500],
       // Shahbagh, TSC & Curzon Hall Campus Greeneries
       [-35, 160], [35, 160], [-40, 210], [40, 210],
+      [-50, 260], [50, 260], [-30, 310], [30, 310],
+      // Gulshan Avenue & Banani Roadside
+      [130, -120], [175, -120], [130, -180], [175, -180],
+      [130, -260], [175, -260], [140, 160], [180, 160],
+      // Old Dhaka Bahadur Shah Park & Sadarghat Ghat Edge
+      [-45, 520], [45, 520], [-60, 580], [60, 580],
+      [-35, 640], [35, 640], [-80, 500], [80, 500],
+      // Mirpur & Purbachal Highway Medians
+      [-210, -320], [-250, -320], [-210, -400], [-250, -400],
+      [320, -220], [360, -220], [400, -220], [440, -220],
     ];
 
     treeSpots.forEach(([tx, tz], idx) => {
@@ -2906,125 +3044,223 @@ export class DhakaCityEngine {
       const tree = new THREE.Group();
       tree.position.set(tx, 0, tz);
 
-      // Flared natural tree trunk with organic taper
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.32, 0.58, 3.4, 10),
-        trunkMat
-      );
-      trunk.position.y = 1.7;
-      trunk.castShadow = true;
-      trunk.receiveShadow = true;
-      tree.add(trunk);
+      const treeVariety = idx % 4;
 
-      // 3 spreading structural boughs branching outward
-      [
-        { rotZ: 0.45, rotY: 0, y: 2.8, len: 1.8 },
-        { rotZ: -0.42, rotY: 2.1, y: 2.9, len: 1.7 },
-        { rotZ: 0.38, rotY: 4.2, y: 3.0, len: 1.9 },
-      ].forEach((b) => {
-        const bough = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.16, 0.28, b.len, 8),
+      if (treeVariety === 3) {
+        // TROPICAL COCONUT / ROYAL PALM (নারকেল গাছ / সুপারি গাছ)
+        const trunkSegs = 7;
+        let currY = 0;
+        let currX = 0;
+        const curveDir = (idx % 2 === 0 ? 1 : -1) * 0.08;
+        for (let s = 0; s < trunkSegs; s++) {
+          const segH = 1.05;
+          const rBottom = 0.3 - s * 0.015;
+          const rTop = 0.285 - s * 0.015;
+          const seg = new THREE.Mesh(
+            new THREE.CylinderGeometry(rTop, rBottom, segH, 8),
+            palmTrunkMat
+          );
+          seg.position.set(currX, currY + segH / 2, 0);
+          seg.rotation.z = curveDir * (s * 0.25);
+          seg.castShadow = true;
+          tree.add(seg);
+          currY += segH;
+          currX += Math.sin(curveDir * (s * 0.25)) * segH;
+        }
+
+        // Green crownshaft cylinder
+        const crownShaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.19, 0.75, 8),
+          palmCrownMat
+        );
+        crownShaft.position.set(currX, currY + 0.38, 0);
+        tree.add(crownShaft);
+
+        // Cluster of coconuts nestled below fronds
+        for (let c = 0; c < 5; c++) {
+          const cAngle = (c * Math.PI * 2) / 5;
+          const nut = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.2, 1),
+            coconutMat
+          );
+          nut.position.set(
+            currX + Math.cos(cAngle) * 0.28,
+            currY + 0.25,
+            Math.sin(cAngle) * 0.28
+          );
+          nut.castShadow = true;
+          tree.add(nut);
+        }
+
+        // Radiating ring of 10 arching drooping palm fronds
+        const canopyGroup = new THREE.Group();
+        canopyGroup.position.set(currX, currY + 0.72, 0);
+        for (let f = 0; f < 10; f++) {
+          const fAngle = (f * Math.PI * 2) / 10 + idx * 0.3;
+          const frondMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.65, 3.4),
+            palmFrondMat
+          );
+          frondMesh.rotation.x = 0.65;
+          frondMesh.rotation.y = fAngle;
+          frondMesh.position.set(
+            Math.cos(fAngle) * 1.35,
+            -0.35,
+            Math.sin(fAngle) * 1.35
+          );
+          frondMesh.castShadow = true;
+          canopyGroup.add(frondMesh);
+        }
+        tree.add(canopyGroup);
+        this.treeCanopies.push(canopyGroup);
+      } else {
+        // Standard hardwood trunk with natural taper & spreading boughs
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.32, 0.58, 3.4, 10),
           trunkMat
         );
-        bough.position.y = b.y;
-        bough.rotation.y = b.rotY;
-        bough.rotation.z = b.rotZ;
-        bough.castShadow = true;
-        tree.add(bough);
-      });
+        trunk.position.y = 1.7;
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
+        tree.add(trunk);
 
-      const isKrishnachura = idx % 2 === 0;
-
-      if (isKrishnachura) {
-        // TROPICAL KRISHNACHURA (Royal Poinciana): Spreading flat umbrella canopy with scarlet floral blossoms
-        const umbrella = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(2.8, 1),
-          krishnachuraGreenMat
-        );
-        umbrella.scale.set(1.45, 0.48, 1.45);
-        umbrella.position.set(0, 4.3, 0);
-        umbrella.castShadow = true;
-        umbrella.receiveShadow = true;
-        tree.add(umbrella);
-
-        // Side foliage lobes
+        // 3 spreading structural boughs branching outward
         [
-          [-1.5, 4.1, 0.6, 1.5],
-          [1.4, 4.2, -0.7, 1.55],
-          [0.2, 4.2, 1.4, 1.4],
-        ].forEach(([lx, ly, lz, rad]) => {
-          const lobe = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(rad, 1),
-            krishnachuraGreenMat
-          );
-          lobe.scale.set(1.2, 0.5, 1.2);
-          lobe.position.set(lx, ly, lz);
-          lobe.castShadow = true;
-          tree.add(lobe);
-        });
-
-        // Layer of delicate scarlet & orange floral blossom clusters across the top canopy surface
-        [
-          [0.3, 4.65, 0.4, 0.9, krishnachuraScarletMat],
-          [-1.2, 4.5, 0.5, 0.85, krishnachuraOrangeMat],
-          [1.1, 4.55, -0.6, 0.85, krishnachuraScarletMat],
-          [-0.3, 4.6, -1.1, 0.8, krishnachuraOrangeMat],
-        ].forEach(([fx, fy, fz, frad, fmat]) => {
-          const blossom = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(frad as number, 1),
-            fmat as THREE.Material
-          );
-          blossom.scale.set(1.15, 0.32, 1.15);
-          blossom.position.set(fx as number, fy as number, fz as number);
-          blossom.castShadow = true;
-          tree.add(blossom);
-        });
-      } else {
-        // MAJESTIC DHAKA BANYAN TREE (বটগাছ): Multi-tiered dense dome with aerial prop roots
-        // Tier 1 (Low dense canopy)
-        const tier1 = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(2.9, 1),
-          banyanBaseMat
-        );
-        tier1.scale.set(1.4, 0.52, 1.4);
-        tier1.position.set(0, 4.1, 0);
-        tier1.castShadow = true;
-        tier1.receiveShadow = true;
-        tree.add(tier1);
-
-        // Tier 2 (Mid canopy)
-        const tier2 = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(2.3, 1),
-          banyanMidMat
-        );
-        tier2.scale.set(1.2, 0.55, 1.2);
-        tier2.position.set(0.2, 5.1, -0.2);
-        tier2.castShadow = true;
-        tree.add(tier2);
-
-        // Tier 3 (Sun-kissed crown)
-        const tier3 = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(1.6, 1),
-          banyanSunMat
-        );
-        tier3.scale.set(1.0, 0.6, 1.0);
-        tier3.position.set(-0.1, 6.0, 0.1);
-        tier3.castShadow = true;
-        tree.add(tier3);
-
-        // Hanging aerial prop roots
-        [
-          [-1.2, 0.8],
-          [1.3, -0.6],
-          [-0.4, -1.3],
-        ].forEach(([rx, rz]) => {
-          const propRoot = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.04, 0.04, 3.0, 6),
+          { rotZ: 0.45, rotY: 0, y: 2.8, len: 1.8 },
+          { rotZ: -0.42, rotY: 2.1, y: 2.9, len: 1.7 },
+          { rotZ: 0.38, rotY: 4.2, y: 3.0, len: 1.9 },
+        ].forEach((b) => {
+          const bough = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.16, 0.28, b.len, 8),
             trunkMat
           );
-          propRoot.position.set(rx, 2.2, rz);
-          tree.add(propRoot);
+          bough.position.y = b.y;
+          bough.rotation.y = b.rotY;
+          bough.rotation.z = b.rotZ;
+          bough.castShadow = true;
+          tree.add(bough);
         });
+
+        const canopyGroup = new THREE.Group();
+
+        if (treeVariety === 0) {
+          // TROPICAL KRISHNACHURA (Royal Poinciana): Spreading flat umbrella canopy with scarlet floral blossoms
+          const umbrella = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(2.8, 1),
+            krishnachuraGreenMat
+          );
+          umbrella.scale.set(1.45, 0.48, 1.45);
+          umbrella.position.set(0, 4.3, 0);
+          umbrella.castShadow = true;
+          umbrella.receiveShadow = true;
+          canopyGroup.add(umbrella);
+
+          // Side foliage lobes
+          [
+            [-1.5, 4.1, 0.6, 1.5],
+            [1.4, 4.2, -0.7, 1.55],
+            [0.2, 4.2, 1.4, 1.4],
+          ].forEach(([lx, ly, lz, rad]) => {
+            const lobe = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(rad, 1),
+              krishnachuraGreenMat
+            );
+            lobe.scale.set(1.2, 0.5, 1.2);
+            lobe.position.set(lx, ly, lz);
+            lobe.castShadow = true;
+            canopyGroup.add(lobe);
+          });
+
+          // Layer of delicate scarlet & orange floral blossom clusters across the top canopy surface
+          [
+            [0.3, 4.65, 0.4, 0.9, krishnachuraScarletMat],
+            [-1.2, 4.5, 0.5, 0.85, krishnachuraOrangeMat],
+            [1.1, 4.55, -0.6, 0.85, krishnachuraScarletMat],
+            [-0.3, 4.6, -1.1, 0.8, krishnachuraOrangeMat],
+          ].forEach(([fx, fy, fz, frad, fmat]) => {
+            const blossom = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(frad as number, 1),
+              fmat as THREE.Material
+            );
+            blossom.scale.set(1.15, 0.32, 1.15);
+            blossom.position.set(fx as number, fy as number, fz as number);
+            blossom.castShadow = true;
+            canopyGroup.add(blossom);
+          });
+        } else if (treeVariety === 2) {
+          // RADHACHURA (Golden Yellow Poinciana): Golden yellow blossoms & lush green foliage
+          const umbrella = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(2.7, 1),
+            radhachuraGreenMat
+          );
+          umbrella.scale.set(1.4, 0.5, 1.4);
+          umbrella.position.set(0, 4.3, 0);
+          umbrella.castShadow = true;
+          canopyGroup.add(umbrella);
+
+          // Bright golden yellow flower clusters
+          [
+            [0.2, 4.6, 0.3, 0.95],
+            [-1.1, 4.45, 0.4, 0.85],
+            [1.0, 4.5, -0.5, 0.85],
+            [-0.2, 4.55, -1.0, 0.8],
+          ].forEach(([fx, fy, fz, frad]) => {
+            const blossom = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(frad, 1),
+              radhachuraYellowMat
+            );
+            blossom.scale.set(1.15, 0.34, 1.15);
+            blossom.position.set(fx, fy, fz);
+            blossom.castShadow = true;
+            canopyGroup.add(blossom);
+          });
+        } else {
+          // MAJESTIC DHAKA BANYAN TREE (বটগাছ): Multi-tiered dense dome with aerial prop roots
+          const tier1 = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(2.9, 1),
+            banyanBaseMat
+          );
+          tier1.scale.set(1.4, 0.52, 1.4);
+          tier1.position.set(0, 4.1, 0);
+          tier1.castShadow = true;
+          tier1.receiveShadow = true;
+          canopyGroup.add(tier1);
+
+          const tier2 = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(2.3, 1),
+            banyanMidMat
+          );
+          tier2.scale.set(1.2, 0.55, 1.2);
+          tier2.position.set(0.2, 5.1, -0.2);
+          tier2.castShadow = true;
+          canopyGroup.add(tier2);
+
+          const tier3 = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(1.6, 1),
+            banyanSunMat
+          );
+          tier3.scale.set(1.0, 0.6, 1.0);
+          tier3.position.set(-0.1, 6.0, 0.1);
+          tier3.castShadow = true;
+          canopyGroup.add(tier3);
+
+          // Hanging aerial prop roots
+          [
+            [-1.2, 0.8],
+            [1.3, -0.6],
+            [-0.4, -1.3],
+          ].forEach(([rx, rz]) => {
+            const propRoot = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.04, 0.04, 3.0, 6),
+              trunkMat
+            );
+            propRoot.position.set(rx, 2.2, rz);
+            tree.add(propRoot);
+          });
+        }
+
+        tree.add(canopyGroup);
+        this.treeCanopies.push(canopyGroup);
       }
 
       this.scene.add(tree);
@@ -3855,14 +4091,14 @@ export class DhakaCityEngine {
       tag: 'flyover_barrier',
     });
 
-    // Middle Segment: Z: -40 to 40 (between on-ramp merge and off-ramp diverge)
-    const eastBarrierM = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
+    // Middle Segment: Z: -15 to 15 (between on-ramp merge taper and off-ramp diverge taper)
+    const eastBarrierM = this.sharedBox(0.45, 1.25, 30, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
     this.scene.add(eastBarrierM);
     this.buildingColliders.push({
       minX: 20.6,
       maxX: 21.25,
-      minZ: -40,
-      maxZ: 40,
+      minZ: -15,
+      maxZ: 15,
       minY: 7.5,
       maxY: 11.5,
       tag: 'flyover_barrier',
@@ -7909,7 +8145,11 @@ export class DhakaCityEngine {
     if (store.switchCharacterRequest) {
       const charId = store.switchCharacterRequest;
       store.clearEngineRequests();
+      this.lastSelectedCharacterId = charId;
       this.switchPlayerCharacter(charId);
+    } else if (store.selectedCharacterId && store.selectedCharacterId !== this.lastSelectedCharacterId) {
+      this.lastSelectedCharacterId = store.selectedCharacterId;
+      this.switchPlayerCharacter(store.selectedCharacterId);
     }
     if (store.teleportRequest) {
       const { x, z } = store.teleportRequest;
@@ -8014,6 +8254,16 @@ export class DhakaCityEngine {
       setCharacterAnimationState(this.playerLimbs, 'idle', dt, 0, false, 1.0, wCat);
       this.playerLimbs.group.position.copy(this.playerPos);
       this.playerLimbs.group.rotation.y = this.playerRotation;
+    }
+
+    // Gentle natural wind sway for Dhaka tree foliage canopies
+    if (this.treeCanopies.length > 0) {
+      const windTime = this.clock.getElapsedTime();
+      for (let i = 0; i < this.treeCanopies.length; i++) {
+        const phase = i * 0.42;
+        this.treeCanopies[i].rotation.x = Math.sin(windTime * 1.5 + phase) * 0.024;
+        this.treeCanopies[i].rotation.z = Math.cos(windTime * 1.2 + phase) * 0.020;
+      }
     }
 
     this.updateCamera(dt, store.cameraMode);
@@ -8668,6 +8918,16 @@ export class DhakaCityEngine {
       sMat.visible = sMat.opacity > 0.01;
     }
 
+    // Dynamic night window illumination on commercial towers & glass skyscrapers
+    const nightWindowGlow = isNight ? 1.55 : isGolden ? 0.65 : 0.0;
+    for (let i = 0; i < this.buildingEmissiveMats.length; i++) {
+      this.buildingEmissiveMats[i].emissiveIntensity = THREE.MathUtils.lerp(
+        this.buildingEmissiveMats[i].emissiveIntensity,
+        nightWindowGlow,
+        dt * 2.8
+      );
+    }
+
     // Lift the shadow floor at night so wet asphalt keeps some detail instead
     // of crushing to pure black under ACES tone mapping.
     const targetExposure = isNight ? 1.38 : isGolden ? 1.24 : 1.18;
@@ -8808,8 +9068,8 @@ export class DhakaCityEngine {
     const playerY = this.playerPos.y;
     const pRad = 0.52;
     for (const b of this.buildingColliders) {
-      if (b.minY !== undefined && playerY < b.minY) continue;
-      if (b.maxY !== undefined && playerY > b.maxY) continue;
+      if (b.minY !== undefined && playerY < b.minY - 0.6) continue;
+      if (b.maxY !== undefined && playerY > b.maxY + 0.6) continue;
 
       const clampedX = Math.max(b.minX, Math.min(this.playerPos.x, b.maxX));
       const clampedZ = Math.max(b.minZ, Math.min(this.playerPos.z, b.maxZ));
@@ -8818,34 +9078,70 @@ export class DhakaCityEngine {
       const distSq = dx * dx + dz * dz;
 
       if (distSq < pRad * pRad) {
+        const thicknessX = b.maxX - b.minX;
+        const lengthZ = b.maxZ - b.minZ;
+        const isThinX = thicknessX <= lengthZ;
+
         if (b.tag === 'flyover_barrier') {
-          // For flyovers and elevated ramps, resolve strictly towards the valid road surface!
-          const elevEast = this.getRoadElevation(b.maxX + 0.6, this.playerPos.z, playerY);
-          const elevWest = this.getRoadElevation(b.minX - 0.6, this.playerPos.z, playerY);
-          if (elevEast > 2.0 && elevWest < 1.0) {
-            // Road deck is strictly to the EAST (X > b.maxX)
-            this.playerPos.x = b.maxX + pRad + 0.05;
-            continue;
-          } else if (elevWest > 2.0 && elevEast < 1.0) {
-            // Road deck is strictly to the WEST (X < b.minX)
-            this.playerPos.x = b.minX - (pRad + 0.05);
+          // For flyovers and elevated ramps, resolve strictly towards the valid road surface along the thin axis!
+          if (isThinX) {
+            const elevEast = this.getRoadElevation(b.maxX + 0.8, this.playerPos.z, playerY);
+            const elevWest = this.getRoadElevation(b.minX - 0.8, this.playerPos.z, playerY);
+            if (playerY > 2.0) {
+              if (elevEast > 2.0 && elevWest < 1.0) {
+                this.playerPos.x = b.maxX + pRad + 0.08;
+                continue;
+              } else if (elevWest > 2.0 && elevEast < 1.0) {
+                this.playerPos.x = b.minX - (pRad + 0.08);
+                continue;
+              }
+            }
+            // Thin wall along Z: push out along X to the closer edge
+            const dWest = Math.abs(this.playerPos.x - b.minX);
+            const dEast = Math.abs(this.playerPos.x - b.maxX);
+            if (dWest <= dEast) {
+              this.playerPos.x = b.minX - (pRad + 0.08);
+            } else {
+              this.playerPos.x = b.maxX + pRad + 0.08;
+            }
             continue;
           } else {
-            const elevNorth = this.getRoadElevation(this.playerPos.x, b.minZ - 0.6, playerY);
-            const elevSouth = this.getRoadElevation(this.playerPos.x, b.maxZ + 0.6, playerY);
-            if (elevSouth > 2.0 && elevNorth < 1.0) {
-              this.playerPos.z = b.maxZ + pRad + 0.05;
-              continue;
-            } else if (elevNorth > 2.0 && elevSouth < 1.0) {
-              this.playerPos.z = b.minZ - (pRad + 0.05);
-              continue;
+            const elevSouth = this.getRoadElevation(this.playerPos.x, b.maxZ + 0.8, playerY);
+            const elevNorth = this.getRoadElevation(this.playerPos.x, b.minZ - 0.8, playerY);
+            if (playerY > 2.0) {
+              if (elevSouth > 2.0 && elevNorth < 1.0) {
+                this.playerPos.z = b.maxZ + pRad + 0.08;
+                continue;
+              } else if (elevNorth > 2.0 && elevSouth < 1.0) {
+                this.playerPos.z = b.minZ - (pRad + 0.08);
+                continue;
+              }
             }
+            // Thin wall along X: push out along Z to the closer edge
+            const dNorth = Math.abs(this.playerPos.z - b.minZ);
+            const dSouth = Math.abs(this.playerPos.z - b.maxZ);
+            if (dNorth <= dSouth) {
+              this.playerPos.z = b.minZ - (pRad + 0.08);
+            } else {
+              this.playerPos.z = b.maxZ + pRad + 0.08;
+            }
+            continue;
           }
+        } else if (b.tag === 'road_median') {
+          // Road medians are thin dividers along Z: push out strictly in X
+          const dWest = Math.abs(this.playerPos.x - b.minX);
+          const dEast = Math.abs(this.playerPos.x - b.maxX);
+          if (dWest <= dEast) {
+            this.playerPos.x = b.minX - (pRad + 0.06);
+          } else {
+            this.playerPos.x = b.maxX + (pRad + 0.06);
+          }
+          continue;
         }
 
         if (distSq > 0.0001) {
           const dist = Math.sqrt(distSq);
-          const push = pRad - dist + 0.04;
+          const push = pRad - dist + 0.06;
           this.playerPos.x += (dx / dist) * push;
           this.playerPos.z += (dz / dist) * push;
         } else {
@@ -8855,10 +9151,10 @@ export class DhakaCityEngine {
           const dMinZ = this.playerPos.z - b.minZ;
           const dMaxZ = b.maxZ - this.playerPos.z;
           const minPen = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-          if (minPen === dMinX) this.playerPos.x = b.minX - (pRad + 0.04);
-          else if (minPen === dMaxX) this.playerPos.x = b.maxX + (pRad + 0.04);
-          else if (minPen === dMinZ) this.playerPos.z = b.minZ - (pRad + 0.04);
-          else this.playerPos.z = b.maxZ + (pRad + 0.04);
+          if (minPen === dMinX) this.playerPos.x = b.minX - (pRad + 0.06);
+          else if (minPen === dMaxX) this.playerPos.x = b.maxX + (pRad + 0.06);
+          else if (minPen === dMinZ) this.playerPos.z = b.minZ - (pRad + 0.06);
+          else this.playerPos.z = b.maxZ + (pRad + 0.06);
         }
       }
     }
@@ -9199,11 +9495,19 @@ export class DhakaCityEngine {
       if (!mesh.userData) mesh.userData = {};
       mesh.userData.noDriver = true;
 
-      // Purge any lingering or late-loaded npc_driver from this player-driven vehicle
-      for (let i = mesh.children.length - 1; i >= 0; i--) {
-        const c = mesh.children[i];
+      // Purge any lingering or late-loaded npc_driver from this player-driven vehicle (search descendants)
+      mesh.traverse((c) => {
+        let isPlayerPart = c === this.playerLimbs.group;
+        let p: THREE.Object3D | null = c.parent;
+        while (p) {
+          if (p === this.playerLimbs.group) {
+            isPlayerPart = true;
+            break;
+          }
+          p = p.parent;
+        }
         if (
-          c !== this.playerLimbs.group &&
+          !isPlayerPart &&
           c.name &&
           (c.name === 'npc_driver' ||
             c.name.startsWith('npc_driver') ||
@@ -9212,9 +9516,9 @@ export class DhakaCityEngine {
             c.name.includes('rider'))
         ) {
           c.visible = false;
-          mesh.remove(c);
+          if (c.parent) c.parent.remove(c);
         }
-      }
+      });
 
       mesh.position.set(veh.x, elev, veh.z);
       mesh.rotation.y = veh.rotation;
@@ -9277,9 +9581,9 @@ export class DhakaCityEngine {
         this.playerLimbs.group.rotation.set(0, 0, 0);
         this.playerLimbs.group.scale.set(0.74, 0.74, 0.74);
       } else if (veh.type === 'car' || veh.type === 'police') {
-        this.playerLimbs.group.position.set(-0.36, -0.48, -0.05);
+        this.playerLimbs.group.position.set(-0.36, -0.68, -0.05);
         this.playerLimbs.group.rotation.set(0, 0, 0);
-        this.playerLimbs.group.scale.set(0.50, 0.50, 0.50);
+        this.playerLimbs.group.scale.set(0.44, 0.44, 0.44);
       } else if (veh.type === 'pickup') {
         this.playerLimbs.group.position.set(-0.38, 0.18, 0.35);
         this.playerLimbs.group.rotation.set(0, 0, 0);

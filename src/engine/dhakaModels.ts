@@ -6,8 +6,10 @@ import { NPCRole, ToolWeaponId, VehicleType } from '../types/game';
 import {
   createBanglaNumberPlateTexture,
   createBanglaSignTexture,
+  createBrtcSideDecalTexture,
   createCngBodyTexture,
   createLungiPatternTexture,
+  createNeonSignTexture,
   createRickshawArtTexture,
   loadRealTexture,
 } from './dhakaTextures';
@@ -1461,6 +1463,18 @@ export function createVehicleMesh(
     waistline.castShadow = true;
     group.add(waistline);
 
+    // High-resolution authentic BRTC coachwork banner decals on both sides
+    const brtcDecalTex = createBrtcSideDecalTexture(seed);
+    [-1.32, 1.32].forEach((sx) => {
+      const decalMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.5, 0.44),
+        new THREE.MeshBasicMaterial({ map: brtcDecalTex, side: THREE.DoubleSide })
+      );
+      decalMesh.position.set(sx, 1.38, 0);
+      decalMesh.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      group.add(decalMesh);
+    });
+
     // Continuous curved roof slab with rounded crown
     const roof = new THREE.Mesh(
       new THREE.BoxGeometry(2.64, 0.32, 8.9),
@@ -1580,10 +1594,11 @@ export function createVehicleMesh(
       group.add(ind);
     });
 
-    // 8. Illuminated Destination Board (ফার্মগেট - শাহবাগ - মতিঝিল - উত্তরা)
+    // 8. Illuminated Digital Destination Board (ফার্মগেট ⇄ মতিঝিল)
+    const ledSignTex = createNeonSignTexture('ফার্মগেট ⇄ মতিঝিল', 'BRTC AC COMMUTER', '#facc15', '#05070a');
     const routeSign = new THREE.Mesh(
       new THREE.BoxGeometry(2.15, 0.42, 0.1),
-      new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(seed + 2) })
+      new THREE.MeshBasicMaterial({ map: ledSignTex })
     );
     routeSign.position.set(0, 2.92, 4.42);
     group.add(routeSign);
@@ -1671,11 +1686,13 @@ export function createVehicleMesh(
     busPlateRear.rotation.y = Math.PI;
     group.add(busPlateRear);
 
-    // Heavy-duty bus wheels situated properly in the recessed wheel arches
+    // Heavy-duty commercial bus wheels with dual rear wheels on both sides (Tata / Ashok Leyland layout)
     addWheel(-1.32, 0.48, 2.65, 1.45);
     addWheel(1.32, 0.48, 2.65, 1.45);
-    addWheel(-1.32, 0.48, -2.55, 1.45);
-    addWheel(1.32, 0.48, -2.55, 1.45);
+    addWheel(-1.18, 0.48, -2.55, 1.45);
+    addWheel(-1.42, 0.48, -2.55, 1.45);
+    addWheel(1.18, 0.48, -2.55, 1.45);
+    addWheel(1.42, 0.48, -2.55, 1.45);
 
     // Bus driver seated in the elevated front driver cabin (traffic only)
     if (hasDriver) {
@@ -2876,20 +2893,41 @@ export function createCharacterMesh(
         gltf.animations &&
         gltf.animations.length > 0
       ) {
+        // Strip mixamorig: prefix on all node names so Three.js PropertyBinding matches tracks
+        clonedScene.traverse((o) => {
+          if (o.name.startsWith('mixamorig')) {
+            o.name = o.name.replace(/^mixamorig[:_]?/, '');
+          }
+        });
+
+        const normalizeClip = (clip: THREE.AnimationClip) => {
+          const c = clip.clone();
+          c.tracks = c.tracks.map((t) => {
+            const track = t.clone();
+            track.name = track.name.replace(/^mixamorig[:_]?/, '');
+            return track;
+          });
+          return c;
+        };
+
         const mixer = new THREE.AnimationMixer(clonedScene);
-        const idleClip =
+        const rawIdle =
           THREE.AnimationClip.findByName(gltf.animations, 'Idle') ||
           THREE.AnimationClip.findByName(gltf.animations, 'idle') ||
           gltf.animations[0];
-        const walkClip =
+        const rawWalk =
           THREE.AnimationClip.findByName(gltf.animations, 'Walk') ||
           THREE.AnimationClip.findByName(gltf.animations, 'Walking') ||
           THREE.AnimationClip.findByName(gltf.animations, 'walk') ||
-          idleClip;
-        const runClip =
+          rawIdle;
+        const rawRun =
           THREE.AnimationClip.findByName(gltf.animations, 'Run') ||
           THREE.AnimationClip.findByName(gltf.animations, 'run') ||
-          walkClip;
+          rawWalk;
+
+        const idleClip = normalizeClip(rawIdle);
+        const walkClip = normalizeClip(rawWalk);
+        const runClip = normalizeClip(rawRun);
 
         const actions: CharacterLimbs['actions'] = {};
         if (idleClip) {
@@ -2905,35 +2943,19 @@ export function createCharacterMesh(
 
         // Driving and resting rig for Soldier so driving postures & relaxed arms never T-pose
         const soldierRig: RpmBoneRig = { phase: 0 };
-        const relaxedLeftArmQuat = new THREE.Quaternion(
-          0.476682,
-          0.0426,
-          -0.058619,
-          0.876084
-        );
-        const relaxedRightArmQuat = new THREE.Quaternion(
-          0.47668,
-          -0.042601,
-          0.058619,
-          0.876085
-        );
         clonedScene.traverse((node) => {
-          const n = node.name.replace(/^mixamorig[:_]?/, '');
-          if (n === 'LeftUpLeg') soldierRig.leftUpLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'RightUpLeg') soldierRig.rightUpLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'LeftLeg') soldierRig.leftLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'RightLeg') soldierRig.rightLeg = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'LeftFoot') soldierRig.leftFoot = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'RightFoot') soldierRig.rightFoot = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'LeftArm') {
-            node.quaternion.copy(relaxedLeftArmQuat);
-            soldierRig.leftArm = { bone: node, rest: node.quaternion.clone() };
-          } else if (n === 'RightArm') {
-            node.quaternion.copy(relaxedRightArmQuat);
-            soldierRig.rightArm = { bone: node, rest: node.quaternion.clone() };
-          } else if (n === 'LeftForeArm') soldierRig.leftForeArm = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'RightForeArm') soldierRig.rightForeArm = { bone: node, rest: node.quaternion.clone() };
-          else if (n === 'Spine') soldierRig.spine = { bone: node, rest: node.quaternion.clone() };
+          const n = node.name;
+          if (n === 'LeftUpLeg') soldierRig.leftUpLeg = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'RightUpLeg') soldierRig.rightUpLeg = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'LeftLeg') soldierRig.leftLeg = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'RightLeg') soldierRig.rightLeg = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'LeftFoot') soldierRig.leftFoot = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'RightFoot') soldierRig.rightFoot = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'LeftArm') soldierRig.leftArm = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'RightArm') soldierRig.rightArm = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'LeftForeArm') soldierRig.leftForeArm = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'RightForeArm') soldierRig.rightForeArm = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
+          else if (n === 'Spine') soldierRig.spine = { bone: node as THREE.Bone, rest: node.quaternion.clone() };
         });
         limbs.driveRig = soldierRig;
       } else {
