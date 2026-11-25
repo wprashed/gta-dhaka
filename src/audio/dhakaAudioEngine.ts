@@ -34,8 +34,13 @@ class DhakaAudioEngine {
   private rainGain: GainNode | null = null;
   private isRaining = false;
 
-  // Dhaka City Traffic Ambience (BGM)
+  // Dhaka City Traffic Ambience (BGM) & Pedestrian Crowd Chatter
   private trafficGain: GainNode | null = null;
+  private crowdGain: GainNode | null = null;
+  private trafficLoopSource: AudioBufferSourceNode | null = null;
+  private crowdLoopSource: AudioBufferSourceNode | null = null;
+  private currentCrowdDensity = 0.35;
+  private lastCalloutTime = 0;
   private trafficHornInterval: number | null = null;
 
   // Radio sequencer
@@ -90,6 +95,14 @@ class DhakaAudioEngine {
       '/audio/horn_bus_air.wav',
       '/audio/horn_car.wav',
       '/audio/horn_siren.wav',
+      '/audio/dhaka_traffic_bg.wav',
+      '/audio/dhaka_crowd_chatter.wav',
+      '/audio/voice_cha_vendor.wav',
+      '/audio/voice_bus_conductor.wav',
+      '/audio/voice_rickshaw_puller.wav',
+      '/audio/voice_pedestrian_1.wav',
+      '/audio/voice_pedestrian_2.wav',
+      '/audio/voice_pedestrian_3.wav',
     ];
     assets.forEach((path) => this.preloadAudio(path));
   }
@@ -220,41 +233,123 @@ class DhakaAudioEngine {
 
   private setupTrafficAmbience() {
     if (!this.ctx) return;
-    // Generate filtered urban rumble noise (muffled traffic, rolling tires, city presence)
-    const bufferSize = this.ctx.sampleRate * 3;
-    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    let lastOut = 0.0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      output[i] = (lastOut + 0.025 * white) / 1.025;
-      lastOut = output[i];
-    }
 
-    const trafficNoise = this.ctx.createBufferSource();
-    trafficNoise.buffer = noiseBuffer;
-    trafficNoise.loop = true;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 220;
-
+    // Master gains for traffic drone and crowd street chatter
     this.trafficGain = this.ctx.createGain();
-    this.trafficGain.gain.value = 0.16 * this.ambienceVolume;
-
-    trafficNoise.connect(filter);
-    filter.connect(this.trafficGain);
+    this.trafficGain.gain.value = 0.22 * this.ambienceVolume;
     this.trafficGain.connect(this.ctx.destination);
-    trafficNoise.start();
 
-    // Periodic distant Dhaka traffic echoes (random bus airhorn or rickshaw chime echoing in background)
+    this.crowdGain = this.ctx.createGain();
+    this.crowdGain.gain.value = this.currentCrowdDensity * 0.18 * this.ambienceVolume;
+    this.crowdGain.connect(this.ctx.destination);
+
+    // 1. Play real Dhaka Traffic Ambience AudioBuffer loop
+    this.startTrafficBufferLoop();
+
+    // 2. Play real Dhaka Pedestrian Crowd / Market Chatter AudioBuffer loop
+    this.startCrowdBufferLoop();
+
+    // 3. Periodic distant Dhaka traffic echoes (random bus airhorn or rickshaw chime echoing in background)
     if (this.trafficHornInterval) window.clearInterval(this.trafficHornInterval);
     this.trafficHornInterval = window.setInterval(() => {
       if (!this.ctx || this.trafficGain?.gain.value === 0) return;
-      if (Math.random() < 0.65) {
+      if (Math.random() < 0.60) {
         this.playDistantTrafficChirp();
       }
-    }, 5500);
+    }, 6000);
+  }
+
+  private startTrafficBufferLoop() {
+    if (!this.ctx || !this.trafficGain) return;
+    const url = '/audio/dhaka_traffic_bg.wav';
+    const buf = this.bufferCache.get(url);
+    if (buf) {
+      if (this.trafficLoopSource) {
+        try { this.trafficLoopSource.stop(); } catch {}
+      }
+      this.trafficLoopSource = this.ctx.createBufferSource();
+      this.trafficLoopSource.buffer = buf;
+      this.trafficLoopSource.loop = true;
+      this.trafficLoopSource.connect(this.trafficGain);
+      this.trafficLoopSource.start();
+    } else {
+      // Start fallback noise until real audio buffer decodes
+      const bufferSize = this.ctx.sampleRate * 3;
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      let lastOut = 0.0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        output[i] = (lastOut + 0.025 * white) / 1.025;
+        lastOut = output[i];
+      }
+      const trafficNoise = this.ctx.createBufferSource();
+      trafficNoise.buffer = noiseBuffer;
+      trafficNoise.loop = true;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 220;
+      trafficNoise.connect(filter);
+      filter.connect(this.trafficGain);
+      trafficNoise.start();
+
+      const checkInterval = window.setInterval(() => {
+        if (this.bufferCache.has(url)) {
+          window.clearInterval(checkInterval);
+          try { trafficNoise.stop(); } catch {}
+          this.startTrafficBufferLoop();
+        }
+      }, 800);
+    }
+  }
+
+  private startCrowdBufferLoop() {
+    if (!this.ctx || !this.crowdGain) return;
+    const url = '/audio/dhaka_crowd_chatter.wav';
+    const buf = this.bufferCache.get(url);
+    if (buf) {
+      if (this.crowdLoopSource) {
+        try { this.crowdLoopSource.stop(); } catch {}
+      }
+      this.crowdLoopSource = this.ctx.createBufferSource();
+      this.crowdLoopSource.buffer = buf;
+      this.crowdLoopSource.loop = true;
+      this.crowdLoopSource.connect(this.crowdGain);
+      this.crowdLoopSource.start();
+    } else {
+      const checkInterval = window.setInterval(() => {
+        if (this.bufferCache.has(url)) {
+          window.clearInterval(checkInterval);
+          this.startCrowdBufferLoop();
+        }
+      }, 800);
+    }
+  }
+
+  public setCrowdDensity(density: number) {
+    this.currentCrowdDensity = Math.max(0, Math.min(1.0, density));
+    if (this.ctx && this.crowdGain) {
+      const targetGain = this.currentCrowdDensity * 0.22 * this.ambienceVolume;
+      this.crowdGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.35);
+    }
+  }
+
+  public playStreetCallout(type?: 'vendor' | 'conductor' | 'rickshaw' | 'pedestrian') {
+    if (!this.ctx || this.sfxVolume === 0) return;
+    const now = performance.now();
+    if (now - this.lastCalloutTime < 4500) return;
+    this.lastCalloutTime = now;
+
+    let path = '/audio/voice_pedestrian_1.wav';
+    if (type === 'vendor') path = '/audio/voice_cha_vendor.wav';
+    else if (type === 'conductor') path = '/audio/voice_bus_conductor.wav';
+    else if (type === 'rickshaw') path = '/audio/voice_rickshaw_puller.wav';
+    else {
+      const pIdx = Math.floor(Math.random() * 3) + 1;
+      path = `/audio/voice_pedestrian_${pIdx}.wav`;
+    }
+
+    this.playBufferOneShot(path, 0.50 * this.sfxVolume, 0.05);
   }
 
   private playDistantTrafficChirp() {
@@ -1097,12 +1192,21 @@ class DhakaAudioEngine {
     this.sfxVolume = sfx;
     this.ambienceVolume = ambience;
     this.setRainActive(this.isRaining);
-    if (this.ctx && this.trafficGain) {
-      this.trafficGain.gain.setTargetAtTime(
-        0.16 * this.ambienceVolume,
-        this.ctx.currentTime,
-        0.2
-      );
+    if (this.ctx) {
+      if (this.trafficGain) {
+        this.trafficGain.gain.setTargetAtTime(
+          0.22 * this.ambienceVolume,
+          this.ctx.currentTime,
+          0.2
+        );
+      }
+      if (this.crowdGain) {
+        this.crowdGain.gain.setTargetAtTime(
+          this.currentCrowdDensity * 0.18 * this.ambienceVolume,
+          this.ctx.currentTime,
+          0.2
+        );
+      }
     }
   }
 }

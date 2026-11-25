@@ -157,6 +157,7 @@ export class DhakaCityEngine {
   private policeSpawnTimer = 0;
   private policeSirenTimer = 0;
   private tireSmokeTimer = 0;
+  private streetChatterTimer = 0;
 
   // Cached Colors for Zero-GC Day/Night Transitions
   private static readonly SKY_DAY = new THREE.Color('#38bdf8');
@@ -8817,6 +8818,31 @@ export class DhakaCityEngine {
       const distSq = dx * dx + dz * dz;
 
       if (distSq < pRad * pRad) {
+        if (b.tag === 'flyover_barrier') {
+          // For flyovers and elevated ramps, resolve strictly towards the valid road surface!
+          const elevEast = this.getRoadElevation(b.maxX + 0.6, this.playerPos.z, playerY);
+          const elevWest = this.getRoadElevation(b.minX - 0.6, this.playerPos.z, playerY);
+          if (elevEast > 2.0 && elevWest < 1.0) {
+            // Road deck is strictly to the EAST (X > b.maxX)
+            this.playerPos.x = b.maxX + pRad + 0.05;
+            continue;
+          } else if (elevWest > 2.0 && elevEast < 1.0) {
+            // Road deck is strictly to the WEST (X < b.minX)
+            this.playerPos.x = b.minX - (pRad + 0.05);
+            continue;
+          } else {
+            const elevNorth = this.getRoadElevation(this.playerPos.x, b.minZ - 0.6, playerY);
+            const elevSouth = this.getRoadElevation(this.playerPos.x, b.maxZ + 0.6, playerY);
+            if (elevSouth > 2.0 && elevNorth < 1.0) {
+              this.playerPos.z = b.maxZ + pRad + 0.05;
+              continue;
+            } else if (elevNorth > 2.0 && elevSouth < 1.0) {
+              this.playerPos.z = b.minZ - (pRad + 0.05);
+              continue;
+            }
+          }
+        }
+
         if (distSq > 0.0001) {
           const dist = Math.sqrt(distSq);
           const push = pRad - dist + 0.04;
@@ -9805,13 +9831,42 @@ export class DhakaCityEngine {
         npc.rotation = Math.atan2(dx, dz);
         const nx = npc.x + Math.sin(npc.rotation) * speed * dt;
         const nz = npc.z + Math.cos(npc.rotation) * speed * dt;
-        if (!this.checkBuildingCollision(nx, nz, 0.45)) {
+
+        // Check vehicle obstacle clearance (prevent walking through cars, buses, police cruisers)
+        let blockedByVehicle = false;
+        for (const veh of this.vehicles) {
+          const vDist = Math.hypot(nx - veh.x, nz - veh.z);
+          const vStats = VEHICLE_STATS[veh.type];
+          const clearance = Math.max(vStats.width, vStats.length) * 0.48 + 0.6;
+          if (vDist < clearance) {
+            blockedByVehicle = true;
+            const detourAngle = Math.atan2(nx - veh.x, nz - veh.z);
+            npc.walkTargetX = npc.x + Math.sin(detourAngle) * 8;
+            npc.walkTargetZ = npc.z + Math.cos(detourAngle) * 8;
+            break;
+          }
+        }
+
+        if (!blockedByVehicle && !this.checkBuildingCollision(nx, nz, 0.45)) {
           npc.x = nx;
           npc.z = nz;
         } else {
           // Divert around buildings, flyover pillars & obstacles
           npc.walkTargetX = npc.x + (Math.random() - 0.5) * 16;
           npc.walkTargetZ = -npc.walkTargetZ;
+        }
+      }
+
+      // Keep pedestrians outside vehicle bounding boxes so nobody clips through car bodies or roofs
+      for (const veh of this.vehicles) {
+        const vDist = Math.hypot(npc.x - veh.x, npc.z - veh.z);
+        const vStats = VEHICLE_STATS[veh.type];
+        const minRadius = Math.max(vStats.width, vStats.length) * 0.48 + 0.45;
+        if (vDist < minRadius && vDist > 0.001) {
+          const pushAngle = Math.atan2(npc.x - veh.x, npc.z - veh.z);
+          const pushDist = minRadius - vDist + 0.08;
+          npc.x += Math.sin(pushAngle) * pushDist;
+          npc.z += Math.cos(pushAngle) * pushDist;
         }
       }
 
@@ -9823,6 +9878,32 @@ export class DhakaCityEngine {
 
       limbs.group.position.set(npc.x, 0, npc.z);
       limbs.group.rotation.y = npc.rotation;
+    }
+
+    // Modulate crowd murmur & people talking density based on nearby pedestrians
+    let nearbyPedCount = 0;
+    let closestPedDist = 999;
+    for (const npc of this.npcs) {
+      if (npc.isDead) continue;
+      const d = Math.hypot(npc.x - this.playerPos.x, npc.z - this.playerPos.z);
+      if (d < 30) nearbyPedCount++;
+      if (d < closestPedDist) closestPedDist = d;
+    }
+
+    const crowdDensity = Math.min(1.0, nearbyPedCount / 4);
+    dhakaAudio.setCrowdDensity(crowdDensity);
+
+    // Periodically play authentic Bengali street vendor / passerby callouts when near pedestrians
+    this.streetChatterTimer += dt;
+    if (this.streetChatterTimer > 8.5 && closestPedDist < 14) {
+      this.streetChatterTimer = 0;
+      if (Math.random() < 0.65) {
+        const r = Math.random();
+        if (r < 0.30) dhakaAudio.playStreetCallout('vendor');
+        else if (r < 0.55) dhakaAudio.playStreetCallout('conductor');
+        else if (r < 0.78) dhakaAudio.playStreetCallout('rickshaw');
+        else dhakaAudio.playStreetCallout('pedestrian');
+      }
     }
   }
 

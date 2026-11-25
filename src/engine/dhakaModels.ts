@@ -12,6 +12,7 @@ import {
   loadRealTexture,
 } from './dhakaTextures';
 import { resolveAssetUrl } from '../utils/assets';
+import { useGameStore } from '../store/useGameStore';
 
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(resolveAssetUrl('/draco/'));
@@ -2720,6 +2721,18 @@ export function createCharacterMesh(
         ? createLungiPatternTexture(lungiPal.a, lungiPal.b)
         : null;
 
+      // Player modern streetwear textures from equipped wardrobe
+      let playerTopTex = '/textures/modern_street_jacket.png';
+      let playerBotTex = '/textures/modern_denim_bottom.png';
+      if (isPlayer) {
+        try {
+          const store = useGameStore.getState();
+          const eqOutfit = store.outfits.find((o) => o.id === store.equippedOutfitId);
+          if (eqOutfit?.textureTop) playerTopTex = eqOutfit.textureTop;
+          if (eqOutfit?.textureBottom) playerBotTex = eqOutfit.textureBottom;
+        } catch {}
+      }
+
       // Customize sub-meshes & materials while preserving photorealistic baked PBR textures!
       clonedScene.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
@@ -2781,39 +2794,61 @@ export function createCharacterMesh(
             matName === 'Wolf3D_Outfit_Top' ||
             matName === 'T-shirt'
           ) {
+            mat.normalMap = null;
+            mat.roughnessMap = null;
+            mat.metalnessMap = null;
             if (isPlayer || (!wearsLungi && !isHajiElder)) {
-              mat.map = loadRealTexture('/textures/modern_street_jacket.png');
+              mat.map = loadRealTexture(isPlayer ? playerTopTex : '/textures/modern_street_jacket.png');
             }
-            mat.color.copy(brightTopTint);
+            if (isPlayer) {
+              mat.color.set('#ffffff');
+            } else {
+              mat.color.copy(brightTopTint);
+            }
             mat.roughness = 0.65;
             mat.metalness = 0.12;
-            if ('sheen' in mat) {
-              (mat as THREE.MeshPhysicalMaterial).sheen = 0.35;
-              (mat as THREE.MeshPhysicalMaterial).sheenColor =
-                new THREE.Color('#ffffff');
-            }
+            mat.needsUpdate = true;
           } else if (
             m.name === 'Wolf3D_Outfit_Bottom' ||
             matName === 'Wolf3D_Outfit_Bottom' ||
             matName === 'short'
           ) {
+            mat.normalMap = null;
+            mat.roughnessMap = null;
+            mat.metalnessMap = null;
             if (wearsLungi && lungiTex) {
               mat.map = lungiTex;
               mat.color.set('#ffffff');
             } else {
-              mat.map = loadRealTexture('/textures/modern_denim_bottom.png');
-              mat.color.copy(brightBottomTint);
+              mat.map = loadRealTexture(isPlayer ? playerBotTex : '/textures/modern_denim_bottom.png');
+              if (isPlayer) {
+                mat.color.set('#ffffff');
+              } else {
+                mat.color.copy(brightBottomTint);
+              }
             }
             mat.roughness = 0.85;
             mat.metalness = 0.05;
+            mat.needsUpdate = true;
           } else if (
             m.name === 'Wolf3D_Outfit_Footwear' ||
             matName === 'Wolf3D_Outfit_Footwear'
           ) {
+            mat.normalMap = null;
+            mat.roughnessMap = null;
+            mat.metalnessMap = null;
             mat.map = loadRealTexture('/textures/modern_sneakers.png');
             mat.color.set('#ffffff');
             mat.roughness = 0.55;
             mat.metalness = 0.1;
+            mat.needsUpdate = true;
+          } else if (
+            m.name === 'Wolf3D_Hair' ||
+            matName === 'Wolf3D_Hair'
+          ) {
+            mat.color.set('#181411');
+            mat.roughness = 0.45;
+            mat.needsUpdate = true;
           } else if (
             m.name === 'Wolf3D_Skin' ||
             m.name === 'Wolf3D_Head' ||
@@ -2867,6 +2902,40 @@ export function createCharacterMesh(
         limbs.mixer = mixer;
         limbs.actions = actions;
         limbs.currentActionName = 'idle';
+
+        // Driving and resting rig for Soldier so driving postures & relaxed arms never T-pose
+        const soldierRig: RpmBoneRig = { phase: 0 };
+        const relaxedLeftArmQuat = new THREE.Quaternion(
+          0.476682,
+          0.0426,
+          -0.058619,
+          0.876084
+        );
+        const relaxedRightArmQuat = new THREE.Quaternion(
+          0.47668,
+          -0.042601,
+          0.058619,
+          0.876085
+        );
+        clonedScene.traverse((node) => {
+          const n = node.name.replace(/^mixamorig[:_]?/, '');
+          if (n === 'LeftUpLeg') soldierRig.leftUpLeg = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightUpLeg') soldierRig.rightUpLeg = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'LeftLeg') soldierRig.leftLeg = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightLeg') soldierRig.rightLeg = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'LeftFoot') soldierRig.leftFoot = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightFoot') soldierRig.rightFoot = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'LeftArm') {
+            node.quaternion.copy(relaxedLeftArmQuat);
+            soldierRig.leftArm = { bone: node, rest: node.quaternion.clone() };
+          } else if (n === 'RightArm') {
+            node.quaternion.copy(relaxedRightArmQuat);
+            soldierRig.rightArm = { bone: node, rest: node.quaternion.clone() };
+          } else if (n === 'LeftForeArm') soldierRig.leftForeArm = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'RightForeArm') soldierRig.rightForeArm = { bone: node, rest: node.quaternion.clone() };
+          else if (n === 'Spine') soldierRig.spine = { bone: node, rest: node.quaternion.clone() };
+        });
+        limbs.driveRig = soldierRig;
       } else {
         // Humanoid Skeleton Bone Rig (rpm_male.glb, readyplayerme1.glb, Michelle.glb)
         const rig: RpmBoneRig = { phase: seed * 1.3 };
@@ -3367,13 +3436,13 @@ export function setCharacterAnimationState(
     }
   } else if (limbs.mixer && limbs.actions) {
     // 2. Drive native GLTF AnimationMixer for Soldier & mocap-retargeted humans
-    if (limbs.currentActionName !== targetState) {
+    if (limbs.currentActionName !== targetState || !limbs.actions[targetState]?.isRunning()) {
       const prev = limbs.currentActionName
         ? limbs.actions[limbs.currentActionName]
         : undefined;
-      const next = limbs.actions[targetState];
+      const next = limbs.actions[targetState] || limbs.actions.idle;
       if (next) {
-        next.reset().fadeIn(0.18).play();
+        next.reset().setEffectiveWeight(1.0).fadeIn(0.18).play();
         if (prev && prev !== next) {
           prev.fadeOut(0.18);
         }

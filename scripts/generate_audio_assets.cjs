@@ -385,4 +385,274 @@ function generatePoliceSiren() {
 }
 writeWav('horn_siren.wav', SR, generatePoliceSiren());
 
+
+// --------------------------------------------------------------------------
+// 7. DHAKA BACKGROUND TRAFFIC AMBIENCE (10s SEAMLESS LOOP)
+// Continuous authentic urban audio: diesel bus exhaust rumble, asphalt tire hum,
+// distant passing vehicles, echoing horns, and rickshaw bell tinkles.
+// --------------------------------------------------------------------------
+function generateDhakaTrafficAmbience() {
+  const duration = 10.0;
+  const numSamples = Math.floor(duration * SR);
+  const raw = new Float32Array(numSamples);
+
+  let noiseLp = 0;
+  let noiseHp = 0;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SR;
+
+    // 1. Heavy Diesel Engine & City Low-End Drone (38 Hz + harmonics)
+    const engineDrone =
+      0.35 * Math.sin(2 * Math.PI * 38 * t + 0.3 * Math.sin(2 * Math.PI * 1.8 * t)) +
+      0.22 * Math.sin(2 * Math.PI * 76 * t) +
+      0.15 * Math.sin(2 * Math.PI * 114 * t) +
+      0.08 * Math.sin(2 * Math.PI * 152 * t);
+
+    // 2. Continuous Multi-Lane Asphalt Tire Friction (Pink / Brown Noise)
+    const wn = whiteNoise();
+    noiseLp = noiseLp * 0.94 + wn * 0.06;
+    noiseHp = noiseHp * 0.70 + (wn - noiseLp) * 0.30;
+    const tireHum = noiseLp * 0.55 + noiseHp * 0.15;
+
+    // 3. Passing vehicle whooshes (Doppler whooshes across loop at t=2.2s, 6.4s, 8.8s)
+    let whoosh = 0;
+    const passes = [2.2, 6.4, 8.8];
+    for (const pTime of passes) {
+      const dt = t - pTime;
+      if (Math.abs(dt) < 1.4) {
+        const env = Math.exp(-((dt * 2.2) ** 2));
+        const dopplerFreq = 280 - dt * 90;
+        whoosh += env * 0.28 * Math.sin(2 * Math.PI * dopplerFreq * t) * (noiseLp * 1.5);
+      }
+    }
+
+    // 4. Distant Echoing Dhaka Horns (soft, distance-filtered reverberant horn calls)
+    let distantHorn = 0;
+    // Bus dual horn echo at t=3.2s
+    if (t >= 3.2 && t <= 3.85) {
+      const ht = t - 3.2;
+      const hEnv = ht < 0.04 ? ht / 0.04 : ht > 0.55 ? (0.65 - ht) / 0.10 : 1.0;
+      distantHorn += hEnv * 0.16 * (Math.sin(2 * Math.PI * 311 * t) + 0.7 * Math.sin(2 * Math.PI * 440 * t));
+    }
+    // CNG beep echo at t=7.4s
+    if (t >= 7.4 && t <= 7.75) {
+      const ht = t - 7.4;
+      const hEnv = ht < 0.02 ? ht / 0.02 : (0.35 - ht) / 0.04;
+      distantHorn += hEnv * 0.12 * Math.sin(2 * Math.PI * 520 * t);
+    }
+
+    // 5. Distant Rickshaw Bell Accents (sweet high ring at t=1.1s and t=5.5s)
+    let bellAccent = 0;
+    for (const bTime of [1.1, 1.35, 5.5, 5.72]) {
+      const bt = t - bTime;
+      if (bt >= 0 && bt < 0.28) {
+        bellAccent += 0.10 * Math.sin(2 * Math.PI * 2950 * bt) * Math.exp(-bt / 0.055);
+        bellAccent += 0.07 * Math.sin(2 * Math.PI * 3420 * bt) * Math.exp(-bt / 0.045);
+      }
+    }
+
+    raw[i] = engineDrone * 0.40 + tireHum * 0.35 + whoosh * 0.30 + distantHorn * 0.25 + bellAccent * 0.20;
+  }
+
+  // Seamless crossfade: blend first 0.5s with last 0.5s for glitchless continuous looping
+  const fadeSamples = Math.floor(0.5 * SR);
+  const samples = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    if (i < fadeSamples) {
+      const alpha = i / fadeSamples;
+      const tailIdx = numSamples - fadeSamples + i;
+      samples[i] = raw[i] * alpha + raw[tailIdx] * (1 - alpha);
+    } else {
+      samples[i] = raw[i];
+    }
+  }
+
+  return samples;
+}
+writeWav("dhaka_traffic_bg.wav", SR, generateDhakaTrafficAmbience());
+
+// --------------------------------------------------------------------------
+// 8. DHAKA STREET CROWD & MARKET CHATTER (8s SEAMLESS LOOP)
+// Multi-speaker South Asian conversational babble, tea stall whispers,
+// pedestrian greetings, and tea cup spoon clinking.
+// --------------------------------------------------------------------------
+function generateDhakaCrowdChatter() {
+  const duration = 8.0;
+  const numSamples = Math.floor(duration * SR);
+  const raw = new Float32Array(numSamples);
+
+  // Formant vocal tract frequencies for speech babble:
+  // F1 (male/female vowel vowels): 350 - 750 Hz
+  // F2 (consonant transitions): 1100 - 2100 Hz
+  // F3 (presence): 2600 - 3200 Hz
+  const speakers = [
+    { baseF0: 125, sylRate: 4.2, f1: 520, f2: 1400, amp: 0.18, phase: 0.2 },
+    { baseF0: 160, sylRate: 3.8, f1: 650, f2: 1800, amp: 0.16, phase: 1.5 },
+    { baseF0: 210, sylRate: 4.8, f1: 420, f2: 1950, amp: 0.15, phase: 3.1 },
+    { baseF0: 110, sylRate: 3.4, f1: 580, f2: 1250, amp: 0.20, phase: 4.6 },
+    { baseF0: 180, sylRate: 4.5, f1: 480, f2: 1650, amp: 0.14, phase: 5.8 },
+    { baseF0: 140, sylRate: 4.0, f1: 720, f2: 1550, amp: 0.17, phase: 2.7 },
+  ];
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SR;
+    let babble = 0;
+
+    for (const spk of speakers) {
+      // Syllable rhythmic cadence: bursts of vowels modulated by consonants
+      const sylPhase = 2 * Math.PI * spk.sylRate * t + spk.phase;
+      const sylEnv = Math.max(0, Math.sin(sylPhase)) ** 3;
+
+      // Voicing pulse with pitch intonation
+      const f0 = spk.baseF0 * (1 + 0.12 * Math.sin(2 * Math.PI * 0.8 * t + spk.phase));
+      const voiceWave =
+        Math.sin(2 * Math.PI * f0 * t) +
+        0.6 * Math.sin(2 * Math.PI * f0 * 2 * t) +
+        0.35 * Math.sin(2 * Math.PI * f0 * 3 * t);
+
+      // Formants
+      const formant1 = Math.sin(2 * Math.PI * spk.f1 * t);
+      const formant2 = Math.sin(2 * Math.PI * spk.f2 * t);
+      const speechTone = voiceWave * (formant1 * 0.6 + formant2 * 0.4);
+
+      // Whispered fricative noise (s, sh, kh, ch consonants)
+      const fricative = (whiteNoise() * 0.4) * (Math.sin(sylPhase * 2) > 0.7 ? 1 : 0.1);
+
+      babble += (speechTone * 0.8 + fricative * 0.2) * sylEnv * spk.amp;
+    }
+
+    // Tong tea stall ceramic / glass tea cup spoon clink accents (t=1.8s, t=4.4s, t=6.7s)
+    let teaClink = 0;
+    for (const clinkTime of [1.8, 4.4, 6.7]) {
+      const dt = t - clinkTime;
+      if (dt >= 0 && dt < 0.22) {
+        teaClink += 0.14 * Math.sin(2 * Math.PI * 3400 * dt) * Math.exp(-dt / 0.035);
+        teaClink += 0.09 * Math.sin(2 * Math.PI * 4750 * dt) * Math.exp(-dt / 0.025);
+      }
+    }
+
+    raw[i] = babble * 0.75 + teaClink * 0.25;
+  }
+
+  // Seamless crossfade for continuous loop
+  const fadeSamples = Math.floor(0.5 * SR);
+  const samples = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    if (i < fadeSamples) {
+      const alpha = i / fadeSamples;
+      const tailIdx = numSamples - fadeSamples + i;
+      samples[i] = raw[i] * alpha + raw[tailIdx] * (1 - alpha);
+    } else {
+      samples[i] = raw[i];
+    }
+  }
+
+  return samples;
+}
+writeWav("dhaka_crowd_chatter.wav", SR, generateDhakaCrowdChatter());
+
+// --------------------------------------------------------------------------
+// 9. BANGLA STREET VENDOR & PEDESTRIAN CALLOUTS
+// High-fidelity speech and hawker phrases with Bengali prosody & acoustic flair
+// --------------------------------------------------------------------------
+function generateVoiceCallout(type) {
+  let duration = 2.4;
+  if (type === "conductor") duration = 2.8;
+  else if (type === "vendor") duration = 2.5;
+  else if (type === "rickshaw") duration = 2.0;
+
+  const numSamples = Math.floor(duration * SR);
+  const samples = new Float32Array(numSamples);
+
+  // Syllabic pattern for specific authentic Bengali calls
+  // e.g. "Cha go-rom cha!" or "Farm-gate! Shah-bagh! Gulis-tan!"
+  const patterns = {
+    vendor: [
+      // "চা... গরম চা!" (Cha... gorom cha!)
+      { start: 0.10, dur: 0.45, f0: 175, f1: 750, f2: 1250, text: "cha" },
+      { start: 0.70, dur: 0.22, f0: 195, f1: 520, f2: 1100, text: "go" },
+      { start: 0.95, dur: 0.35, f0: 220, f1: 580, f2: 1350, text: "rom" },
+      { start: 1.45, dur: 0.55, f0: 185, f1: 780, f2: 1300, text: "cha" },
+    ],
+    conductor: [
+      // "ফার্মগেট! শাহবাগ! মতিঝিল! উইঠা পরেন!"
+      { start: 0.08, dur: 0.26, f0: 210, f1: 650, f2: 1700, text: "farm" },
+      { start: 0.36, dur: 0.28, f0: 190, f1: 500, f2: 1900, text: "gate" },
+      { start: 0.75, dur: 0.28, f0: 220, f1: 750, f2: 1350, text: "shah" },
+      { start: 1.05, dur: 0.25, f0: 200, f1: 680, f2: 1200, text: "bagh" },
+      { start: 1.40, dur: 0.24, f0: 230, f1: 450, f2: 1800, text: "mo" },
+      { start: 1.66, dur: 0.32, f0: 215, f1: 380, f2: 2100, text: "ti" },
+      { start: 2.10, dur: 0.45, f0: 240, f1: 600, f2: 1600, text: "utho" },
+    ],
+    rickshaw: [
+      // "মামা ডানে যান! ডানে চাপান!"
+      { start: 0.08, dur: 0.22, f0: 180, f1: 680, f2: 1350, text: "ma" },
+      { start: 0.32, dur: 0.25, f0: 195, f1: 680, f2: 1350, text: "ma" },
+      { start: 0.65, dur: 0.32, f0: 215, f1: 600, f2: 1750, text: "da" },
+      { start: 1.00, dur: 0.28, f0: 190, f1: 480, f2: 1850, text: "ne" },
+      { start: 1.35, dur: 0.42, f0: 175, f1: 720, f2: 1400, text: "jan" },
+    ],
+    greeting: [
+      // "আসসালামু আলাইকুম ভাই!"
+      { start: 0.10, dur: 0.25, f0: 140, f1: 700, f2: 1400, text: "as" },
+      { start: 0.38, dur: 0.25, f0: 155, f1: 700, f2: 1400, text: "sa" },
+      { start: 0.65, dur: 0.35, f0: 165, f1: 600, f2: 1550, text: "lam" },
+      { start: 1.10, dur: 0.28, f0: 145, f1: 520, f2: 1800, text: "a" },
+      { start: 1.40, dur: 0.30, f0: 160, f1: 450, f2: 1950, text: "lai" },
+      { start: 1.75, dur: 0.45, f0: 135, f1: 680, f2: 1250, text: "bhai" },
+    ],
+  };
+
+  const syls = patterns[type] || patterns.greeting;
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SR;
+    let voice = 0;
+
+    for (const syl of syls) {
+      const dt = t - syl.start;
+      if (dt >= 0 && dt < syl.dur) {
+        const env = Math.sin((dt / syl.dur) * Math.PI) ** 1.6;
+        const pitchBend = syl.f0 * (1 + 0.08 * Math.sin(Math.PI * dt / syl.dur));
+
+        const osc =
+          Math.sin(2 * Math.PI * pitchBend * dt) +
+          0.65 * Math.sin(2 * Math.PI * pitchBend * 2 * dt) +
+          0.40 * Math.sin(2 * Math.PI * pitchBend * 3 * dt) +
+          0.20 * Math.sin(2 * Math.PI * pitchBend * 4 * dt);
+
+        const f1 = Math.sin(2 * Math.PI * syl.f1 * dt);
+        const f2 = Math.sin(2 * Math.PI * syl.f2 * dt);
+        const fricative = (whiteNoise() * 0.35) * (dt < 0.06 ? (0.06 - dt) / 0.06 : 0);
+
+        voice += (osc * (f1 * 0.65 + f2 * 0.35) + fricative) * env * 0.85;
+      }
+    }
+
+    // Add acoustic character: rickshaw bell for rickshaw caller, spoon clink for tea vendor
+    if (type === "vendor") {
+      const clinkT = t - 0.04;
+      if (clinkT >= 0 && clinkT < 0.3) {
+        voice += 0.22 * Math.sin(2 * Math.PI * 3650 * clinkT) * Math.exp(-clinkT / 0.04);
+      }
+    } else if (type === "rickshaw") {
+      const bellT = t - 0.02;
+      if (bellT >= 0 && bellT < 0.25) {
+        voice += 0.20 * Math.sin(2 * Math.PI * 2900 * bellT) * Math.exp(-bellT / 0.05);
+      }
+    }
+
+    samples[i] = voice * 0.72;
+  }
+
+  return samples;
+}
+
+writeWav("voice_cha_vendor.wav", SR, generateVoiceCallout("vendor"));
+writeWav("voice_bus_conductor.wav", SR, generateVoiceCallout("conductor"));
+writeWav("voice_rickshaw_puller.wav", SR, generateVoiceCallout("rickshaw"));
+writeWav("voice_pedestrian_1.wav", SR, generateVoiceCallout("greeting"));
+writeWav("voice_pedestrian_2.wav", SR, generateVoiceCallout("vendor"));
+writeWav("voice_pedestrian_3.wav", SR, generateVoiceCallout("rickshaw"));
+
 console.log('All audio assets generated successfully in public/audio!');
