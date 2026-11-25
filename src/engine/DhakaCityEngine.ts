@@ -2974,42 +2974,127 @@ export class DhakaCityEngine {
    * Uttara (High-rise), Mirpur (Superblocks) & Keraniganj/Old Dhaka.
    */
   private buildDistant3DSkyline() {
+    // Authentic Orthographic 3D Dhaka Architectural Skins & PBR Facades
+    const dhakaCommercialTex = loadRealTexture(
+      '/textures/dhaka_commercial_tower.jpg',
+      2,
+      4,
+      true
+    );
+    const dhakaCommercialTexTall = loadRealTexture(
+      '/textures/dhaka_commercial_tower.jpg',
+      3,
+      8,
+      true
+    );
+    const dhakaFacadeTex = loadRealTexture(
+      '/textures/dhaka_facade_realistic.jpg',
+      2,
+      4,
+      true
+    );
+    const dhakaFacadeTexTall = loadRealTexture(
+      '/textures/dhaka_facade_realistic.jpg',
+      3,
+      7,
+      true
+    );
+    const dhakaOldCityTex = loadRealTexture(
+      '/textures/dhaka_old_city_facade.jpg',
+      2,
+      3,
+      true
+    );
+    const dhakaBrickTex = loadRealTexture(
+      '/textures/brick_diffuse.jpg',
+      3,
+      5,
+      true
+    );
+    const brickBump = loadRealTexture(
+      '/textures/brick_bump.jpg',
+      2,
+      3,
+      false
+    );
+    const dhakaShopfrontTex = loadRealTexture(
+      '/textures/dhaka_shopfront_arcade.jpg',
+      1,
+      1,
+      true
+    );
+    const dhakaSidewalkTileTex = loadRealTexture(
+      '/textures/dhaka_ground_sidewalk.jpg',
+      4,
+      4,
+      true
+    );
+
     const glassTowerMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.88,
-      roughness: 0.15,
+      map: dhakaCommercialTex,
+      color: '#e0f2fe',
+      metalness: 0.85,
+      roughness: 0.16,
     });
     const darkGlassMat = new THREE.MeshStandardMaterial({
-      color: '#0f172a',
-      metalness: 0.92,
+      map: dhakaCommercialTexTall,
+      color: '#cbd5e1',
+      metalness: 0.90,
       roughness: 0.12,
     });
     const tealGlassMat = new THREE.MeshStandardMaterial({
-      color: '#0f766e',
-      metalness: 0.82,
+      map: dhakaCommercialTex,
+      color: '#ccfbf1',
+      metalness: 0.80,
       roughness: 0.18,
     });
     const modernSteelMat = new THREE.MeshStandardMaterial({
-      color: '#cbd5e1',
-      metalness: 0.75,
-      roughness: 0.32,
+      map: dhakaCommercialTexTall,
+      color: '#f8fafc',
+      metalness: 0.65,
+      roughness: 0.28,
     });
     const concreteTowerMat = new THREE.MeshStandardMaterial({
-      color: '#64748b',
-      roughness: 0.78,
+      map: dhakaFacadeTex,
+      color: '#e2e8f0',
+      roughness: 0.65,
+      metalness: 0.12,
     });
     const warmStuccoMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      roughness: 0.82,
+      map: dhakaFacadeTexTall,
+      color: '#ffedd5',
+      roughness: 0.70,
     });
     const dhakaBrickMat = new THREE.MeshStandardMaterial({
-      color: '#b45309',
-      roughness: 0.85,
+      map: dhakaBrickTex,
+      bumpMap: brickBump,
+      bumpScale: 0.06,
+      color: '#c2410c',
+      roughness: 0.82,
+    });
+    const oldDhakaHeritageMat = new THREE.MeshStandardMaterial({
+      map: dhakaOldCityTex,
+      color: '#fef08a',
+      roughness: 0.65,
+    });
+    const groundShopArcadeMat = new THREE.MeshStandardMaterial({
+      map: dhakaShopfrontTex,
+      roughness: 0.52,
+      metalness: 0.1,
+    });
+    const sidewalkPlinthMat = new THREE.MeshStandardMaterial({
+      map: dhakaSidewalkTileTex,
+      roughness: 0.82,
     });
     const mechCrownMat = new THREE.MeshStandardMaterial({
       color: '#1e293b',
-      metalness: 0.5,
-      roughness: 0.5,
+      metalness: 0.55,
+      roughness: 0.45,
+    });
+    const balconyLedgeMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      roughness: 0.65,
+      metalness: 0.3,
     });
     const spireMat = new THREE.MeshStandardMaterial({
       color: '#f8fafc',
@@ -3037,8 +3122,8 @@ export class DhakaCityEngine {
     };
 
     const towerRings = [
-      { minR: 95, maxR: 240, count: 90, baseH: 26, maxH: 60 },
-      { minR: 240, maxR: 450, count: 120, baseH: 36, maxH: 95 },
+      { minR: 85, maxR: 240, count: 95, baseH: 26, maxH: 60 },
+      { minR: 240, maxR: 450, count: 125, baseH: 36, maxH: 95 },
       { minR: 450, maxR: 750, count: 140, baseH: 52, maxH: 140 },
       { minR: 750, maxR: 1150, count: 130, baseH: 68, maxH: 190 },
       { minR: 1150, maxR: 1600, count: 110, baseH: 80, maxH: 220 },
@@ -3052,11 +3137,11 @@ export class DhakaCityEngine {
         const bz = Math.sin(angle) * radius;
 
         // Keep all active road corridors and flyovers unobstructed across 5000m metropolitan grid
-        const onNsRoad = [0, 14, -170, -380, -480, -580, -780, 220, 440, 640, 840, -70].some(
-          (rx) => Math.abs(bx - rx) < 16.5
+        const onNsRoad = [0, 14, -170, -380, -480, -580, -780, -950, 220, 440, 640, 840, 950, -70].some(
+          (rx) => Math.abs(bx - rx) < 18.5
         );
-        const onEwRoad = [-1100, -850, -620, -460, -315, -175, 0, 175, 285, 360, 460, 620, 760].some(
-          (rz) => Math.abs(bz - rz) < 16.5
+        const onEwRoad = [-1400, -1100, -850, -620, -460, -315, -175, 0, 175, 285, 360, 460, 620, 760, 800].some(
+          (rz) => Math.abs(bz - rz) < 18.5
         );
         if (onNsRoad || onEwRoad) continue;
 
@@ -3091,15 +3176,76 @@ export class DhakaCityEngine {
           facadeMat = rnd() > 0.4 ? glassTowerMat : rnd() > 0.5 ? tealGlassMat : modernSteelMat;
         } else if (style === 'motijheel') {
           facadeMat = rnd() > 0.45 ? darkGlassMat : rnd() > 0.5 ? concreteTowerMat : modernSteelMat;
-        } else if (style === 'mirpur' || style === 'old_dhaka') {
-          facadeMat = rnd() > 0.5 ? dhakaBrickMat : warmStuccoMat;
+        } else if (style === 'old_dhaka') {
+          facadeMat = rnd() > 0.5 ? oldDhakaHeritageMat : dhakaBrickMat;
+        } else if (style === 'mirpur') {
+          facadeMat = rnd() > 0.5 ? warmStuccoMat : dhakaBrickMat;
         } else {
           facadeMat = rnd() > 0.5 ? warmStuccoMat : concreteTowerMat;
         }
 
         const towerMesh = this.sharedBox(width, height, depth, facadeMat, bx, height / 2, bz);
         towerMesh.rotation.y = angle + (rnd() - 0.5) * 0.4;
+        towerMesh.castShadow = ring.minR <= 450;
+        towerMesh.receiveShadow = true;
         this.scene.add(towerMesh);
+
+        // Ground-Floor Dhaka Shopfront Arcade & Raised Sidewalk Plinth for street-facing buildings
+        if (ring.minR <= 450) {
+          const groundArcade = this.sharedBox(
+            width + 0.22,
+            4.1,
+            depth + 0.22,
+            groundShopArcadeMat,
+            bx,
+            2.05,
+            bz
+          );
+          groundArcade.rotation.y = towerMesh.rotation.y;
+          this.scene.add(groundArcade);
+
+          const sidewalkPlinth = this.sharedBox(
+            width + 3.2,
+            0.24,
+            depth + 3.2,
+            sidewalkPlinthMat,
+            bx,
+            0.12,
+            bz
+          );
+          sidewalkPlinth.rotation.y = towerMesh.rotation.y;
+          sidewalkPlinth.receiveShadow = true;
+          this.scene.add(sidewalkPlinth);
+
+          // Authentic Bangla Shopfront Signboards on street facade
+          const signIndex = Math.floor(rnd() * 8);
+          const signTex = createBanglaSignTexture(signIndex);
+          const signMat = new THREE.MeshBasicMaterial({ map: signTex });
+          const signMesh = this.sharedBox(
+            Math.min(width * 0.78, 12.5),
+            2.1,
+            0.28,
+            signMat,
+            bx,
+            4.2,
+            bz + depth / 2 + 0.18
+          );
+          signMesh.rotation.y = towerMesh.rotation.y;
+          this.scene.add(signMesh);
+        }
+
+        // Rooftop Parapet Ledge (ছাদের রেলিং) so buildings don't have razor-blade raw tops
+        const parapet = this.sharedBox(
+          width + 0.4,
+          0.9,
+          depth + 0.4,
+          balconyLedgeMat,
+          bx,
+          height + 0.45,
+          bz
+        );
+        parapet.rotation.y = towerMesh.rotation.y;
+        this.scene.add(parapet);
 
         if (height > 55) {
           const tierW = width * 0.72;
