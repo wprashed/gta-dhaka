@@ -307,3 +307,283 @@ export function createBanglaNumberPlateTexture(
   return tex;
 }
 
+/**
+ * Authentic Cast-Iron Circular Dhaka WASA (ঢাকা ওয়াসা) Sewer / Water Manhole Cover
+ */
+export function createWasaManholeTexture(): THREE.CanvasTexture {
+  const key = 'wasa_manhole';
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Dark cast iron base
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.arc(128, 128, 124, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Outer beveled iron rim
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 10;
+  ctx.stroke();
+
+  // Concentric non-slip textured ribs
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 3;
+  [100, 78, 56].forEach((r) => {
+    ctx.beginPath();
+    ctx.arc(128, 128, r, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  // Cross pattern grips
+  for (let i = 0; i < 16; i++) {
+    const angle = (i * Math.PI * 2) / 16;
+    ctx.beginPath();
+    ctx.moveTo(128 + Math.cos(angle) * 60, 128 + Math.sin(angle) * 60);
+    ctx.lineTo(128 + Math.cos(angle) * 98, 128 + Math.sin(angle) * 98);
+    ctx.stroke();
+  }
+
+  // Embossed Bangla WASA insignia
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = 'bold 20px "Noto Sans Bengali", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('ঢাকা ওয়াসা', 128, 108);
+
+  ctx.font = 'bold 16px "Inter", sans-serif';
+  ctx.fillText('DWASA', 128, 148);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Authentic Yellow Diagonal Anti-Gridlock "Box Junction" Crisscross Grid
+ */
+export function createBoxJunctionTexture(): THREE.CanvasTexture {
+  const key = 'box_junction';
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Transparent dark asphalt base
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.0)';
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Outer yellow bounding box
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(6, 6, 244, 244);
+
+  // Diagonal 45-degree crosshatch lines
+  ctx.lineWidth = 5;
+  for (let offset = -256; offset <= 512; offset += 36) {
+    ctx.beginPath();
+    ctx.moveTo(offset, 0);
+    ctx.lineTo(offset + 256, 256);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(offset, 256);
+    ctx.lineTo(offset + 256, 0);
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Directional White Traffic Lane Arrows (Straight / Turn) painted on asphalt
+ */
+export function createRoadArrowTexture(type: 'straight' | 'left' | 'right'): THREE.CanvasTexture {
+  const key = `road_arrow_${type}`;
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#f8fafc';
+  if (type === 'straight') {
+    // Arrow stem
+    ctx.fillRect(56, 110, 16, 120);
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(64, 28);
+    ctx.lineTo(104, 115);
+    ctx.lineTo(76, 115);
+    ctx.lineTo(76, 120);
+    ctx.lineTo(52, 120);
+    ctx.lineTo(52, 115);
+    ctx.lineTo(24, 115);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'left') {
+    ctx.fillRect(56, 140, 16, 90);
+    ctx.beginPath();
+    ctx.arc(42, 140, 18, 0, Math.PI * 0.5, true);
+    ctx.lineTo(28, 120);
+    ctx.lineTo(10, 140);
+    ctx.lineTo(28, 160);
+    ctx.lineTo(28, 146);
+    ctx.fill();
+  } else {
+    ctx.fillRect(56, 140, 16, 90);
+    ctx.beginPath();
+    ctx.arc(86, 140, 18, Math.PI, Math.PI * 0.5, false);
+    ctx.lineTo(100, 120);
+    ctx.lineTo(118, 140);
+    ctx.lineTo(100, 160);
+    ctx.lineTo(100, 146);
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Soft Radial Droplet Texture for 3D Animated Fountain Water Spray
+ */
+export function createFountainWaterDropTexture(): THREE.CanvasTexture {
+  const key = 'fountain_drop';
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+  grad.addColorStop(0.35, 'rgba(186, 230, 253, 0.85)');
+  grad.addColorStop(0.75, 'rgba(56, 189, 248, 0.35)');
+  grad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.fill();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Authentic Air Conditioner Outdoor Condenser Unit Texture (Walton / General)
+ */
+export function createAcUnitTexture(): THREE.CanvasTexture {
+  const key = 'ac_outdoor_unit';
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 160;
+  const ctx = canvas.getContext('2d')!;
+
+  // Off-white weather-resistant casing
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(0, 0, 256, 160);
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, 248, 152);
+
+  // Circular fan guard grille
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath();
+  ctx.arc(95, 80, 58, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Fan blades
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + 0.3;
+    ctx.beginPath();
+    ctx.moveTo(95, 80);
+    ctx.lineTo(95 + Math.cos(a) * 52, 80 + Math.sin(a) * 52);
+    ctx.stroke();
+  }
+
+  // Right-hand service panel & ventilation louvers
+  ctx.fillStyle = '#334155';
+  for (let y = 30; y < 135; y += 10) {
+    ctx.fillRect(175, y, 62, 5);
+  }
+
+  // Brand Badge
+  ctx.fillStyle = '#0284c7';
+  ctx.font = 'bold 16px "Inter", sans-serif';
+  ctx.fillText('WALTON', 178, 22);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Authentic Alternating Black-and-White Dhaka Roadside Curb Texture
+ */
+export function createBlackWhiteCurbTexture(): THREE.CanvasTexture {
+  const key = 'bw_curb_texture';
+  if (canvasCache.has(key)) return canvasCache.get(key)!;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+
+  // Left half: dark asphalt charcoal
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 64, 64);
+
+  // Right half: weathered white concrete
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(64, 0, 64, 64);
+
+  // Concrete texture grain
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+  for (let x = 0; x < 128; x += 4) {
+    if ((x / 4) % 2 === 0) {
+      ctx.fillRect(x, 0, 2, 64);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 1);
+  canvasCache.set(key, tex);
+  return tex;
+}
+
+
