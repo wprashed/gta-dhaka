@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import {
   DISTRICTS,
   POINTS_OF_INTEREST,
@@ -75,7 +76,9 @@ export class DhakaCityEngine {
   private sunLight!: THREE.DirectionalLight;
   private headlightSpot!: THREE.SpotLight;
   private headlightTarget!: THREE.Object3D;
-  private skyDomeMesh!: THREE.Mesh;
+  private sky!: Sky;
+  private sunPosition = new THREE.Vector3();
+  private starField!: THREE.Points;
   private waterNormalTex!: THREE.Texture;
   private rainSystem: THREE.Points | null = null;
   private hatirjheelLights: THREE.PointLight[] = [];
@@ -211,7 +214,7 @@ export class DhakaCityEngine {
       60,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.4,
-      1350
+      2200
     );
 
     this.renderer = new THREE.WebGLRenderer({
@@ -278,21 +281,55 @@ export class DhakaCityEngine {
     this.headlightSpot.target = this.headlightTarget;
     this.scene.add(this.headlightSpot);
 
-    // 360° Realistic Dhaka Sunset Sky Dome + Real-Time PBR Environment Reflections
-    const skyTex = loadRealTexture('/textures/dhaka_sky_sunset.jpg', 1, 1, true);
-    skyTex.mapping = THREE.EquirectangularReflectionMapping;
-    this.scene.environment = skyTex;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.18;
+    // Physically-Based Atmospheric Scattering Sky (Preetham / Rayleigh Model - No Fake Wallpaper Images)
+    this.sky = new Sky();
+    this.sky.scale.setScalar(5000);
+    this.scene.add(this.sky);
 
-    const skyGeo = new THREE.SphereGeometry(1100, 32, 20);
-    const skyMat = new THREE.MeshBasicMaterial({
-      map: skyTex,
-      side: THREE.BackSide,
+    // Procedural Night Starfield (Twinkling stars for Dhaka night sky)
+    const starCount = 1200;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 2400;
+      starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 150;
+      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: '#ffffff',
+      size: 2.5,
+      transparent: true,
+      opacity: 0,
       fog: false,
     });
-    this.skyDomeMesh = new THREE.Mesh(skyGeo, skyMat);
-    this.scene.add(this.skyDomeMesh);
+    this.starField = new THREE.Points(starGeo, starMat);
+    this.scene.add(this.starField);
+
+    // Smooth procedural PBR environment map for realistic car paint & glass reflections
+    const envCanvas = document.createElement('canvas');
+    envCanvas.width = 512;
+    envCanvas.height = 256;
+    const envCtx = envCanvas.getContext('2d')!;
+    const envGrad = envCtx.createLinearGradient(0, 0, 0, 256);
+    envGrad.addColorStop(0, '#0369a1');
+    envGrad.addColorStop(0.48, '#38bdf8');
+    envGrad.addColorStop(0.52, '#fde68a');
+    envGrad.addColorStop(0.56, '#ea580c');
+    envGrad.addColorStop(0.68, '#334155');
+    envGrad.addColorStop(1, '#0f172a');
+    envCtx.fillStyle = envGrad;
+    envCtx.fillRect(0, 0, 512, 256);
+    const envTex = new THREE.CanvasTexture(envCanvas);
+    envTex.mapping = THREE.EquirectangularReflectionMapping;
+    this.scene.environment = envTex;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.18;
   }
 
   private buildDhakaWorld() {
@@ -2102,6 +2139,34 @@ export class DhakaCityEngine {
       { x: 92, z: 26, w: 20, d: 20, h: 26, style: 'commercial', color: '#cbd5e1', signIndex: 4 },
       { x: -92, z: -28, w: 22, d: 18, h: 21, style: 'residential', color: '#fed7aa', signIndex: 5 },
 
+      // Farmgate Super Market & Commercial Towers
+      { x: 38, z: -10, w: 26, d: 24, h: 28, style: 'commercial', color: '#f8fafc', signIndex: 0 },
+      { x: -38, z: -10, w: 24, d: 22, h: 26, style: 'commercial', color: '#fef3c7', signIndex: 1 },
+      { x: 42, z: 15, w: 30, d: 24, h: 25, style: 'commercial', color: '#e0f2fe', signIndex: 4 },
+      { x: -44, z: 15, w: 28, d: 22, h: 32, style: 'modern_glass', color: '#0284c7', signIndex: 3 },
+      { x: 38, z: -65, w: 22, d: 22, h: 24, style: 'commercial', color: '#fef9c3', signIndex: 6 },
+      { x: -42, z: 65, w: 28, d: 26, h: 22, style: 'commercial', color: '#ffedd5', signIndex: 5 },
+      { x: -55, z: 95, w: 26, d: 26, h: 38, style: 'modern_glass', color: '#0ea5e9', signIndex: 7 },
+      { x: 55, z: 95, w: 26, d: 24, h: 36, style: 'commercial', color: '#cbd5e1', signIndex: 2 },
+      { x: -48, z: -110, w: 28, d: 26, h: 34, style: 'modern_glass', color: '#38bdf8', signIndex: 3 },
+      { x: 48, z: -110, w: 28, d: 26, h: 36, style: 'modern_glass', color: '#0284c7', signIndex: 5 },
+
+      // Tejgaon & Bijoy Sarani Commercial / Industrial Towers
+      { x: 78, z: -80, w: 28, d: 24, h: 30, style: 'modern_glass', color: '#0284c7', signIndex: 6 },
+      { x: -78, z: -80, w: 26, d: 24, h: 28, style: 'residential', color: '#fed7aa', signIndex: 1 },
+      { x: 78, z: -125, w: 30, d: 26, h: 35, style: 'commercial', color: '#f8fafc', signIndex: 4 },
+      { x: -78, z: -125, w: 28, d: 24, h: 27, style: 'residential', color: '#e2e8f0', signIndex: 0 },
+      { x: 110, z: -60, w: 28, d: 26, h: 32, style: 'modern_glass', color: '#0369a1', signIndex: 7 },
+      { x: 110, z: 20, w: 32, d: 28, h: 38, style: 'modern_glass', color: '#1e3a8a', signIndex: 3 },
+      { x: 110, z: 80, w: 28, d: 26, h: 30, style: 'commercial', color: '#e2e8f0', signIndex: 2 },
+
+      // Karwan Bazar & Panthapath Media Centers
+      { x: -68, z: 45, w: 26, d: 24, h: 30, style: 'commercial', color: '#fde68a', signIndex: 5 },
+      { x: -68, z: -45, w: 26, d: 24, h: 28, style: 'residential', color: '#fef3c7', signIndex: 4 },
+      { x: -110, z: 25, w: 30, d: 28, h: 35, style: 'modern_glass', color: '#0284c7', signIndex: 3 },
+      { x: -110, z: -45, w: 28, d: 26, h: 26, style: 'commercial', color: '#cbd5e1', signIndex: 1 },
+      { x: -110, z: 95, w: 32, d: 28, h: 42, style: 'modern_glass', color: '#0f766e', signIndex: 7 },
+
       // Old Dhaka (Puran Dhaka) Dense Heritage Blocks
       { x: -42, z: 125, w: 15, d: 15, h: 14, style: 'old_dhaka', color: '#fca5a5', signIndex: 0 },
       { x: -42, z: 150, w: 15, d: 16, h: 16, style: 'old_dhaka', color: '#fcd34d', signIndex: 2 },
@@ -2435,6 +2500,7 @@ export class DhakaCityEngine {
     this.buildDhakaDistrictScenes();
     this.buildDistant3DSkyline();
     this.buildMohakhaliFlyover();
+    this.buildFarmgateElevatedExpressway();
     this.buildDhakaFootOverBridges();
     this.buildMirpurCricketStadium();
     this.buildDhakaMegaShoppingMalls();
@@ -2877,9 +2943,11 @@ export class DhakaCityEngine {
     };
 
     const towerRings = [
-      { minR: 430, maxR: 560, count: 92, baseH: 42, maxH: 120 },
-      { minR: 560, maxR: 700, count: 96, baseH: 52, maxH: 148 },
-      { minR: 700, maxR: 880, count: 88, baseH: 68, maxH: 180 },
+      { minR: 95, maxR: 240, count: 75, baseH: 22, maxH: 52 },
+      { minR: 240, maxR: 430, count: 95, baseH: 30, maxH: 80 },
+      { minR: 430, maxR: 580, count: 90, baseH: 45, maxH: 120 },
+      { minR: 580, maxR: 740, count: 85, baseH: 55, maxH: 150 },
+      { minR: 740, maxR: 950, count: 80, baseH: 68, maxH: 180 },
     ];
 
     towerRings.forEach((ring) => {
@@ -2888,6 +2956,11 @@ export class DhakaCityEngine {
         const radius = ring.minR + rnd() * (ring.maxR - ring.minR);
         const bx = Math.cos(angle) * radius;
         const bz = Math.sin(angle) * radius;
+
+        // Keep all active road corridors and flyovers unobstructed
+        const onNsRoad = [0, 14, -170, -380, -580, 220, 440, 640, -70].some((rx) => Math.abs(bx - rx) < 14.5);
+        const onEwRoad = [-620, -460, -315, -175, 0, 175, 285, 440].some((rz) => Math.abs(bz - rz) < 14.5);
+        if (onNsRoad || onEwRoad) continue;
 
         let deg = ((angle * 180) / Math.PI) % 360;
         if (deg < 0) deg += 360;
@@ -3149,6 +3222,170 @@ export class DhakaCityEngine {
     sign2Board.position.set(0.25, 4.2, 0);
     gantry2Group.add(sign2Board);
     this.scene.add(gantry2Group);
+  }
+
+  /**
+   * Dhaka Elevated Expressway (ঢাকা এলিভেটেড এক্সপ্রেসওয়ে) at Farmgate & Central Spine
+   * 4-lane elevated concrete expressway spanning 580m north-south along X = 14.
+   * Elevation: Y = 9.2m (clearance 8.0m over ground streets & traffic)
+   * On-ramp at Farmgate (Z: -120 to -40, X: 22 to 14)
+   * Off-ramp at Farmgate (Z: 40 to 120, X: 14 to 22)
+   * Supported by massive hammerhead piers, solid concrete Jersey crash safety barriers,
+   * overhead highway gantry signboards, and high-mast LED street lamps.
+   */
+  private buildFarmgateElevatedExpressway() {
+    const deckMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      roughness: 0.88,
+    });
+    const pierMat = new THREE.MeshStandardMaterial({
+      color: '#94a3b8',
+      roughness: 0.82,
+    });
+    const barrierMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.65,
+    });
+    const barrierYellowMat = new THREE.MeshStandardMaterial({
+      color: '#eab308',
+      roughness: 0.6,
+    });
+    const gantryFrameMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      metalness: 0.75,
+      roughness: 0.35,
+    });
+    const stripeWhiteMat = new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+    });
+    const lampLightMat = new THREE.MeshBasicMaterial({
+      color: '#fef08a',
+    });
+
+    const flyoverX = 14;
+    const flyoverW = 14.2;
+    const deckLen = 580; // Z: -340 to +240
+    const deckElev = 9.2;
+
+    // 1. Main Elevated Span Deck (Z: -340 to +240) at Y = 9.2
+    const mainDeck = this.sharedBox(flyoverW, 1.2, deckLen, deckMat, flyoverX, deckElev - 0.6, -50);
+    mainDeck.receiveShadow = true;
+    this.scene.add(mainDeck);
+
+    // Elevated Deck Center Striping (dashed white lane lines)
+    for (let z = -330; z <= 230; z += 14) {
+      [-3.2, 0, 3.2].forEach((ox) => {
+        const stripe = this.sharedBox(0.28, 0.04, 7.5, stripeWhiteMat, flyoverX + ox, deckElev + 0.03, z);
+        this.scene.add(stripe);
+      });
+    }
+
+    // 2. Farmgate Southbound On-Ramp (Z: -120 to -40, X curves 22 -> 14, Y: 0 -> 9.2)
+    const rampLen = 80;
+    const onRampSlopeAngle = Math.atan2(deckElev, rampLen);
+    const onRampMesh = new THREE.Mesh(this.boxCache(8.4, 1.2, 80.5), deckMat);
+    onRampMesh.position.set(18, deckElev * 0.5, -80);
+    onRampMesh.rotation.x = -onRampSlopeAngle;
+    onRampMesh.receiveShadow = true;
+    this.scene.add(onRampMesh);
+
+    // 3. Farmgate Northbound Exit Off-Ramp (Z: 40 to 120, X curves 14 -> 22, Y: 9.2 -> 0)
+    const offRampMesh = new THREE.Mesh(this.boxCache(8.4, 1.2, 80.5), deckMat);
+    offRampMesh.position.set(18, deckElev * 0.5, 80);
+    offRampMesh.rotation.x = onRampSlopeAngle;
+    offRampMesh.receiveShadow = true;
+    this.scene.add(offRampMesh);
+
+    // 4. Solid Concrete Crash Barriers & Physics Colliders on Outer Edges
+    const westBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX - flyoverW / 2 + 0.22, deckElev + 0.62, -50);
+    this.scene.add(westBarrier);
+    this.buildingColliders.push({
+      minX: flyoverX - flyoverW / 2 - 0.4,
+      maxX: flyoverX - flyoverW / 2 + 0.4,
+      minZ: -340,
+      maxZ: 240,
+      tag: 'flyover_barrier',
+    });
+
+    const eastBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -50);
+    this.scene.add(eastBarrier);
+    this.buildingColliders.push({
+      minX: flyoverX + flyoverW / 2 - 0.4,
+      maxX: flyoverX + flyoverW / 2 + 0.4,
+      minZ: -340,
+      maxZ: 240,
+      tag: 'flyover_barrier',
+    });
+
+    // Yellow/Black Hazard Curb Trims along highway barriers
+    for (let z = -330; z <= 230; z += 20) {
+      const curbTrimW = this.sharedBox(0.25, 0.25, 9.5, barrierYellowMat, flyoverX - flyoverW / 2 + 0.45, deckElev + 0.15, z);
+      const curbTrimE = this.sharedBox(0.25, 0.25, 9.5, barrierYellowMat, flyoverX + flyoverW / 2 - 0.45, deckElev + 0.15, z);
+      this.scene.add(curbTrimW);
+      this.scene.add(curbTrimE);
+    }
+
+    // 5. Heavy Concrete Hammerhead Piers with Cantilever Arms Spaced Every 36m
+    for (let pz = -324; pz <= 228; pz += 36) {
+      const pier = new THREE.Mesh(this.cylCache(1.35, 1.55, deckElev - 0.6, 14), pierMat);
+      pier.position.set(flyoverX, (deckElev - 0.6) / 2, pz);
+      pier.castShadow = true;
+      this.scene.add(pier);
+
+      this.circleColliders.push({
+        x: flyoverX,
+        z: pz,
+        radius: 1.6,
+        tag: 'flyover_pier',
+      });
+
+      const pierCap = this.sharedBox(flyoverW + 0.8, 1.3, 3.2, pierMat, flyoverX, deckElev - 1.2, pz);
+      pierCap.castShadow = true;
+      this.scene.add(pierCap);
+    }
+
+    // 6. Overhead Highway Directional Sign Gantries (Green Boards with White Bold Text)
+    const signLocations = [
+      { z: -160, b1: 'উত্তরা / বিমানবন্দর / ৩০০ ফিট', e1: 'UTTARA / AIRPORT / 300FT', b2: 'বনানী প্রস্থান', e2: 'BANANI EXIT' },
+      { z: -10, b1: 'ঢাকা এলিভেটেড এক্সপ্রেসওয়ে', e1: 'DHAKA ELEVATED EXPRESSWAY', b2: 'ফার্মগেট / তেজগাঁও প্রস্থান', e2: 'FARMGATE / TEJGAON EXIT' },
+      { z: 140, b1: 'মহাখালী / বিমানবন্দর লিঙ্ক', e1: 'MOHAKHALI / AIRPORT LINK', b2: 'মতিঝিল / সদরঘাট এক্সপ্রেসওয়ে', e2: 'MOTIJHEEL / SADARGHAT EXPRESS' },
+    ];
+
+    signLocations.forEach((loc) => {
+      const gantryGroup = new THREE.Group();
+      gantryGroup.position.set(flyoverX, deckElev, loc.z);
+
+      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gx) => {
+        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
+        leg.position.set(gx, 3.1, 0);
+        gantryGroup.add(leg);
+      });
+
+      const gantryBeam = new THREE.Mesh(this.boxCache(flyoverW, 0.55, 0.4), gantryFrameMat);
+      gantryBeam.position.set(0, 6.2, 0);
+      gantryGroup.add(gantryBeam);
+
+      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
+      const signBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(10.2, 2.5, 0.12),
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
+      );
+      signBoard.position.set(0, 4.8, 0);
+      gantryGroup.add(signBoard);
+
+      this.scene.add(gantryGroup);
+    });
+
+    // 7. Highway Light Poles (Dual Cantilever Cobra-head Lights)
+    for (let lz = -310; lz <= 210; lz += 42) {
+      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
+      pole.position.set(flyoverX - flyoverW / 2 + 0.35, deckElev + 3.75, lz);
+      this.scene.add(pole);
+
+      const luminaire = new THREE.Mesh(this.boxCache(0.35, 0.15, 0.8), lampLightMat);
+      luminaire.position.set(flyoverX - flyoverW / 2 + 1.2, deckElev + 7.5, lz);
+      this.scene.add(luminaire);
+    }
   }
 
   /**
@@ -5421,7 +5658,7 @@ export class DhakaCityEngine {
         isHigh ? Math.min(window.devicePixelRatio, 1.35) : 1
       );
       this.renderer.shadowMap.enabled = isHigh;
-      this.camera.far = isHigh ? 1350 : 900;
+      this.camera.far = isHigh ? 2200 : 1500;
       this.camera.updateProjectionMatrix();
     }
 
@@ -6017,18 +6254,7 @@ export class DhakaCityEngine {
       this.scene.fog.density = isRain ? 0.0046 : 0.0019;
     }
 
-    // Center Sky Dome and Skyline Horizon Ring on player and modulate brightness
-    if (this.skyDomeMesh) {
-      this.skyDomeMesh.position.set(this.playerPos.x, 0, this.playerPos.z);
-      (this.skyDomeMesh.material as THREE.MeshBasicMaterial).color.lerp(
-        isNight
-          ? new THREE.Color('#1e293b')
-          : isGolden
-          ? new THREE.Color('#ffffff')
-          : new THREE.Color('#e0f2fe'),
-        dt * 2
-      );
-    }
+
 
     // Dynamic Aviation Hazard Beacon Pulse atop Tall Dhaka Skyline Towers
     if (this.aviationBeacons.length > 0) {
@@ -6060,9 +6286,39 @@ export class DhakaCityEngine {
     this.sunLight.color.set(
       isNight ? '#93b4e8' : isGolden ? '#fb923c' : isRain ? '#94a3b8' : '#fff7d6'
     );
-    // Shadows get softer and shorter near noon, long at dawn/dusk.
-    if (this.sunLight.shadow) {
-      this.sunLight.shadow.radius = isNight ? 6 : isGolden ? 3.2 : 1.6;
+    // Physical Rayleigh/Mie atmospheric scattering sky calculation
+    if (this.sky) {
+      const skyUniforms = this.sky.material.uniforms;
+      if (isGolden) {
+        skyUniforms['turbidity'].value = 8.5; // Tropical evening atmospheric haze
+        skyUniforms['rayleigh'].value = 3.4; // Rich warm golden/amber sunset Rayleigh scattering
+        skyUniforms['mieCoefficient'].value = 0.006;
+        skyUniforms['mieDirectionalG'].value = 0.82;
+      } else if (isNight) {
+        skyUniforms['turbidity'].value = 10.0;
+        skyUniforms['rayleigh'].value = 0.35;
+        skyUniforms['mieCoefficient'].value = 0.002;
+        skyUniforms['mieDirectionalG'].value = 0.7;
+      } else {
+        skyUniforms['turbidity'].value = 4.2;
+        skyUniforms['rayleigh'].value = 1.35;
+        skyUniforms['mieCoefficient'].value = 0.003;
+        skyUniforms['mieDirectionalG'].value = 0.8;
+      }
+
+      const sunPhi = THREE.MathUtils.degToRad(isNight ? 102 : 90 - (sunHeight / 210) * 85);
+      const sunTheta = azimuth;
+      this.sunPosition.setFromSphericalCoords(1, sunPhi, sunTheta);
+      skyUniforms['sunPosition'].value.copy(this.sunPosition);
+      this.sky.position.copy(this.playerPos);
+    }
+
+    if (this.starField) {
+      this.starField.position.copy(this.playerPos);
+      const starTarget = isNight ? 0.92 : 0;
+      const sMat = this.starField.material as THREE.PointsMaterial;
+      sMat.opacity = THREE.MathUtils.lerp(sMat.opacity, starTarget, dt * 2.5);
+      sMat.visible = sMat.opacity > 0.01;
     }
 
     // Lift the shadow floor at night so wet asphalt keeps some detail instead
@@ -7326,7 +7582,7 @@ export class DhakaCityEngine {
    * Supports seamless transition onto elevated Dhaka flyovers, highway approach ramps, and bridges.
    */
   public getRoadElevation(x: number, z: number): number {
-    // Mohakhali Elevated Flyover (Z = -175, road width = 13.6m)
+    // 1. Mohakhali Elevated Flyover (Z = -175, road width = 13.6m)
     if (Math.abs(z - (-175)) <= 6.8) {
       // Main Elevated Flyover Deck (-240m to +240m)
       if (x >= -240 && x <= 240) {
@@ -7343,6 +7599,30 @@ export class DhakaCityEngine {
         return 7.2 * Math.max(0, Math.min(1, t));
       }
     }
+
+    // 2. Dhaka Elevated Expressway at Farmgate (X = 14, road width = 14.2m, Y = 9.2m)
+    if (Math.abs(x - 14) <= 7.1) {
+      if (z >= -340 && z <= 240) {
+        return 9.2;
+      }
+    }
+    // Farmgate Southbound On-Ramp (Z: -120 to -40, X curves 22 -> 14)
+    if (z >= -120 && z <= -40) {
+      const t = (z - (-120)) / 80;
+      const rampX = 22 - t * 8;
+      if (Math.abs(x - rampX) <= 4.2) {
+        return 9.2 * Math.max(0, Math.min(1, t));
+      }
+    }
+    // Farmgate Northbound Exit Off-Ramp (Z: 40 to 120, X curves 14 -> 22)
+    if (z >= 40 && z <= 120) {
+      const t = 1 - (z - 40) / 80;
+      const rampX = 14 + (1 - t) * 8;
+      if (Math.abs(x - rampX) <= 4.2) {
+        return 9.2 * Math.max(0, Math.min(1, t));
+      }
+    }
+
     return 0;
   }
 
