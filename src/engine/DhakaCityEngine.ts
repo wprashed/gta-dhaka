@@ -5947,10 +5947,10 @@ export class DhakaCityEngine {
       { type: 'car', x: 5.5, z: 85, rot: 0, isTraffic: true, color: '#e2e8f0' },
       { type: 'cng', x: -5.5, z: 130, rot: Math.PI, isTraffic: true, color: '#15803d' },
       { type: 'rickshaw', x: 5.5, z: 210, rot: 0, isTraffic: true, color: '#ec4899' },
-      { type: 'bus', x: -60, z: -5.5, rot: Math.PI / 2, isTraffic: true, color: '#b91c1c' },
-      { type: 'cng', x: 75, z: 5.5, rot: -Math.PI / 2, isTraffic: true, color: '#15803d' },
-      { type: 'car', x: 145, z: -5.5, rot: Math.PI / 2, isTraffic: true, color: '#facc15' },
-      { type: 'motorcycle', x: -115, z: 5.5, rot: -Math.PI / 2, isTraffic: true, color: '#e11d48' },
+      { type: 'bus', x: -5.5, z: -240, rot: Math.PI, isTraffic: true, color: '#b91c1c' },
+      { type: 'cng', x: 5.5, z: 165, rot: 0, isTraffic: true, color: '#15803d' },
+      { type: 'car', x: -5.5, z: 290, rot: Math.PI, isTraffic: true, color: '#facc15' },
+      { type: 'motorcycle', x: 5.5, z: -160, rot: 0, isTraffic: true, color: '#e11d48' },
       { type: 'cng', x: 224, z: -45, rot: 0, isTraffic: true, color: '#15803d' },
       { type: 'car', x: 216, z: 65, rot: Math.PI, isTraffic: true, color: '#f8fafc' },
       { type: 'pickup', x: -166, z: -90, rot: 0, isTraffic: true, color: '#0284c7' },
@@ -8140,12 +8140,18 @@ export class DhakaCityEngine {
       const nextX = this.playerPos.x + vx;
       const nextZ = this.playerPos.z + vz;
 
-      const elevX = this.getRoadElevation(nextX, this.playerPos.z);
-      if (!this.checkWorldObstacle(nextX, this.playerPos.z, 0.48, this.activeVehicleId, elevX)) {
+      const elevX = this.getRoadElevation(nextX, this.playerPos.z, this.playerPos.y);
+      if (
+        elevX - this.playerPos.y <= 0.6 &&
+        !this.checkWorldObstacle(nextX, this.playerPos.z, 0.48, this.activeVehicleId, elevX)
+      ) {
         this.playerPos.x = clampWorldCoord(nextX);
       }
-      const elevZ = this.getRoadElevation(this.playerPos.x, nextZ);
-      if (!this.checkWorldObstacle(this.playerPos.x, nextZ, 0.48, this.activeVehicleId, elevZ)) {
+      const elevZ = this.getRoadElevation(this.playerPos.x, nextZ, this.playerPos.y);
+      if (
+        elevZ - this.playerPos.y <= 0.6 &&
+        !this.checkWorldObstacle(this.playerPos.x, nextZ, 0.48, this.activeVehicleId, elevZ)
+      ) {
         this.playerPos.z = clampWorldCoord(nextZ);
       }
 
@@ -8154,7 +8160,30 @@ export class DhakaCityEngine {
       this.walkAnimPhase = 0;
     }
 
-    const groundElev = this.getRoadElevation(this.playerPos.x, this.playerPos.z);
+    // Resolve any clipping / penetration with obstacle colliders
+    for (const b of this.buildingColliders) {
+      const onFlyover = this.playerPos.y > 2.0;
+      if (onFlyover && b.tag !== 'flyover_barrier') continue;
+      if (!onFlyover && b.tag === 'flyover_barrier') continue;
+      if (
+        this.playerPos.x > b.minX &&
+        this.playerPos.x < b.maxX &&
+        this.playerPos.z > b.minZ &&
+        this.playerPos.z < b.maxZ
+      ) {
+        const dMinX = this.playerPos.x - b.minX;
+        const dMaxX = b.maxX - this.playerPos.x;
+        const dMinZ = this.playerPos.z - b.minZ;
+        const dMaxZ = b.maxZ - this.playerPos.z;
+        const minPen = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
+        if (minPen === dMinX) this.playerPos.x = b.minX - 0.45;
+        else if (minPen === dMaxX) this.playerPos.x = b.maxX + 0.45;
+        else if (minPen === dMinZ) this.playerPos.z = b.minZ - 0.45;
+        else this.playerPos.z = b.maxZ + 0.45;
+      }
+    }
+
+    const groundElev = this.getRoadElevation(this.playerPos.x, this.playerPos.z, this.playerPos.y);
     if (!this.isGrounded) {
       this.playerPos.y += this.playerVelY * dt;
       this.playerVelY -= 21 * dt;
@@ -8164,7 +8193,12 @@ export class DhakaCityEngine {
         this.isGrounded = true;
       }
     } else {
-      this.playerPos.y = groundElev;
+      if (this.playerPos.y - groundElev > 0.6) {
+        this.isGrounded = false;
+        this.playerVelY = 0;
+      } else if (groundElev - this.playerPos.y <= 0.6) {
+        this.playerPos.y = groundElev;
+      }
     }
 
     // Update Real Skeletal GLTF AnimationMixer & Weapon / Arm Rig
@@ -8315,7 +8349,7 @@ export class DhakaCityEngine {
     const nextX = veh.x + vx;
     const nextZ = veh.z + vz;
 
-    const nextElev = this.getRoadElevation(nextX, nextZ);
+    const nextElev = this.getRoadElevation(nextX, nextZ, veh.y);
     const radius = Math.max(stats.width, stats.length) * 0.45;
     if (!this.checkWorldObstacle(nextX, nextZ, radius, veh.id, nextElev)) {
       veh.x = clampWorldCoord(nextX);
@@ -8458,7 +8492,8 @@ export class DhakaCityEngine {
     }
 
     const mesh = this.vehicleMeshes.get(veh.id);
-    const elev = this.getRoadElevation(veh.x, veh.z);
+    const elev = this.getRoadElevation(veh.x, veh.z, veh.y);
+    veh.y = elev;
     this.playerPos.set(veh.x, elev, veh.z);
 
     if (mesh) {
@@ -8467,11 +8502,20 @@ export class DhakaCityEngine {
       mesh.userData.noDriver = true;
 
       // Purge any lingering or late-loaded npc_driver from this player-driven vehicle
-      let lingeringDriver = mesh.getObjectByName('npc_driver');
-      while (lingeringDriver) {
-        lingeringDriver.visible = false;
-        lingeringDriver.parent?.remove(lingeringDriver);
-        lingeringDriver = mesh.getObjectByName('npc_driver');
+      for (let i = mesh.children.length - 1; i >= 0; i--) {
+        const c = mesh.children[i];
+        if (
+          c !== this.playerLimbs.group &&
+          c.name &&
+          (c.name === 'npc_driver' ||
+            c.name.startsWith('npc_driver') ||
+            c.name.includes('driver') ||
+            c.name.includes('puller') ||
+            c.name.includes('rider'))
+        ) {
+          c.visible = false;
+          mesh.remove(c);
+        }
       }
 
       mesh.position.set(veh.x, elev, veh.z);
@@ -8515,7 +8559,7 @@ export class DhakaCityEngine {
 
       // Position the player in the exact driver seat in vehicle-local coordinates
       if (veh.type === 'motorcycle') {
-        this.playerLimbs.group.position.set(0, 0.16, -0.30);
+        this.playerLimbs.group.position.set(0, 0.14, -0.22);
         this.playerLimbs.group.rotation.set(-this.bikeWheeliePitch, 0, 0);
         this.playerLimbs.group.scale.set(0.92, 0.92, 0.92);
       } else if (veh.type === 'rickshaw') {
@@ -8764,7 +8808,8 @@ export class DhakaCityEngine {
             this.policeArrestTimer = Math.max(0, this.policeArrestTimer - dt * 2);
           }
 
-          const elev = this.getRoadElevation(veh.x, veh.z);
+          const elev = this.getRoadElevation(veh.x, veh.z, veh.y);
+          veh.y = elev;
           mesh.position.set(veh.x, elev, veh.z);
           mesh.rotation.y = veh.rotation;
           this.animateVehicleWheels(
@@ -8787,9 +8832,7 @@ export class DhakaCityEngine {
       } else {
         targetAngle = (veh.laneDirection ?? 1) > 0 ? 0 : Math.PI;
       }
-      veh.rotation = normalizeAngle(
-        veh.rotation + normalizeAngle(targetAngle - veh.rotation) * Math.min(1, dt * 10.0)
-      );
+      veh.rotation = targetAngle;
 
       const forwardX = Math.sin(veh.rotation);
       const forwardZ = Math.cos(veh.rotation);
@@ -8835,7 +8878,8 @@ export class DhakaCityEngine {
       }
 
       // 3. Static building, median barrier or metro pillar collision directly ahead
-      const elev = this.getRoadElevation(veh.x, veh.z);
+      const elev = this.getRoadElevation(veh.x, veh.z, veh.y);
+      veh.y = elev;
       if (!blockedAhead) {
         const probeDist = stats.length * 0.5 + 2.2;
         const probeX = veh.x + forwardX * probeDist;
@@ -9264,6 +9308,8 @@ export class DhakaCityEngine {
 
     let occluded = false;
     for (const b of this.buildingColliders) {
+      if (b.tag === 'road_median') continue;
+      if (b.tag === 'flyover_barrier' && targetY < 6.0) continue;
       if (
         testCamX + 0.6 > b.minX &&
         testCamX - 0.6 < b.maxX &&
@@ -9324,39 +9370,47 @@ export class DhakaCityEngine {
 
   /**
    * Returns vertical ground/road elevation at world coordinates (X, Z).
-   * Supports seamless transition onto elevated Dhaka flyovers, highway approach ramps, and bridges.
+   * Supports seamless transition onto elevated Dhaka flyovers, highway approach ramps, and bridges
+   * while preserving ground level for pedestrians and vehicles passing underneath.
    */
-  public getRoadElevation(x: number, z: number): number {
-    // 1. Mohakhali Elevated Flyover (Z = -175, road width = 13.6m)
+  public getRoadElevation(x: number, z: number, currentY?: number): number {
+    // 1. Mohakhali Elevated Flyover (Z = -175, road width = 13.6m, Y = 7.2m)
     if (Math.abs(z - (-175)) <= 6.8) {
-      // Main Elevated Flyover Deck (-240m to +240m)
-      if (x >= -240 && x <= 240) {
-        return 7.2;
-      }
       // West Approach Ramp (-320m to -240m)
       if (x >= -320 && x < -240) {
         const t = (x - (-320)) / 80;
-        return 7.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 7.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
       }
       // East Approach Ramp (240m to 320m)
       if (x > 240 && x <= 320) {
         const t = 1 - (x - 240) / 80;
-        return 7.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 7.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
+      }
+      // Main Elevated Flyover Deck (-240m to +240m)
+      if (x >= -240 && x <= 240) {
+        if (currentY !== undefined && currentY < 3.8) {
+          return 0; // Entity is on ground street passing under Mohakhali flyover
+        }
+        return 7.2;
       }
     }
 
     // 2. Dhaka Elevated Expressway at Farmgate (X = 14, road width = 14.2m, Y = 9.2m)
-    if (Math.abs(x - 14) <= 7.1) {
-      if (z >= -340 && z <= 240) {
-        return 9.2;
-      }
-    }
     // Farmgate Southbound On-Ramp (Z: -120 to -40, X curves 22 -> 14)
     if (z >= -120 && z <= -40) {
       const t = (z - (-120)) / 80;
       const rampX = 22 - t * 8;
       if (Math.abs(x - rampX) <= 4.2) {
-        return 9.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 9.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
       }
     }
     // Farmgate Northbound Exit Off-Ramp (Z: 40 to 120, X curves 14 -> 22)
@@ -9364,41 +9418,71 @@ export class DhakaCityEngine {
       const t = 1 - (z - 40) / 80;
       const rampX = 14 + (1 - t) * 8;
       if (Math.abs(x - rampX) <= 4.2) {
-        return 9.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 9.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
+      }
+    }
+    // Main Overhead Expressway Span
+    if (Math.abs(x - 14) <= 7.1) {
+      if (z >= -340 && z <= 240) {
+        if (currentY !== undefined && currentY < 4.8) {
+          return 0; // Entity is on ground street passing under Farmgate Elevated Expressway
+        }
+        return 9.2;
       }
     }
 
     // 3. Mayor Mohammad Hanif Flyover (Z = 360, width 14.2m, Y = 8.8m)
     if (Math.abs(z - 360) <= 7.1) {
-      if (x >= -360 && x <= 360) {
-        return 8.8;
-      }
       // West Approach Ramp (X: -440 to -360)
       if (x >= -440 && x < -360) {
         const t = (x - (-440)) / 80;
-        return 8.8 * Math.max(0, Math.min(1, t));
+        const rampElev = 8.8 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
       }
       // East Approach Ramp (X: 360 to 440)
       if (x > 360 && x <= 440) {
         const t = 1 - (x - 360) / 80;
-        return 8.8 * Math.max(0, Math.min(1, t));
+        const rampElev = 8.8 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
+      }
+      if (x >= -360 && x <= 360) {
+        if (currentY !== undefined && currentY < 4.5) {
+          return 0; // Entity is on ground street passing under Hanif flyover
+        }
+        return 8.8;
       }
     }
 
     // 4. Kuril Interchange Flyover (Z = -315, width 14.2m, Y = 11.2m)
     if (Math.abs(z - (-315)) <= 7.1) {
-      if (x >= 360 && x <= 720) {
-        return 11.2;
-      }
       // West Approach On-Ramp (X: 280 to 360)
       if (x >= 280 && x < 360) {
         const t = (x - 280) / 80;
-        return 11.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
       }
       // East Off-Ramp (X: 720 to 800)
       if (x > 720 && x <= 800) {
         const t = 1 - (x - 720) / 80;
-        return 11.2 * Math.max(0, Math.min(1, t));
+        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
+        if (currentY === undefined || Math.abs(currentY - rampElev) < 3.2 || currentY < 1.0) {
+          return rampElev;
+        }
+      }
+      if (x >= 360 && x <= 720) {
+        if (currentY !== undefined && currentY < 5.5) {
+          return 0; // Entity is on 300ft ground expressway under Kuril interchange
+        }
+        return 11.2;
       }
     }
 
@@ -9451,7 +9535,7 @@ export class DhakaCityEngine {
     if (this.vehicles) {
       for (const otherVeh of this.vehicles) {
         if (ignoreVehicleId && otherVeh.id === ignoreVehicleId) continue;
-        const otherElev = this.getRoadElevation(otherVeh.x, otherVeh.z);
+        const otherElev = this.getRoadElevation(otherVeh.x, otherVeh.z, otherVeh.y);
         if (Math.abs(elev - otherElev) > 3.0) continue; // Separated vertical levels
         const oStats = VEHICLE_STATS[otherVeh.type];
         const otherRadius = Math.max(oStats.width, oStats.length) * 0.42;

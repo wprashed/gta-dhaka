@@ -1254,131 +1254,337 @@ export function createVehicleMesh(
   }
 
   if (type === 'bus') {
-    const busSkinTex = loadRealTexture('/textures/dhaka_bus_skin.jpg', 1, 1, false);
-    const busBodyMat = new THREE.MeshPhysicalMaterial({
+    // ULTRA-REALISTIC FULLY 3D SCULPTED DHAKA BRTC BUS (বিআরটিসি ঢাকা সিটি বাস)
+    // Engineered with true 3D chassis, recessed wheel arches, 3D passenger windows,
+    // interior seats & handrails, bi-fold doors, front grille & chrome mirrors.
+    const busRedMat = new THREE.MeshPhysicalMaterial({
       color: customColor || '#b91c1c',
-      roughness: 0.24,
-      metalness: 0.25,
-      clearcoat: 0.85,
+      metalness: 0.22,
+      roughness: 0.32,
+      clearcoat: 0.65,
     });
     const busGreenMat = new THREE.MeshPhysicalMaterial({
-      color: '#15803d',
-      roughness: 0.26,
+      color: '#0f766e',
       metalness: 0.22,
-      clearcoat: 0.82,
+      roughness: 0.32,
+      clearcoat: 0.65,
     });
-    const busSideSkinMat = new THREE.MeshPhysicalMaterial({
-      map: busSkinTex,
-      roughness: 0.28,
-      metalness: 0.18,
-      clearcoat: 0.78,
+    const goldStripeMat = new THREE.MeshStandardMaterial({
+      color: '#f59e0b',
+      metalness: 0.45,
+      roughness: 0.35,
     });
-    const glassMat = new THREE.MeshPhysicalMaterial({
+    const darkChassisMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      roughness: 0.85,
+    });
+    const tintedGlassMat = new THREE.MeshPhysicalMaterial({
       color: '#0f172a',
       transparent: true,
-      opacity: 0.52,
-      metalness: 0.25,
+      opacity: 0.58,
+      metalness: 0.3,
       roughness: 0.08,
+      reflectivity: 0.85,
+    });
+    const windowFrameMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      metalness: 0.6,
+      roughness: 0.4,
+    });
+    const seatFabricMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      roughness: 0.7,
+    });
+    const chromeRailMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.88,
+      roughness: 0.15,
     });
 
-    // Lower green BRTC skirt & chassis
-    const lowerSkirt = new THREE.Mesh(
-      new THREE.BoxGeometry(2.68, 0.92, 8.6),
+    // 1. Lower chassis bed & structural underbody
+    const underchassis = new THREE.Mesh(
+      new THREE.BoxGeometry(2.52, 0.42, 8.8),
+      darkChassisMat
+    );
+    underchassis.position.set(0, 0.44, 0);
+    underchassis.castShadow = true;
+    group.add(underchassis);
+
+    // 2. Sculpted Lower Emerald Green Skirt with Recessed 3D Wheel Arches
+    // Front segment ahead of front wheels (Z: 3.3 to 4.45)
+    const skirtFront = new THREE.Mesh(
+      new THREE.BoxGeometry(2.62, 0.65, 1.15),
       busGreenMat
     );
-    lowerSkirt.position.set(0, 0.82, 0);
-    lowerSkirt.castShadow = true;
-    group.add(lowerSkirt);
+    skirtFront.position.set(0, 0.78, 3.87);
+    skirtFront.castShadow = true;
+    group.add(skirtFront);
 
-    // Upper crimson coach body
-    const upperBody = new THREE.Mesh(
-      new THREE.BoxGeometry(2.66, 1.82, 8.54),
-      busBodyMat
+    // Mid segment between front and rear wheels (Z: -1.75 to 2.0)
+    const skirtMid = new THREE.Mesh(
+      new THREE.BoxGeometry(2.62, 0.65, 3.75),
+      busGreenMat
     );
-    upperBody.position.set(0, 2.12, 0);
-    upperBody.castShadow = true;
-    group.add(upperBody);
+    skirtMid.position.set(0, 0.78, 0.12);
+    skirtMid.castShadow = true;
+    group.add(skirtMid);
 
-    // Orthographic Photorealistic Dhaka BRTC Bus Side Skins (ফার্মগেট - শাহবাগ - মতিঝিল - উত্তরা)
-    [-1.345, 1.345].forEach((sx) => {
-      const sidePanel = new THREE.Mesh(
-        new THREE.PlaneGeometry(8.5, 2.55),
-        busSideSkinMat
-      );
-      sidePanel.position.set(sx, 1.66, 0);
-      sidePanel.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
-      group.add(sidePanel);
+    // Rear segment behind rear wheels (Z: -4.45 to -3.35)
+    const skirtRear = new THREE.Mesh(
+      new THREE.BoxGeometry(2.62, 0.65, 1.1),
+      busGreenMat
+    );
+    skirtRear.position.set(0, 0.78, -3.9);
+    skirtRear.castShadow = true;
+    group.add(skirtRear);
+
+    // Wheel Arch Lip Trim (curves over front & rear tires)
+    [-1.32, 1.32].forEach((sx) => {
+      [2.65, -2.55].forEach((wz) => {
+        const archTrim = new THREE.Mesh(
+          new THREE.BoxGeometry(0.04, 0.22, 1.45),
+          darkChassisMat
+        );
+        archTrim.position.set(sx, 1.05, wz);
+        group.add(archTrim);
+      });
     });
 
-    // Panoramic Front & Rear Bus Windshields
-    const frontWindshield = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.42, 1.12),
-      glassMat
+    // 3. Iconic Dhaka BRTC Golden Yellow Coach Divider Stripe
+    [-1.315, 1.315].forEach((sx) => {
+      const stripeSide = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, 0.085, 8.8),
+        goldStripeMat
+      );
+      stripeSide.position.set(sx, 1.14, 0);
+      group.add(stripeSide);
+    });
+
+    // 4. Upper Crimson Red Coachwork Body (waistline to roof)
+    // Lower body waistline band beneath windows
+    const waistline = new THREE.Mesh(
+      new THREE.BoxGeometry(2.62, 0.45, 8.8),
+      busRedMat
     );
-    frontWindshield.position.set(0, 2.18, 4.28);
+    waistline.position.set(0, 1.38, 0);
+    waistline.castShadow = true;
+    group.add(waistline);
+
+    // Continuous curved roof slab with rounded crown
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(2.64, 0.32, 8.9),
+      busRedMat
+    );
+    roof.position.set(0, 2.92, 0);
+    roof.castShadow = true;
+    group.add(roof);
+
+    // 5. 3D Window Bay, Pillars and Tinted Glazing Panes
+    // Side Window Bands: Left & Right
+    [-1.315, 1.315].forEach((sx) => {
+      // Continuous dark interior frame backing
+      const windowBacking = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, 1.15, 8.6),
+        windowFrameMat
+      );
+      windowBacking.position.set(sx, 2.18, 0);
+      group.add(windowBacking);
+
+      // Tinted glass ribbon
+      const glassPane = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.55, 1.12),
+        tintedGlassMat
+      );
+      glassPane.position.set(sx > 0 ? sx + 0.015 : sx - 0.015, 2.18, 0);
+      glassPane.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      group.add(glassPane);
+
+      // Realistic 3D Window Pillars (vertical mullions every ~1.2m)
+      for (let i = -3; i <= 3; i++) {
+        const pillar = new THREE.Mesh(
+          new THREE.BoxGeometry(0.04, 1.16, 0.12),
+          busRedMat
+        );
+        pillar.position.set(sx, 2.18, i * 1.22);
+        group.add(pillar);
+      }
+    });
+
+    // 6. Visible Interior: Rows of Passenger Seats & Handrails inside the bus
+    for (let row = -3; row <= 2; row++) {
+      const rz = row * 1.25;
+      [-0.72, 0.72].forEach((seatX) => {
+        // Seat Cushion & Backrest
+        const seatBase = new THREE.Mesh(
+          new THREE.BoxGeometry(0.65, 0.12, 0.45),
+          seatFabricMat
+        );
+        seatBase.position.set(seatX, 1.28, rz);
+        const seatBack = new THREE.Mesh(
+          new THREE.BoxGeometry(0.65, 0.52, 0.1),
+          seatFabricMat
+        );
+        seatBack.position.set(seatX, 1.58, rz - 0.18);
+        group.add(seatBase, seatBack);
+      });
+    }
+
+    // Overhead Yellow Straphanger Grab Rails along central aisle
+    [-0.22, 0.22].forEach((rx) => {
+      const rail = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.022, 0.022, 7.8, 8).rotateX(Math.PI / 2),
+        chromeRailMat
+      );
+      rail.position.set(rx, 2.65, 0);
+      group.add(rail);
+    });
+
+    // 7. Panoramic Sloped Aerodynamic Front Windshield & Face
+    const frontWindshield = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.46, 1.28),
+      tintedGlassMat
+    );
+    frontWindshield.position.set(0, 2.22, 4.42);
+    frontWindshield.rotation.x = -0.08;
     group.add(frontWindshield);
 
-    const rearWindshield = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.36, 0.92),
-      glassMat
+    // Front Bumper & Low-slung Air Dam
+    const frontBumper = new THREE.Mesh(
+      new THREE.BoxGeometry(2.72, 0.44, 0.28),
+      darkChassisMat
     );
-    rearWindshield.position.set(0, 2.22, -4.28);
+    frontBumper.position.set(0, 0.52, 4.42);
+    group.add(frontBumper);
+
+    // Front Radiator Grille with Chrome Trim
+    const frontGrille = new THREE.Mesh(
+      new THREE.BoxGeometry(1.65, 0.38, 0.08),
+      new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.85, roughness: 0.3 })
+    );
+    frontGrille.position.set(0, 0.94, 4.43);
+    group.add(frontGrille);
+
+    // BRTC Chrome Front Logo Badge
+    const brtcLogo = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.04, 12).rotateX(Math.PI / 2),
+      chromeRailMat
+    );
+    brtcLogo.position.set(0, 0.94, 4.48);
+    group.add(brtcLogo);
+
+    // Dual Xenon Headlamp Assemblies with Amber Indicators
+    [-0.98, 0.98].forEach((hx) => {
+      const hl = new THREE.Mesh(
+        new THREE.BoxGeometry(0.38, 0.24, 0.08),
+        new THREE.MeshBasicMaterial({ color: '#fef08a' })
+      );
+      hl.position.set(hx, 0.84, 4.44);
+      group.add(hl);
+
+      const ind = new THREE.Mesh(
+        new THREE.BoxGeometry(0.14, 0.24, 0.08),
+        new THREE.MeshBasicMaterial({ color: '#f59e0b' })
+      );
+      ind.position.set(hx > 0 ? hx + 0.24 : hx - 0.24, 0.84, 4.44);
+      group.add(ind);
+    });
+
+    // 8. Illuminated Destination Board (ফার্মগেট - শাহবাগ - মতিঝিল - উত্তরা)
+    const routeSign = new THREE.Mesh(
+      new THREE.BoxGeometry(2.15, 0.42, 0.1),
+      new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(seed + 2) })
+    );
+    routeSign.position.set(0, 2.92, 4.42);
+    group.add(routeSign);
+
+    // 9. Rear Bus Facade: Rear Window, Vertical Taillight Columns & Emergency Exit Door
+    const rearWindshield = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.38, 0.98),
+      tintedGlassMat
+    );
+    rearWindshield.position.set(0, 2.28, -4.42);
     rearWindshield.rotation.y = Math.PI;
     group.add(rearWindshield);
 
-    // Illuminated Bangla Destination Board (ফার্মগেট - মতিঝিল - উত্তরা)
-    const routeSign = new THREE.Mesh(
-      new THREE.BoxGeometry(2.05, 0.38, 0.08),
-      new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(seed + 2) })
+    const rearBumper = new THREE.Mesh(
+      new THREE.BoxGeometry(2.72, 0.44, 0.28),
+      darkChassisMat
     );
-    routeSign.position.set(0, 2.86, 4.26);
-    group.add(routeSign);
+    rearBumper.position.set(0, 0.52, -4.42);
+    group.add(rearBumper);
 
-    const roofAc = new THREE.Mesh(
-      new THREE.BoxGeometry(1.75, 0.28, 3.4),
-      new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.4 })
-    );
-    roofAc.position.set(0, 3.14, 0.3);
-    group.add(roofAc);
-
-    // Front Bumper, Grille & Glowing Xenon Headlights
-    const frontBumper = new THREE.Mesh(
-      new THREE.BoxGeometry(2.74, 0.36, 0.22),
-      new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.5 })
-    );
-    frontBumper.position.set(0, 0.54, 4.28);
-    group.add(frontBumper);
-
-    [-0.96, 0.96].forEach((hx) => {
-      const hl = new THREE.Mesh(
-        new THREE.BoxGeometry(0.42, 0.24, 0.1),
-        new THREE.MeshBasicMaterial({ color: '#fef08a' })
-      );
-      hl.position.set(hx, 0.86, 4.29);
-      group.add(hl);
-
-      const tl = new THREE.Mesh(
-        new THREE.BoxGeometry(0.38, 0.26, 0.1),
+    // Vertical Taillights (Red brake, Amber turn, White reverse)
+    [-1.02, 1.02].forEach((tx) => {
+      const brake = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.28, 0.08),
         new THREE.MeshBasicMaterial({ color: '#ef4444' })
       );
-      tl.position.set(hx, 0.92, -4.29);
-      group.add(tl);
+      brake.position.set(tx, 1.25, -4.44);
+      const turn = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.16, 0.08),
+        new THREE.MeshBasicMaterial({ color: '#f59e0b' })
+      );
+      turn.position.set(tx, 0.98, -4.44);
+      group.add(brake, turn);
     });
 
-    const busPlate = new THREE.Mesh(
+    // 10. Heavy Duty Chrome Aerodynamic Side View Mirrors
+    [-1.42, 1.42].forEach((mx) => {
+      const mArm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 0.42, 8).rotateZ(mx > 0 ? -Math.PI / 4 : Math.PI / 4),
+        darkChassisMat
+      );
+      mArm.position.set(mx > 0 ? mx - 0.12 : mx + 0.12, 2.12, 4.22);
+      const mGlass = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.38, 0.18),
+        darkChassisMat
+      );
+      mGlass.position.set(mx, 2.12, 4.28);
+      group.add(mArm, mGlass);
+    });
+
+    // 11. Rooftop HVAC Conditioning Pods & Air Scoops
+    const roofAc = new THREE.Mesh(
+      new THREE.BoxGeometry(1.82, 0.34, 3.6),
+      new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.35, metalness: 0.2 })
+    );
+    roofAc.position.set(0, 3.22, 0.4);
+    group.add(roofAc);
+
+    const roofHatch = new THREE.Mesh(
+      new THREE.BoxGeometry(0.85, 0.08, 0.85),
+      busRedMat
+    );
+    roofHatch.position.set(0, 3.12, -2.6);
+    group.add(roofHatch);
+
+    // Authentic Bangladeshi Metro Number Plates (ঢাকা মেট্রো-ব ১১-XXXX)
+    const busPlateFront = new THREE.Mesh(
       new THREE.PlaneGeometry(0.56, 0.18),
       new THREE.MeshBasicMaterial({
         map: createBanglaNumberPlateTexture(`ঢাকা মেট্রো-ব ১১-${4102 + (seed % 9) * 17}`, false),
         side: THREE.DoubleSide,
       })
     );
-    busPlate.position.set(0, 0.54, 4.4);
-    group.add(busPlate);
+    busPlateFront.position.set(0, 0.54, 4.56);
+    group.add(busPlateFront);
 
-    addWheel(-1.34, 0.48, 2.65, 1.35);
-    addWheel(1.34, 0.48, 2.65, 1.35);
-    addWheel(-1.34, 0.48, -2.55, 1.35);
-    addWheel(1.34, 0.48, -2.55, 1.35);
+    const busPlateRear = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.56, 0.18),
+      new THREE.MeshBasicMaterial({
+        map: createBanglaNumberPlateTexture(`ঢাকা মেট্রো-ব ১১-${4102 + (seed % 9) * 17}`, false),
+        side: THREE.DoubleSide,
+      })
+    );
+    busPlateRear.position.set(0, 0.54, -4.56);
+    busPlateRear.rotation.y = Math.PI;
+    group.add(busPlateRear);
+
+    // Heavy-duty bus wheels situated properly in the recessed wheel arches
+    addWheel(-1.32, 0.48, 2.65, 1.45);
+    addWheel(1.32, 0.48, 2.65, 1.45);
+    addWheel(-1.32, 0.48, -2.55, 1.45);
+    addWheel(1.32, 0.48, -2.55, 1.45);
 
     // Bus driver seated in the elevated front driver cabin (traffic only)
     if (hasDriver) {
@@ -1630,22 +1836,22 @@ export function createVehicleMesh(
           rider.position.set(0, 0.16, -0.30);
 
           // Authentic human motorcycle riding posture:
-          // Thighs rotated forward hugging fuel tank (-1.05 rad) with outward splay (±0.22 rad)
+          // Thighs rotated forward hugging fuel tank (-0.78 rad) with outward splay (±0.26 rad on Y)
           const leftThighQuat = new THREE.Quaternion()
-            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -1.05)
-            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.22));
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.78)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -0.26));
           const rightThighQuat = new THREE.Quaternion()
-            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -1.05)
-            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.22));
-          // Knees bent backward (+1.25 rad) angling shins down and back to footpegs
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.78)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.26));
+          // Knees bent backward (+0.95 rad) angling shins cleanly down to footpegs
           const kneeBendQuat = new THREE.Quaternion().setFromAxisAngle(
             new THREE.Vector3(1, 0, 0),
-            1.25
+            0.95
           );
           // Feet flexed flat on footpegs
           const footFlatQuat = new THREE.Quaternion().setFromAxisAngle(
             new THREE.Vector3(1, 0, 0),
-            -0.25
+            0.12
           );
           // Arms reach forward and slightly outward to grip handlebars at (±0.30, 1.16, 0.56)
           const leftArmQuat = new THREE.Quaternion()
@@ -3126,18 +3332,10 @@ export function setCharacterAnimationState(
         // AUTHENTIC SLUNG-ON-BACK STANCE (GTA V / PUBG / The Last of Us):
         // Slung diagonally across the upper back from right shoulder to left lower back.
         // Barrel extends UP past the right shoulder, stock rests against lower back.
+        // Positioned in character root space for rock-solid stability across all skeletal GLTF models,
         // COMPLETELY CLEAR OF PELVIS, HIPS, AND LEGS!
-        if (limbs.spineBone) {
-          getNodeTransformInRoot(limbs.spineBone, limbs.group, _spPos, _spQuat);
-          _spTmp.set(0.10, 0.08, -0.16).applyQuaternion(_spQuat);
-          wm.position.copy(_spPos).add(_spTmp);
-
-          _slungQuat.setFromEuler(_slungEuler);
-          wm.quaternion.copy(_spQuat).multiply(_slungQuat);
-        } else {
-          wm.position.set(0.10, 1.28, -0.16);
-          wm.quaternion.copy(_slungQuat);
-        }
+        wm.position.set(0.06, 1.26, -0.16);
+        wm.rotation.set(-Math.PI / 2 + 0.18, -0.15, 0.44);
       }
     } else if (weaponCategory === 'pistol') {
       if (isAimingGun || attackTimer > 0) {
@@ -3242,57 +3440,57 @@ export function setDrivingPose(
 
   if (vehicleType === 'motorcycle') {
     // MOTORCYCLE BIKER POSE:
-    // Both thighs rotate forward hugging fuel tank (-1.05 rad on axisX), splayed outward (±0.22 rad on axisZ)
-    // Both knees bend back (+1.25 rad on axisX) so lower legs angle down & back to footpegs
-    // Feet flex flat on footpegs (-0.25 rad on axisX)
-    // Spine leans forward over fuel tank (0.38 rad) + banking into steer & wheelie
-    // Arms reach forward to handlebars (axisZ: ±0.82 rad, axisX: +0.38 rad)
-    // Forearms bend elbows inward (axisZ: ∓0.35 rad) to grip handlebar ends
+    // Thighs rotated forward hugging fuel tank (-0.78 rad on axisX), splayed outward around tank (±0.25 rad on axisY)
+    // Knees bent naturally back (+0.95 rad on axisX) angling shins cleanly down to footpegs
+    // Feet resting flat on footpegs (0.12 rad on axisX)
+    // Spine leaning forward over fuel tank (0.24 rad) + banking into steer & wheelie
+    // Arms reaching forward to grips (axisZ: ±0.72 rad, axisX: +0.42 rad)
+    // Forearms resting on handlebar controls
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.22));
+      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisY, -0.26));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.22));
+      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisY, 0.26));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.25);
+      tmpQ.setFromAxisAngle(axisX, 0.95);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
     }
     if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.25);
+      tmpQ.setFromAxisAngle(axisX, 0.95);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
     }
     if (rig.leftFoot) {
-      tmpQ.setFromAxisAngle(axisX, -0.25);
+      tmpQ.setFromAxisAngle(axisX, 0.12);
       rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
     }
     if (rig.rightFoot) {
-      tmpQ.setFromAxisAngle(axisX, -0.25);
+      tmpQ.setFromAxisAngle(axisX, 0.12);
       rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
     }
     if (rig.spine) {
-      const speedLean = Math.min(0.22, Math.abs(speed) * 0.012);
-      const forwardLean = 0.38 + speedLean + wheeliePitch * 0.45;
-      const turnLean = -steer * 0.25;
+      const speedLean = Math.min(0.18, Math.abs(speed) * 0.01);
+      const forwardLean = 0.24 + speedLean + wheeliePitch * 0.45;
+      const turnLean = -steer * 0.22;
       tmpQ.setFromAxisAngle(axisX, forwardLean).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, turnLean));
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.82).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
+      tmpQ.setFromAxisAngle(axisZ, 0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.82).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
+      tmpQ.setFromAxisAngle(axisZ, -0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
     }
     if (rig.leftForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.35);
+      tmpQ.setFromAxisAngle(axisZ, -0.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.2));
       rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
     }
     if (rig.rightForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.35);
+      tmpQ.setFromAxisAngle(axisZ, 0.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.2));
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
   } else if (vehicleType === 'rickshaw') {
