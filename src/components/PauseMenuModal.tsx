@@ -6,6 +6,7 @@ import {
   SIDE_MISSIONS,
   STORY_MISSIONS,
   VEHICLE_STATS,
+  PLAYABLE_CHARACTERS,
 } from '../data/dhakaWorldData';
 import {
   CHARACTER_PORTRAITS,
@@ -68,6 +69,8 @@ export const PauseMenuModal: React.FC = () => {
     outfits,
     equippedOutfitId,
     equipOutfit,
+    selectedCharacterId,
+    selectCharacter,
     tools,
     equippedToolId,
     equipTool,
@@ -1124,83 +1127,153 @@ export const PauseMenuModal: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 5: CHARACTER & BANGLADESHI OUTFITS */}
+        {/* TAB 5: CHARACTER SELECTION & MODERN STREETWEAR WARDROBE */}
         {pauseTab === 'character' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
-              <div className="flex items-center gap-4">
-                <img
-                  src={CHARACTER_PORTRAITS.arif}
-                  alt="Arif Rahman"
-                  className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-400 shadow-xl"
-                />
+          <div className="space-y-6">
+            {/* 1. Playable Character Selection (৫ জন চরিত্র নির্বাচন) */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-black text-white">
-                    Arif Rahman (আরিফ রহমান)
+                  <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
+                    <User className="w-5 h-5 text-emerald-400" />
+                    {language === 'en'
+                      ? 'SELECT PLAYABLE CHARACTER'
+                      : 'খেলার চরিত্র নির্বাচন করুন'}
                   </h3>
-                  <p className="text-xs text-amber-400 font-semibold">
-                    Age: 27 • Home Neighborhood: Farmgate, Dhaka
-                  </p>
-                  <p className="text-[11px] text-emerald-400 font-bold mt-1">
-                    Rigged 3D Skeletal GLTF Character Model Active
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {language === 'en'
+                      ? 'Switch seamlessly between 5 unique Dhaka heroes with customized skills, stats, and authentic 3D skeletal animations.'
+                      : 'ঢাকার ৫ জন অনন্য চরিত্রের মধ্য থেকে বেছে নিন। প্রত্যেকের নিজস্ব ড্রাইভিং ও অ্যাকশন দক্ষতা রয়েছে।'}
                   </p>
                 </div>
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
+                  {PLAYABLE_CHARACTERS.length} Characters Available
+                </span>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed mt-1">
-                {language === 'en'
-                  ? 'Raised in a middle-class family in Dhaka, Arif returned home after an unexpected crisis involving his brother Rafiq. Navigating between Old Dhaka’s riverfront syndicates and Motijheel’s corporate towers, your choices shape his reputation.'
-                  : 'ঢাকার এক মধ্যবিত্ত পরিবারে বেড়ে ওঠা আরিফ ভাই রফিকের আকস্মিক সংকটের খবর পেয়ে শহরে ফিরে এসেছে। পুরান ঢাকার ঘাট থেকে মতিঝিলের কর্পোরেট টাওয়ার পর্যন্ত আপনার প্রতিটি সিদ্ধান্ত তার ভবিষ্যৎ নির্ধারণ করবে।'}
-              </p>
 
-              {/* Key Story Contacts Gallery */}
-              <div className="grid grid-cols-3 gap-2 pt-2">
-                {[
-                  {
-                    name: 'Nadia Hasan',
-                    role: 'Journalist',
-                    img: CHARACTER_PORTRAITS.nadia,
-                  },
-                  {
-                    name: 'Uncle Kamal',
-                    role: 'Farmgate Mentor',
-                    img: CHARACTER_PORTRAITS.kamal,
-                  },
-                  {
-                    name: 'Chairman Sikder',
-                    role: 'Syndicate Boss',
-                    img: CHARACTER_PORTRAITS.sikder,
-                  },
-                ].map((c) => (
-                  <div
-                    key={c.name}
-                    className="bg-slate-950 p-2 rounded-xl border border-slate-800 flex items-center gap-2"
-                  >
-                    <img
-                      src={c.img}
-                      alt={c.name}
-                      className="w-10 h-10 rounded-lg object-cover border border-slate-700"
-                    />
-                    <div className="truncate">
-                      <p className="text-[11px] font-bold text-white truncate">
-                        {c.name}
-                      </p>
-                      <p className="text-[9px] text-amber-400 truncate">
-                        {c.role}
-                      </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {PLAYABLE_CHARACTERS.map((char) => {
+                  const isSelected = selectedCharacterId === char.id;
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => selectCharacter(char.id)}
+                      className={`relative p-4 rounded-xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-emerald-950/40 border-emerald-400 ring-2 ring-emerald-500/30 shadow-xl scale-[1.01]'
+                          : 'bg-slate-950/80 border-slate-800 hover:border-slate-700 hover:bg-slate-950'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={char.avatar}
+                          alt={char.nameEn}
+                          className={`w-14 h-14 rounded-xl object-cover border-2 shrink-0 ${
+                            isSelected ? 'border-emerald-400 shadow-md' : 'border-slate-700'
+                          }`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <h4 className="text-sm font-black text-white truncate">
+                              {language === 'en' ? char.nameEn : char.nameBn}
+                            </h4>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-amber-300">
+                              {char.badge}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {language === 'en' ? char.taglineEn : char.taglineBn}
+                          </p>
+                          <div className="mt-2 text-[10px] text-emerald-300 font-semibold bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20">
+                            ⚡ {language === 'en' ? char.specialAbilityEn : char.specialAbilityBn}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stat Bars */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 pt-2.5 border-t border-slate-800/80 text-[10px]">
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Speed</span>
+                            <span className="font-mono text-white">{char.stats.speed}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-cyan-400 rounded-full" style={{ width: `${char.stats.speed}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Driving</span>
+                            <span className="font-mono text-white">{char.stats.driving}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${char.stats.driving}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Stamina</span>
+                            <span className="font-mono text-white">{char.stats.stamina}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-amber-400 rounded-full" style={{ width: `${char.stats.stamina}%` }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-slate-400 mb-0.5">
+                            <span>Combat</span>
+                            <span className="font-mono text-white">{char.stats.combat}%</span>
+                          </div>
+                          <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-rose-400 rounded-full" style={{ width: `${char.stats.combat}%` }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectCharacter(char.id);
+                          }}
+                          className={`w-full py-1.5 rounded-lg text-xs font-black transition-all ${
+                            isSelected
+                              ? 'bg-emerald-500 text-slate-950 shadow-md'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                          }`}
+                        >
+                          {isSelected
+                            ? language === 'en'
+                              ? 'ACTIVE HERO ✓'
+                              : 'সক্রিয় চরিত্র ✓'
+                            : language === 'en'
+                            ? `SELECT ${char.nameEn.toUpperCase()}`
+                            : `${char.nameBn} নির্বাচন`}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
-              <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4" />
-                {language === 'en'
-                  ? 'Banani & BangaBazar Wardrobe'
-                  : 'বনানী ও বঙ্গবাজার পোশাক সংগ্রহ'}
-              </h3>
-              <div className="space-y-2.5">
+            {/* 2. Modern Streetwear & Dhaka Wardrobe (আধুনিক পোশাক ও ড্রেস) */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-black text-amber-400 flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-amber-400" />
+                  {language === 'en'
+                    ? 'MODERN STREETWEAR & DHAKA WARDROBE'
+                    : 'আধুনিক পোশাক ও ওয়ার্ডরোব'}
+                </h3>
+                <span className="text-xs text-slate-400">
+                  {language === 'en'
+                    ? 'Authentic modern jackets, denim & sneakers'
+                    : 'আধুনিক জ্যাকেট, ডেনিম ও স্নিকার্স'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {outfits.map((o) => {
                   const isEq = equippedOutfitId === o.id;
                   return (
@@ -1208,27 +1281,27 @@ export const PauseMenuModal: React.FC = () => {
                       key={o.id}
                       className={`p-3.5 rounded-xl border flex items-center justify-between ${
                         isEq
-                          ? 'bg-emerald-950/30 border-emerald-400'
+                          ? 'bg-emerald-950/30 border-emerald-400 shadow-md'
                           : 'bg-slate-950 border-slate-800'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <span
-                          className="w-7 h-7 rounded-lg border border-white/30 shrink-0"
+                          className="w-8 h-8 rounded-lg border border-white/30 shrink-0 shadow-sm"
                           style={{ backgroundColor: o.shirtColor }}
                         />
                         <div>
                           <p className="text-xs font-extrabold text-white">
                             {language === 'en' ? o.nameEn : o.nameBn}
                           </p>
-                          <p className="text-[10px] text-slate-400">
+                          <p className="text-[10px] text-slate-400 mt-0.5">
                             {o.unlocked ? 'Owned' : `Price: ৳ ${o.price}`}
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => equipOutfit(o.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
                           isEq
                             ? 'bg-emerald-500 text-slate-950'
                             : 'bg-amber-400 hover:bg-amber-300 text-slate-950'

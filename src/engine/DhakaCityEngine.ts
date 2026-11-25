@@ -6,6 +6,7 @@ import {
   SIDE_MISSIONS,
   STORY_MISSIONS,
   VEHICLE_STATS,
+  PLAYABLE_CHARACTERS,
 } from '../data/dhakaWorldData';
 import {
   DistrictId,
@@ -13,6 +14,7 @@ import {
   NPCRole,
   VehicleEntity,
   VehicleType,
+  PlayableCharacterId,
 } from '../types/game';
 import {
   CharacterLimbs,
@@ -53,6 +55,8 @@ interface BuildingCollider {
   maxX: number;
   minZ: number;
   maxZ: number;
+  minY?: number;
+  maxY?: number;
   tag?: string;
 }
 
@@ -134,6 +138,8 @@ export class DhakaCityEngine {
   private isCrouching = false;
   private attackAnimTimer = 0;
   private walkAnimPhase = 0;
+  private footstepTimer = 0;
+  private footstepRight = false;
   private lastEquippedOutfit = '';
   private lastEquippedTool = '';
 
@@ -2564,20 +2570,20 @@ export class DhakaCityEngine {
     );
     const dhakaCommercialTex = loadRealTexture(
       '/textures/dhaka_commercial_tower.jpg',
-      1,
-      2,
+      3,
+      6,
       true
     );
     const dhakaOldCityTex = loadRealTexture(
       '/textures/dhaka_old_city_facade.jpg',
-      1,
-      2,
+      3,
+      5,
       true
     );
     const dhakaSidewalkTileTex = loadRealTexture(
       '/textures/dhaka_ground_sidewalk.jpg',
-      6,
-      6,
+      24,
+      24,
       true
     );
 
@@ -3262,8 +3268,8 @@ export class DhakaCityEngine {
     );
     const dhakaSidewalkTileTex = loadRealTexture(
       '/textures/dhaka_ground_sidewalk.jpg',
-      4,
-      4,
+      24,
+      24,
       true
     );
 
@@ -3610,6 +3616,8 @@ export class DhakaCityEngine {
       maxX: 240,
       minZ: flyoverZ - flyoverW / 2 - 0.65,
       maxZ: flyoverZ - flyoverW / 2 + 0.65,
+      minY: 6.0,
+      maxY: 9.5,
       tag: 'flyover_barrier',
     });
 
@@ -3620,6 +3628,8 @@ export class DhakaCityEngine {
       maxX: 240,
       minZ: flyoverZ + flyoverW / 2 - 0.65,
       maxZ: flyoverZ + flyoverW / 2 + 0.65,
+      minY: 6.0,
+      maxY: 9.5,
       tag: 'flyover_barrier',
     });
 
@@ -3635,6 +3645,8 @@ export class DhakaCityEngine {
         maxX: -240,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 8.5,
         tag: 'flyover_barrier',
       });
     });
@@ -3651,6 +3663,8 @@ export class DhakaCityEngine {
         maxX: 320,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 8.5,
         tag: 'flyover_barrier',
       });
     });
@@ -3813,14 +3827,16 @@ export class DhakaCityEngine {
     this.scene.add(offRampMesh);
 
     // 4. Solid Concrete Crash Barriers & Physics Colliders
-    // 4.1 Continuous West Edge Crash Barrier (X = 6.9, Z: -340 to +240)
+    // 4.1 Continuous West Edge Crash Barrier (X = 7.12, Z: -340 to +240)
     const westBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX - flyoverW / 2 + 0.22, deckElev + 0.62, -50);
     this.scene.add(westBarrier);
     this.buildingColliders.push({
-      minX: flyoverX - flyoverW / 2 - 0.65,
-      maxX: flyoverX - flyoverW / 2 + 0.65,
+      minX: 6.8,
+      maxX: 7.45,
       minZ: -340,
       maxZ: 240,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -3829,10 +3845,12 @@ export class DhakaCityEngine {
     const eastBarrierN = this.sharedBox(0.45, 1.25, 220, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -230);
     this.scene.add(eastBarrierN);
     this.buildingColliders.push({
-      minX: flyoverX + flyoverW / 2 - 0.65,
-      maxX: flyoverX + flyoverW / 2 + 0.65,
+      minX: 20.6,
+      maxX: 21.25,
       minZ: -340,
       maxZ: -120,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -3840,10 +3858,12 @@ export class DhakaCityEngine {
     const eastBarrierM = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
     this.scene.add(eastBarrierM);
     this.buildingColliders.push({
-      minX: flyoverX + flyoverW / 2 - 0.65,
-      maxX: flyoverX + flyoverW / 2 + 0.65,
+      minX: 20.6,
+      maxX: 21.25,
       minZ: -40,
       maxZ: 40,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -3851,10 +3871,12 @@ export class DhakaCityEngine {
     const eastBarrierS = this.sharedBox(0.45, 1.25, 120, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 180);
     this.scene.add(eastBarrierS);
     this.buildingColliders.push({
-      minX: flyoverX + flyoverW / 2 - 0.65,
-      maxX: flyoverX + flyoverW / 2 + 0.65,
+      minX: 20.6,
+      maxX: 21.25,
       minZ: 120,
       maxZ: 240,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -3864,10 +3886,12 @@ export class DhakaCityEngine {
     onRampOuterGuard.rotation.x = -onRampSlopeAngle;
     this.scene.add(onRampOuterGuard);
     this.buildingColliders.push({
-      minX: 21.4,
-      maxX: 22.8,
+      minX: 21.6,
+      maxX: 22.45,
       minZ: -120,
       maxZ: -40,
+      minY: 0.0,
+      maxY: 10.5,
       tag: 'flyover_barrier',
     });
 
@@ -3876,10 +3900,12 @@ export class DhakaCityEngine {
     offRampOuterGuard.rotation.x = onRampSlopeAngle;
     this.scene.add(offRampOuterGuard);
     this.buildingColliders.push({
-      minX: 21.4,
-      maxX: 22.8,
+      minX: 21.6,
+      maxX: 22.45,
       minZ: 40,
       maxZ: 120,
+      minY: 0.0,
+      maxY: 10.5,
       tag: 'flyover_barrier',
     });
 
@@ -3891,6 +3917,8 @@ export class DhakaCityEngine {
       maxX: flyoverX + flyoverW / 2,
       minZ: -341.0,
       maxZ: -339.0,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -3901,6 +3929,8 @@ export class DhakaCityEngine {
       maxX: flyoverX + flyoverW / 2,
       minZ: 239.0,
       maxZ: 241.0,
+      minY: 7.5,
+      maxY: 11.5,
       tag: 'flyover_barrier',
     });
 
@@ -6302,13 +6332,23 @@ export class DhakaCityEngine {
   }
 
   private setupPlayer() {
+    const store = useGameStore.getState();
+    const charId = store.selectedCharacterId || 'arif';
+    const char =
+      PLAYABLE_CHARACTERS.find((c) => c.id === charId) ||
+      PLAYABLE_CHARACTERS[0];
+    const outfit =
+      store.outfits.find((o) => o.id === store.equippedOutfitId) ||
+      store.outfits[0];
+
     this.playerLimbs = createCharacterMesh(
-      '#0f766e',
+      outfit.accentColor || '#0f766e',
       '#1e293b',
       undefined,
       false,
-      'arif',
-      true
+      char.id,
+      true,
+      char.modelKey
     );
     this.playerLimbs.group.position.copy(this.playerPos);
     this.scene.add(this.playerLimbs.group);
@@ -6318,6 +6358,50 @@ export class DhakaCityEngine {
       this.playerPos.z
     );
     this.currentCameraDist = 6.2;
+  }
+
+  public switchPlayerCharacter(charId: PlayableCharacterId) {
+    const char =
+      PLAYABLE_CHARACTERS.find((c) => c.id === charId) ||
+      PLAYABLE_CHARACTERS[0];
+
+    // Remove old player group
+    if (this.playerLimbs?.group) {
+      if (this.playerLimbs.group.parent) {
+        this.playerLimbs.group.parent.remove(this.playerLimbs.group);
+      }
+    }
+
+    const store = useGameStore.getState();
+    const outfit =
+      store.outfits.find((o) => o.id === store.equippedOutfitId) ||
+      store.outfits[0];
+
+    this.playerLimbs = createCharacterMesh(
+      outfit.accentColor || '#0f766e',
+      '#1e293b',
+      undefined,
+      false,
+      char.id,
+      true,
+      char.modelKey
+    );
+
+    if (this.activeVehicleId) {
+      const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
+      const mesh = veh ? this.vehicleMeshes.get(veh.id) : null;
+      if (veh && mesh) {
+        mesh.add(this.playerLimbs.group);
+        setDrivingPose(this.playerLimbs, veh.type, veh.speed, 0, 0, 0.016);
+      }
+    } else {
+      this.playerLimbs.group.position.copy(this.playerPos);
+      this.playerLimbs.group.rotation.y = this.playerRotation;
+      this.scene.add(this.playerLimbs.group);
+    }
+
+    // Reattach active equipped weapon
+    updateWeaponAttachment(this.playerLimbs.weaponMesh, store.equippedToolId);
   }
 
   private spawnInitialVehicles() {
@@ -7821,6 +7905,11 @@ export class DhakaCityEngine {
       }
       store.clearEngineRequests();
     }
+    if (store.switchCharacterRequest) {
+      const charId = store.switchCharacterRequest;
+      store.clearEngineRequests();
+      this.switchPlayerCharacter(charId);
+    }
     if (store.teleportRequest) {
       const { x, z } = store.teleportRequest;
       this.playerPos.set(x, 0, z);
@@ -7849,7 +7938,7 @@ export class DhakaCityEngine {
       const outfit =
         store.outfits.find((o) => o.id === store.equippedOutfitId) ||
         store.outfits[0];
-      tintCharacterOutfit(this.playerLimbs, outfit.shirtColor, outfit.pantsColor);
+      tintCharacterOutfit(this.playerLimbs, outfit.shirtColor, outfit.pantsColor, outfit.id);
       updateWeaponAttachment(this.playerLimbs.weaponMesh, store.equippedToolId);
     }
 
@@ -8698,17 +8787,28 @@ export class DhakaCityEngine {
       }
 
       this.walkAnimPhase += dt * (isSprinting ? 15 : 10);
+
+      // Play authentic footstep impact sound on Dhaka asphalt / pavement
+      if (this.isGrounded) {
+        this.footstepTimer += dt;
+        const stepInterval = isSprinting ? 0.24 : this.isCrouching ? 0.46 : 0.35;
+        if (this.footstepTimer >= stepInterval) {
+          this.footstepTimer = 0;
+          this.footstepRight = !this.footstepRight;
+          dhakaAudio.playFootstep(isSprinting ? 'run' : 'walk', this.footstepRight);
+        }
+      }
     } else {
       this.walkAnimPhase = 0;
+      this.footstepTimer = 0;
     }
 
     // Resolve any clipping / penetration with obstacle colliders (AABB buildings, medians & flyover barriers)
-    const roadElevNow = this.getRoadElevation(this.playerPos.x, this.playerPos.z);
-    const onFlyover = this.playerPos.y > 0.4 || roadElevNow > 0.4;
-    const pRad = 0.62;
+    const playerY = this.playerPos.y;
+    const pRad = 0.52;
     for (const b of this.buildingColliders) {
-      if (onFlyover && b.tag !== 'flyover_barrier') continue;
-      if (!onFlyover && b.tag === 'flyover_barrier') continue;
+      if (b.minY !== undefined && playerY < b.minY) continue;
+      if (b.maxY !== undefined && playerY > b.maxY) continue;
 
       const clampedX = Math.max(b.minX, Math.min(this.playerPos.x, b.maxX));
       const clampedZ = Math.max(b.minZ, Math.min(this.playerPos.z, b.maxZ));
@@ -8738,7 +8838,7 @@ export class DhakaCityEngine {
     }
 
     // Resolve any clipping / penetration with cylindrical obstacles (metro pillars, trees, utility poles)
-    if (!onFlyover) {
+    if (playerY < 1.0) {
       for (const c of this.circleColliders) {
         const dx = this.playerPos.x - c.x;
         const dz = this.playerPos.z - c.z;
@@ -8759,6 +8859,9 @@ export class DhakaCityEngine {
       if (this.playerPos.y <= groundElev) {
         this.playerPos.y = groundElev;
         this.playerVelY = 0;
+        if (!this.isGrounded) {
+          dhakaAudio.playFootstep('land');
+        }
         this.isGrounded = true;
       }
     } else {
@@ -9136,7 +9239,7 @@ export class DhakaCityEngine {
 
       // Position the player in the exact driver seat in vehicle-local coordinates
       if (veh.type === 'motorcycle') {
-        this.playerLimbs.group.position.set(0, 0.14, -0.22);
+        this.playerLimbs.group.position.set(0, 0.22, -0.15);
         this.playerLimbs.group.rotation.set(-this.bikeWheeliePitch, 0, 0);
         this.playerLimbs.group.scale.set(0.92, 0.92, 0.92);
       } else if (veh.type === 'rickshaw') {
@@ -9144,21 +9247,21 @@ export class DhakaCityEngine {
         this.playerLimbs.group.rotation.set(0, 0, 0);
         this.playerLimbs.group.scale.set(0.88, 0.88, 0.88);
       } else if (veh.type === 'cng') {
-        this.playerLimbs.group.position.set(0, 0.12, 0.28);
+        this.playerLimbs.group.position.set(0, 0.08, 0.26);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.74, 0.74, 0.74);
+      } else if (veh.type === 'car' || veh.type === 'police') {
+        this.playerLimbs.group.position.set(-0.36, -0.48, -0.05);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.50, 0.50, 0.50);
+      } else if (veh.type === 'pickup') {
+        this.playerLimbs.group.position.set(-0.38, 0.18, 0.35);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.68, 0.68, 0.68);
+      } else if (veh.type === 'bus') {
+        this.playerLimbs.group.position.set(-0.65, 0.88, 3.8);
         this.playerLimbs.group.rotation.set(0, 0, 0);
         this.playerLimbs.group.scale.set(0.78, 0.78, 0.78);
-      } else if (veh.type === 'car' || veh.type === 'police') {
-        this.playerLimbs.group.position.set(-0.36, -0.26, -0.05);
-        this.playerLimbs.group.rotation.set(0, 0, 0);
-        this.playerLimbs.group.scale.set(0.56, 0.56, 0.56);
-      } else if (veh.type === 'pickup') {
-        this.playerLimbs.group.position.set(-0.38, 0.35, 0.35);
-        this.playerLimbs.group.rotation.set(0, 0, 0);
-        this.playerLimbs.group.scale.set(0.75, 0.75, 0.75);
-      } else if (veh.type === 'bus') {
-        this.playerLimbs.group.position.set(-0.65, 1.15, 3.8);
-        this.playerLimbs.group.rotation.set(0, 0, 0);
-        this.playerLimbs.group.scale.set(0.85, 0.85, 0.85);
       }
     } else {
       this.playerLimbs.group.position.set(veh.x, elev + 0.26, veh.z);
@@ -9470,8 +9573,8 @@ export class DhakaCityEngine {
 
         // Check building colliders (excluding medians when crossing an intersection on East-West road)
         for (const b of this.buildingColliders) {
-          if (elev <= 0.4 && b.tag === 'flyover_barrier') continue;
-          if (elev > 0.4 && b.tag !== 'flyover_barrier') continue;
+          if (b.minY !== undefined && elev < b.minY) continue;
+          if (b.maxY !== undefined && elev > b.maxY) continue;
           if (veh.roadAxis === 'ew' && b.tag === 'road_median') continue;
 
           if (
@@ -10080,10 +10183,9 @@ export class DhakaCityEngine {
     radius: number,
     elev = 0
   ): boolean {
-    const onFlyover = elev > 0.4;
     for (const b of this.buildingColliders) {
-      if (onFlyover && b.tag !== 'flyover_barrier') continue;
-      if (!onFlyover && b.tag === 'flyover_barrier') continue;
+      if (b.minY !== undefined && elev < b.minY) continue;
+      if (b.maxY !== undefined && elev > b.maxY) continue;
       if (
         x + radius > b.minX &&
         x - radius < b.maxX &&
@@ -10093,7 +10195,7 @@ export class DhakaCityEngine {
         return true;
       }
     }
-    if (!onFlyover) {
+    if (elev < 1.0) {
       for (const c of this.circleColliders) {
         const dx = x - c.x;
         const dz = z - c.z;

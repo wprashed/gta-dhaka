@@ -211,6 +211,30 @@ export type WeatherType = 'clear' | 'golden_hour' | 'monsoon_rain' | 'night';
 
 export type RadioStationId = 'off' | 'dhaka_folk' | 'gully_beat' | 'hatirjheel_synth';
 
+export type PlayableCharacterId = 'arif' | 'nadia' | 'kabir' | 'tanvir' | 'meher';
+
+export interface PlayableCharacter {
+  id: PlayableCharacterId;
+  nameEn: string;
+  nameBn: string;
+  taglineEn: string;
+  taglineBn: string;
+  bioEn: string;
+  bioBn: string;
+  avatar: string;
+  modelKey: 'rpm_male' | 'michelle' | 'readyplayerme1' | 'soldier' | 'hvgirl';
+  gender: 'male' | 'female';
+  stats: {
+    speed: number;
+    stamina: number;
+    driving: number;
+    combat: number;
+  };
+  specialAbilityEn: string;
+  specialAbilityBn: string;
+  badge: string;
+}
+
 export interface PlayerOutfit {
   id: string;
   nameEn: string;
@@ -220,6 +244,8 @@ export interface PlayerOutfit {
   accentColor: string;
   price: number;
   unlocked: boolean;
+  textureTop?: string;
+  textureBottom?: string;
 }
 
 export type ToolWeaponId =

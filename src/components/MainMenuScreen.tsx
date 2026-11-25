@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { DISTRICTS } from '../data/dhakaWorldData';
+import { DISTRICTS, PLAYABLE_CHARACTERS } from '../data/dhakaWorldData';
 import { CHARACTER_PORTRAITS } from '../data/sketchfabGtaCatalog';
 import {
   Award,
@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldAlert,
   Sparkles,
+  User,
   Volume2,
 } from 'lucide-react';
 
@@ -32,13 +33,18 @@ export const MainMenuScreen: React.FC = () => {
     ambienceVolume,
     setVolumes,
     setGamePhase,
+    selectedCharacterId,
+    selectCharacter,
   } = useGameStore();
 
   const [subPanel, setSubPanel] = useState<
-    'none' | 'settings' | 'controls' | 'credits'
+    'none' | 'settings' | 'controls' | 'credits' | 'characters'
   >('none');
 
   const savedExists = hasSavedGame();
+  const currentChar =
+    PLAYABLE_CHARACTERS.find((c) => c.id === selectedCharacterId) ||
+    PLAYABLE_CHARACTERS[0];
 
   return (
     <div className="fixed inset-0 z-30 bg-gradient-to-r from-slate-950/95 via-slate-950/82 to-slate-950/45 backdrop-blur-[3px] flex flex-col justify-between p-5 sm:p-10 text-white select-none overflow-y-auto">
@@ -69,8 +75,8 @@ export const MainMenuScreen: React.FC = () => {
         <div className="lg:col-span-6 space-y-6">
           <div className="flex items-center gap-4">
             <img
-              src={CHARACTER_PORTRAITS.arif}
-              alt="Arif Rahman"
+              src={currentChar.avatar}
+              alt={currentChar.nameEn}
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-amber-400 shadow-2xl shrink-0"
             />
             <div>
@@ -83,8 +89,8 @@ export const MainMenuScreen: React.FC = () => {
               <h1 className="text-4xl sm:text-6xl font-black tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-br from-white via-amber-200 to-emerald-400 drop-shadow-2xl">
                 DHAKA CITY
               </h1>
-              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
-                ঢাকা সিটি : রাজপথের গল্প
+              <p className="text-lg sm:text-xl font-black text-amber-400 mt-1">
+                {language === 'en' ? currentChar.nameEn : currentChar.nameBn} • {currentChar.badge}
               </p>
             </div>
           </div>
@@ -124,6 +130,21 @@ export const MainMenuScreen: React.FC = () => {
 
           {/* Secondary Menu Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() =>
+                setSubPanel(subPanel === 'characters' ? 'none' : 'characters')
+              }
+              className={`px-4 py-2.5 rounded-xl text-xs font-black border flex items-center gap-2 transition-all ${
+                subPanel === 'characters'
+                  ? 'bg-emerald-400 text-slate-950 border-emerald-300 shadow-lg'
+                  : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-400/50'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              {language === 'en'
+                ? `Hero: ${currentChar.nameEn.split(' ')[0]}`
+                : `চরিত্র: ${currentChar.nameBn.split(' ')[0]}`}
+            </button>
             <button
               onClick={() => setGamePhase('paused', 'sketchfab')}
               className="px-4 py-2.5 rounded-xl text-xs font-extrabold border bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-400/50 flex items-center gap-2 transition-all"

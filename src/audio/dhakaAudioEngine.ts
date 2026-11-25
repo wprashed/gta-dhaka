@@ -1,4 +1,5 @@
 import { RadioStationId, VehicleType } from '../types/game';
+import { resolveAssetUrl } from '../utils/assets';
 
 class DhakaAudioEngine {
   private ctx: AudioContext | null = null;
@@ -9,7 +10,19 @@ class DhakaAudioEngine {
   public sfxVolume = 0.7;
   public ambienceVolume = 0.4;
 
-  // Engine oscillator nodes (Dual-Oscillator for rich vehicle physics)
+  // Real Audio Assets Cache (Decoded AudioBuffers)
+  private bufferCache = new Map<string, AudioBuffer>();
+  private loadingBuffers = new Set<string>();
+
+  // Real Vehicle Engine Looping Audio Nodes
+  private currentActiveVehicleType: VehicleType | null = null;
+  private engineIdleSource: AudioBufferSourceNode | null = null;
+  private engineRevSource: AudioBufferSourceNode | null = null;
+  private engineIdleGain: GainNode | null = null;
+  private engineRevGain: GainNode | null = null;
+  private lastVehicleSpeed = 0;
+
+  // Fallback Engine oscillator nodes (Dual-Oscillator for vehicle physics)
   private engineOsc: OscillatorNode | null = null;
   private engineSubOsc: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
@@ -45,12 +58,131 @@ class DhakaAudioEngine {
           .webkitAudioContext;
       this.ctx = new AudioCtx();
       this.isInitialized = true;
+      this.preloadAllAudioAssets();
       this.setupEngineSound();
       this.setupRainAmbience();
       this.setupTrafficAmbience();
       this.startRadioSequencer();
     } catch {
       // Web Audio not allowed yet
+    }
+  }
+
+  private preloadAllAudioAssets() {
+    const assets = [
+      '/audio/footstep_walk_1.wav',
+      '/audio/footstep_walk_2.wav',
+      '/audio/footstep_run_1.wav',
+      '/audio/footstep_run_2.wav',
+      '/audio/footstep_land.wav',
+      '/audio/engine_motorcycle_idle.wav',
+      '/audio/engine_motorcycle_rev.wav',
+      '/audio/engine_cng_idle.wav',
+      '/audio/engine_cng_rev.wav',
+      '/audio/engine_car_idle.wav',
+      '/audio/engine_car_rev.wav',
+      '/audio/engine_bus_idle.wav',
+      '/audio/engine_bus_rev.wav',
+      '/audio/bus_air_brake.wav',
+      '/audio/engine_rickshaw_chain.wav',
+      '/audio/horn_rickshaw_bell.wav',
+      '/audio/horn_cng.wav',
+      '/audio/horn_bus_air.wav',
+      '/audio/horn_car.wav',
+      '/audio/horn_siren.wav',
+    ];
+    assets.forEach((path) => this.preloadAudio(path));
+  }
+
+  public preloadAudio(url: string) {
+    if (this.bufferCache.has(url) || this.loadingBuffers.has(url)) return;
+    this.loadingBuffers.add(url);
+    const resolved = resolveAssetUrl(url);
+    fetch(resolved)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((arrayBuf) => {
+        if (!this.ctx) return;
+        return this.ctx.decodeAudioData(arrayBuf);
+      })
+      .then((audioBuf) => {
+        if (audioBuf) {
+          this.bufferCache.set(url, audioBuf);
+        }
+      })
+      .catch((err) => {
+        console.warn(`[DhakaAudio] Preload note for ${url}:`, err);
+      })
+      .finally(() => {
+        this.loadingBuffers.delete(url);
+      });
+  }
+
+  private playBufferOneShot(
+    url: string,
+    volumeScale = 1.0,
+    pitchVariation = 0.0
+  ): boolean {
+    if (!this.ctx) return false;
+    const buf = this.bufferCache.get(url);
+    if (!buf) {
+      this.preloadAudio(url);
+      return false;
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buf;
+    if (pitchVariation > 0) {
+      source.playbackRate.value =
+        1.0 + (Math.random() * 2 - 1) * pitchVariation;
+    }
+    const gain = this.ctx.createGain();
+    gain.gain.value = volumeScale * this.sfxVolume;
+    source.connect(gain);
+    gain.connect(this.ctx.destination);
+    source.start();
+    return true;
+  }
+
+  /**
+   * Plays authentic walking / sprinting / landing shoe impact sounds on Dhaka pavement.
+   */
+  public playFootstep(
+    type: 'walk' | 'run' | 'land',
+    isRight = false
+  ) {
+    this.init();
+    if (!this.ctx) return;
+
+    let url = '/audio/footstep_walk_1.wav';
+    let vol = 0.35;
+    if (type === 'land') {
+      url = '/audio/footstep_land.wav';
+      vol = 0.65;
+    } else if (type === 'run') {
+      url = isRight ? '/audio/footstep_run_2.wav' : '/audio/footstep_run_1.wav';
+      vol = 0.48;
+    } else {
+      url = isRight ? '/audio/footstep_walk_2.wav' : '/audio/footstep_walk_1.wav';
+      vol = 0.32;
+    }
+
+    if (!this.playBufferOneShot(url, vol, 0.06)) {
+      // Synth fallback if WAV buffer not decoded yet
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      const f = type === 'land' ? 62 : type === 'run' ? 95 : 80;
+      osc.frequency.setValueAtTime(f, now);
+      osc.frequency.exponentialRampToValueAtTime(30, now + 0.08);
+      gain.gain.setValueAtTime(vol * 0.4 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.1);
     }
   }
 
@@ -206,6 +338,82 @@ class DhakaAudioEngine {
     this.rainGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.4);
   }
 
+  private startVehicleEngineLoops(type: VehicleType) {
+    if (!this.ctx) return;
+    this.stopVehicleEngineLoops();
+
+    let idleUrl = "/audio/engine_car_idle.wav";
+    let revUrl: string | null = "/audio/engine_car_rev.wav";
+
+    if (type === "motorcycle") {
+      idleUrl = "/audio/engine_motorcycle_idle.wav";
+      revUrl = "/audio/engine_motorcycle_rev.wav";
+    } else if (type === "cng") {
+      idleUrl = "/audio/engine_cng_idle.wav";
+      revUrl = "/audio/engine_cng_rev.wav";
+    } else if (type === "bus") {
+      idleUrl = "/audio/engine_bus_idle.wav";
+      revUrl = "/audio/engine_bus_rev.wav";
+    } else if (type === "rickshaw") {
+      idleUrl = "/audio/engine_rickshaw_chain.wav";
+      revUrl = null;
+    }
+
+    const idleBuf = this.bufferCache.get(idleUrl);
+    const revBuf = revUrl ? this.bufferCache.get(revUrl) : null;
+
+    if (idleBuf) {
+      this.engineIdleSource = this.ctx.createBufferSource();
+      this.engineIdleSource.buffer = idleBuf;
+      this.engineIdleSource.loop = true;
+      this.engineIdleGain = this.ctx.createGain();
+      this.engineIdleGain.gain.value = 0.05 * this.sfxVolume;
+      this.engineIdleSource.connect(this.engineIdleGain);
+      this.engineIdleGain.connect(this.ctx.destination);
+      this.engineIdleSource.start();
+    } else {
+      this.preloadAudio(idleUrl);
+    }
+
+    if (revBuf) {
+      this.engineRevSource = this.ctx.createBufferSource();
+      this.engineRevSource.buffer = revBuf;
+      this.engineRevSource.loop = true;
+      this.engineRevGain = this.ctx.createGain();
+      this.engineRevGain.gain.value = 0;
+      this.engineRevSource.connect(this.engineRevGain);
+      this.engineRevGain.connect(this.ctx.destination);
+      this.engineRevSource.start();
+    } else if (revUrl) {
+      this.preloadAudio(revUrl);
+    }
+  }
+
+  private stopVehicleEngineLoops() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (this.engineIdleGain) {
+      this.engineIdleGain.gain.setTargetAtTime(0, now, 0.08);
+    }
+    if (this.engineRevGain) {
+      this.engineRevGain.gain.setTargetAtTime(0, now, 0.08);
+    }
+    const oldIdle = this.engineIdleSource;
+    const oldRev = this.engineRevSource;
+    setTimeout(() => {
+      try {
+        oldIdle?.stop();
+      } catch {}
+      try {
+        oldRev?.stop();
+      } catch {}
+    }, 100);
+    this.engineIdleSource = null;
+    this.engineRevSource = null;
+    this.engineIdleGain = null;
+    this.engineRevGain = null;
+  }
+
   public updateEngine(
     inVehicle: boolean,
     vehicleType: VehicleType | null,
@@ -222,6 +430,9 @@ class DhakaAudioEngine {
       return;
 
     if (!inVehicle || !vehicleType) {
+      this.currentActiveVehicleType = null;
+      this.stopVehicleEngineLoops();
+      this.lastVehicleSpeed = 0;
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
       this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
       if (this.rickshawClickInterval) {
@@ -233,45 +444,59 @@ class DhakaAudioEngine {
 
     const absSpeed = Math.abs(speedRatio);
 
-    // 1. CYCLE RICKSHAW: Mechanical pedal chain rattle & spoke freewheel clicks
-    if (vehicleType === 'rickshaw') {
-      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
-      this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+    // If vehicle type switched or real buffer became available, start real engine loops
+    if (this.currentActiveVehicleType !== vehicleType || !this.engineIdleSource) {
+      this.currentActiveVehicleType = vehicleType;
+      this.startVehicleEngineLoops(vehicleType);
+    }
 
-      if (absSpeed > 0.08) {
-        if (!this.rickshawClickInterval) {
-          this.rickshawClickInterval = window.setInterval(() => {
-            if (!this.ctx) return;
-            const now = this.ctx.currentTime;
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(950, now);
-            osc.frequency.exponentialRampToValueAtTime(320, now + 0.035);
-            gain.gain.setValueAtTime(0.045 * this.sfxVolume, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start(now);
-            osc.stop(now + 0.045);
-          }, 140);
+    // Bus pneumatic air brake release hiss when coming to a halt
+    if (vehicleType === "bus" && this.lastVehicleSpeed > 0.35 && absSpeed < 0.08) {
+      this.playBufferOneShot("/audio/bus_air_brake.wav", 0.65);
+    }
+    this.lastVehicleSpeed = absSpeed;
+
+    // If real recorded engine audio loop is active, update volume & pitch dynamics
+    if (this.engineIdleGain && this.engineIdleSource) {
+      const now = this.ctx.currentTime;
+      if (vehicleType === "rickshaw") {
+        const chainVol =
+          absSpeed > 0.04
+            ? Math.min(0.45, 0.12 + absSpeed * 0.35) * this.sfxVolume
+            : 0;
+        const chainRate = 0.65 + absSpeed * 0.95;
+        this.engineIdleGain.gain.setTargetAtTime(chainVol, now, 0.05);
+        this.engineIdleSource.playbackRate.setTargetAtTime(chainRate, now, 0.05);
+      } else {
+        const idleVol =
+          Math.max(0.1, 1.0 - absSpeed * 1.15) * (0.35 * this.sfxVolume);
+        const idleRate = 0.88 + absSpeed * 0.4;
+        this.engineIdleGain.gain.setTargetAtTime(idleVol, now, 0.05);
+        this.engineIdleSource.playbackRate.setTargetAtTime(idleRate, now, 0.05);
+
+        if (this.engineRevGain && this.engineRevSource) {
+          const revVol = Math.min(1.0, absSpeed * 1.35) * (0.42 * this.sfxVolume);
+          const revRate = 0.72 + absSpeed * 0.92;
+          this.engineRevGain.gain.setTargetAtTime(revVol, now, 0.04);
+          this.engineRevSource.playbackRate.setTargetAtTime(revRate, now, 0.04);
         }
-      } else if (this.rickshawClickInterval) {
-        window.clearInterval(this.rickshawClickInterval);
-        this.rickshawClickInterval = null;
       }
+      // Real recorded engine loops are active — silence fallback synth
+      this.engineGain.gain.setTargetAtTime(0, now, 0.1);
+      this.engineSubGain.gain.setTargetAtTime(0, now, 0.1);
       return;
     }
 
-    if (this.rickshawClickInterval) {
-      window.clearInterval(this.rickshawClickInterval);
-      this.rickshawClickInterval = null;
+    // Fallback Dual-Oscillator Synthesis if buffers are still decoding
+    if (vehicleType === "rickshaw") {
+      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      return;
     }
 
-    // 2. CNG AUTO-RICKSHAW: Iconic 2-stroke high-sputter "putt-putt" thrum
-    if (vehicleType === 'cng') {
-      this.engineOsc.type = 'sawtooth';
-      this.engineSubOsc.type = 'square';
+    if (vehicleType === "cng") {
+      this.engineOsc.type = "sawtooth";
+      this.engineSubOsc.type = "square";
       const baseFreq = 72;
       const maxFreq = 235;
       const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
@@ -283,10 +508,9 @@ class DhakaAudioEngine {
       return;
     }
 
-    // 3. DHAKA CITY BUS: Deep sub-harmonic 6-cylinder diesel chug & turbo air resonance
-    if (vehicleType === 'bus') {
-      this.engineOsc.type = 'sawtooth';
-      this.engineSubOsc.type = 'sine';
+    if (vehicleType === "bus") {
+      this.engineOsc.type = "sawtooth";
+      this.engineSubOsc.type = "sine";
       const baseFreq = 32;
       const maxFreq = 95;
       const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
@@ -298,10 +522,9 @@ class DhakaAudioEngine {
       return;
     }
 
-    // 4. DMP POLICE CRUISER: High-revving pursuit interceptor V6 engine
-    if (vehicleType === 'police') {
-      this.engineOsc.type = 'sawtooth';
-      this.engineSubOsc.type = 'triangle';
+    if (vehicleType === "police") {
+      this.engineOsc.type = "sawtooth";
+      this.engineSubOsc.type = "triangle";
       const baseFreq = 62;
       const maxFreq = 250;
       const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
@@ -313,37 +536,21 @@ class DhakaAudioEngine {
       return;
     }
 
-    // 5. MOTORCYCLE: Thumping 4-stroke 150cc Bajaj Pulsar / Yamaha FZ with multi-gear rev acoustics
-    if (vehicleType === 'motorcycle') {
-      this.engineOsc.type = 'sawtooth';
-      this.engineSubOsc.type = 'square';
-      // Multi-gear RPM climb & shift drops (1st to 5th gear)
-      let gearRpm = 0;
-      if (absSpeed < 0.02) {
-        gearRpm = 0.05; // Idle rumble
-      } else if (absSpeed < 0.18) {
-        gearRpm = absSpeed / 0.18;
-      } else if (absSpeed < 0.38) {
-        gearRpm = (absSpeed - 0.18) / 0.20;
-      } else if (absSpeed < 0.60) {
-        gearRpm = (absSpeed - 0.38) / 0.22;
-      } else if (absSpeed < 0.82) {
-        gearRpm = (absSpeed - 0.60) / 0.22;
-      } else {
-        gearRpm = Math.min(1.0, (absSpeed - 0.82) / 0.18);
-      }
-      const freq = 80 + gearRpm * 195;
+    if (vehicleType === "motorcycle") {
+      this.engineOsc.type = "sawtooth";
+      this.engineSubOsc.type = "square";
+      const freq = 80 + absSpeed * 195;
       this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.035);
       this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.035);
-      this.engineFilter.frequency.setTargetAtTime(550 + gearRpm * 520, this.ctx.currentTime, 0.04);
-      this.engineGain.gain.setTargetAtTime((0.075 + gearRpm * 0.035) * this.sfxVolume, this.ctx.currentTime, 0.04);
+      this.engineFilter.frequency.setTargetAtTime(550 + absSpeed * 520, this.ctx.currentTime, 0.04);
+      this.engineGain.gain.setTargetAtTime((0.075 + absSpeed * 0.035) * this.sfxVolume, this.ctx.currentTime, 0.04);
       this.engineSubGain.gain.setTargetAtTime(0.045 * this.sfxVolume, this.ctx.currentTime, 0.04);
       return;
     }
 
-    // 6. GULSHAN EXECUTIVE SEDAN (Default Car): Smooth modern 4-cylinder purr
-    this.engineOsc.type = 'triangle';
-    this.engineSubOsc.type = 'sawtooth';
+    // Default Car
+    this.engineOsc.type = "triangle";
+    this.engineSubOsc.type = "sawtooth";
     const baseFreq = 50;
     const maxFreq = 180;
     const freq = baseFreq + absSpeed * (maxFreq - baseFreq);
@@ -354,32 +561,37 @@ class DhakaAudioEngine {
     this.engineSubGain.gain.setTargetAtTime(0.025 * this.sfxVolume, this.ctx.currentTime, 0.06);
   }
 
-  public playHorn(type: 'cng' | 'bell' | 'airhorn' | 'car' | 'siren' = 'cng') {
+  public playHorn(type: "cng" | "bell" | "airhorn" | "car" | "siren" = "cng") {
     this.init();
     if (!this.ctx) return;
 
-    const now = this.ctx.currentTime;
+    let hornUrl = "/audio/horn_car.wav";
+    if (type === "bell") hornUrl = "/audio/horn_rickshaw_bell.wav";
+    else if (type === "cng") hornUrl = "/audio/horn_cng.wav";
+    else if (type === "airhorn") hornUrl = "/audio/horn_bus_air.wav";
+    else if (type === "siren") hornUrl = "/audio/horn_siren.wav";
 
-    if (type === 'bell') {
-      // Classic Bangladeshi Cycle Rickshaw "Tring-Tring!" double bell
+    // Play real recorded audio if loaded
+    if (this.playBufferOneShot(hornUrl, 0.75)) {
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    if (type === "bell") {
       [0, 0.13].forEach((offset) => {
         if (!this.ctx) return;
         const osc1 = this.ctx.createOscillator();
         const osc2 = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-
-        osc1.type = 'sine';
-        osc2.type = 'triangle';
+        osc1.type = "sine";
+        osc2.type = "triangle";
         osc1.frequency.setValueAtTime(1760, now + offset);
         osc2.frequency.setValueAtTime(2637, now + offset);
-
         gain.gain.setValueAtTime(0.22 * this.sfxVolume, now + offset);
         gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.25);
-
         osc1.connect(gain);
         osc2.connect(gain);
         gain.connect(this.ctx.destination);
-
         osc1.start(now + offset);
         osc2.start(now + offset);
         osc1.stop(now + offset + 0.26);
@@ -388,38 +600,33 @@ class DhakaAudioEngine {
       return;
     }
 
-    if (type === 'airhorn') {
-      // Dhaka Bus Air Horn chord
+    if (type === "airhorn") {
       [220, 277.18, 329.63].forEach((f) => {
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
+        osc.type = "sawtooth";
         osc.frequency.setValueAtTime(f, now);
         osc.frequency.linearRampToValueAtTime(f * 1.03, now + 0.35);
-
         gain.gain.setValueAtTime(0.11 * this.sfxVolume, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        osc.connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + 0.46);
       });
       return;
     }
 
-    if (type === 'siren') {
+    if (type === "siren") {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = 'triangle';
+      osc.type = "triangle";
       osc.frequency.setValueAtTime(620, now);
       osc.frequency.linearRampToValueAtTime(920, now + 0.22);
       osc.frequency.linearRampToValueAtTime(620, now + 0.44);
-
       gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.46);
-
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
@@ -427,16 +634,13 @@ class DhakaAudioEngine {
       return;
     }
 
-    // Default CNG / Car horn
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = 'square';
-    const base = type === 'cng' ? 480 : 370;
+    osc.type = "square";
+    const base = type === "cng" ? 480 : 370;
     osc.frequency.setValueAtTime(base, now);
-
     gain.gain.setValueAtTime(0.14 * this.sfxVolume, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(now);

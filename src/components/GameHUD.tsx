@@ -10,6 +10,7 @@ import {
 } from '../types/game';
 import {
   DISTRICTS,
+  PLAYABLE_CHARACTERS,
   SIDE_MISSIONS,
   STORY_MISSIONS,
   VEHICLE_STATS,
@@ -83,6 +84,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     isBusted,
     requestSpawnVehicle,
     setGamePhase,
+    setPauseTab,
+    selectedCharacterId,
     storyEndingEn,
     storyEndingBn,
   } = useGameStore();
@@ -98,6 +101,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
   const activeStep = activeMission
     ? activeMission.steps[activeMissionStepIndex]
     : null;
+  const currentChar =
+    PLAYABLE_CHARACTERS.find((c) => c.id === selectedCharacterId) ||
+    PLAYABLE_CHARACTERS[0];
 
   const distToObjective = activeStep
     ? Math.round(
@@ -194,8 +200,27 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
       {/* ==================== TOP BAR ==================== */}
       <div className="flex items-start justify-between gap-3 w-full">
-        {/* TOP-LEFT: Ultra-Minimalist Floating Objective Badge */}
-        <div className="pointer-events-auto flex items-start gap-1.5 max-w-sm">
+        {/* TOP-LEFT: Ultra-Minimalist Floating Objective Badge & Active Character Pill */}
+        <div className="pointer-events-auto flex items-start gap-2 max-w-sm">
+          {/* Active Hero Pill */}
+          <div
+            onClick={() => {
+              setPauseTab('character');
+              setGamePhase('paused', 'character');
+            }}
+            className="bg-slate-950/80 hover:bg-slate-950 backdrop-blur-md border border-slate-800 hover:border-emerald-500/50 rounded-full pl-1.5 pr-2.5 py-1 shadow-lg flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 group shrink-0"
+            title={language === 'en' ? 'Click to switch character' : 'চরিত্র পরিবর্তন করতে ক্লিক করুন'}
+          >
+            <img
+              src={currentChar.avatar}
+              alt={currentChar.nameEn}
+              className="w-5 h-5 rounded-full object-cover border border-emerald-400 shrink-0"
+            />
+            <span className="text-[11px] font-bold text-slate-200 group-hover:text-emerald-300">
+              {language === 'en' ? currentChar.nameEn.split(' ')[0] : currentChar.nameBn.split(' ')[0]}
+            </span>
+          </div>
+
           {activeMission && activeStep ? (
             <div className="flex flex-col gap-1">
               <div

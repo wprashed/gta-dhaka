@@ -431,6 +431,24 @@ function getVehicleShadowTexture(): THREE.CanvasTexture {
   return sharedVehicleShadowTex;
 }
 
+export function applyModernGarmentTexture(
+  m: THREE.Mesh,
+  texturePath: string,
+  tint = "#ffffff"
+) {
+  const original = Array.isArray(m.material) ? m.material[0] : m.material;
+  const mat = (original ? original.clone() : new THREE.MeshStandardMaterial()) as THREE.MeshStandardMaterial;
+  mat.map = loadRealTexture(texturePath);
+  mat.normalMap = null;
+  mat.roughnessMap = null;
+  mat.metalnessMap = null;
+  mat.color.set(tint);
+  mat.roughness = 0.72;
+  mat.metalness = 0.08;
+  mat.needsUpdate = true;
+  m.material = mat;
+}
+
 export function createVehicleMesh(
   type: VehicleType,
   customColor?: string,
@@ -809,6 +827,16 @@ export function createVehicleMesh(
           driver.traverse((c) => {
             if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
               c.visible = false;
+            }
+            if ((c as THREE.Mesh).isMesh) {
+              const m = c as THREE.Mesh;
+              if (m.name === 'Wolf3D_Outfit_Top') {
+                applyModernGarmentTexture(m, '/textures/modern_street_jacket.png');
+              } else if (m.name === 'Wolf3D_Outfit_Bottom') {
+                applyModernGarmentTexture(m, '/textures/modern_denim_bottom.png');
+              } else if (m.name === 'Wolf3D_Outfit_Footwear') {
+                applyModernGarmentTexture(m, '/textures/modern_sneakers.png');
+              }
             }
             if ((c as THREE.Bone).isBone) {
               bones[c.name.replace(/^mixamorig[:_]?/, '')] = c as THREE.Bone;
@@ -1663,6 +1691,16 @@ export function createVehicleMesh(
             if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
               c.visible = false;
             }
+            if ((c as THREE.Mesh).isMesh) {
+              const m = c as THREE.Mesh;
+              if (m.name === 'Wolf3D_Outfit_Top') {
+                applyModernGarmentTexture(m, '/textures/modern_street_jacket.png');
+              } else if (m.name === 'Wolf3D_Outfit_Bottom') {
+                applyModernGarmentTexture(m, '/textures/modern_denim_bottom.png');
+              } else if (m.name === 'Wolf3D_Outfit_Footwear') {
+                applyModernGarmentTexture(m, '/textures/modern_sneakers.png');
+              }
+            }
             if ((c as THREE.Bone).isBone) {
               bones[c.name.replace(/^mixamorig[:_]?/, '')] = c as THREE.Bone;
             }
@@ -2366,14 +2404,24 @@ export function createVehicleMesh(
           try {
             const driver = SkeletonUtils.clone(driverGltf.scene);
             driver.name = 'npc_driver';
-            driver.scale.setScalar(0.56);
-            driver.position.set(carModelKey === 'ferrari' ? 0.36 : -0.36, -0.26, -0.05);
+            driver.scale.setScalar(0.50);
+            driver.position.set(carModelKey === 'ferrari' ? 0.36 : -0.36, -0.48, -0.05);
             driver.rotation.y = 0;
 
             const bones: Record<string, THREE.Bone> = {};
             driver.traverse((c) => {
               if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
                 c.visible = false;
+              }
+              if ((c as THREE.Mesh).isMesh) {
+                const m = c as THREE.Mesh;
+                if (m.name === 'Wolf3D_Outfit_Top') {
+                  applyModernGarmentTexture(m, '/textures/modern_street_jacket.png');
+                } else if (m.name === 'Wolf3D_Outfit_Bottom') {
+                  applyModernGarmentTexture(m, '/textures/modern_denim_bottom.png');
+                } else if (m.name === 'Wolf3D_Outfit_Footwear') {
+                  applyModernGarmentTexture(m, '/textures/modern_sneakers.png');
+                }
               }
               if ((c as THREE.Bone).isBone) {
                 bones[c.name.replace(/^mixamorig[:_]?/, '')] = c as THREE.Bone;
@@ -2552,7 +2600,8 @@ export function createCharacterMesh(
   role?: NPCRole,
   isStoryNPC = false,
   storyId?: string,
-  isPlayer = false
+  isPlayer = false,
+  overrideModelKey?: ModelKey
 ): CharacterLimbs {
   const seed = isPlayer
     ? 0
@@ -2606,7 +2655,9 @@ export function createCharacterMesh(
 
   // Choose which Actual 3D Human .GLB Model to load for this person
   let modelKey: ModelKey = 'rpm_male';
-  if (isPlayer) {
+  if (overrideModelKey) {
+    modelKey = overrideModelKey;
+  } else if (isPlayer) {
     modelKey = 'rpm_male'; // Realistic 3D Human Man with full hair for Arif Rahman
   } else if (isFemale) {
     modelKey = 'michelle'; // Photorealistic 3D Human Woman
@@ -2633,7 +2684,7 @@ export function createCharacterMesh(
         ? 1.0
         : 0.95 + (seed % 4) * 0.035;
 
-      if (modelKey === 'soldier' || modelKey === 'michelle') {
+      if (modelKey === 'soldier' || modelKey === 'michelle' || modelKey === 'hvgirl') {
         // Uniform scaling only — non-uniform Y stretch visibly distorts faces
         // and limbs on fully sculpted humans.
         const s = heightVar;
@@ -2649,7 +2700,7 @@ export function createCharacterMesh(
       }
 
       // Face forward (+Z) in the game engine's coordinate system
-      if (modelKey === 'soldier') {
+      if (modelKey === 'soldier' || modelKey === 'hvgirl') {
         clonedScene.rotation.y = Math.PI;
       }
 
@@ -2730,9 +2781,12 @@ export function createCharacterMesh(
             matName === 'Wolf3D_Outfit_Top' ||
             matName === 'T-shirt'
           ) {
+            if (isPlayer || (!wearsLungi && !isHajiElder)) {
+              mat.map = loadRealTexture('/textures/modern_street_jacket.png');
+            }
             mat.color.copy(brightTopTint);
-            mat.roughness = 0.88;
-            mat.metalness = 0.0;
+            mat.roughness = 0.65;
+            mat.metalness = 0.12;
             if ('sheen' in mat) {
               (mat as THREE.MeshPhysicalMaterial).sheen = 0.35;
               (mat as THREE.MeshPhysicalMaterial).sheenColor =
@@ -2747,10 +2801,19 @@ export function createCharacterMesh(
               mat.map = lungiTex;
               mat.color.set('#ffffff');
             } else {
+              mat.map = loadRealTexture('/textures/modern_denim_bottom.png');
               mat.color.copy(brightBottomTint);
             }
-            mat.roughness = 0.9;
-            mat.metalness = 0.0;
+            mat.roughness = 0.85;
+            mat.metalness = 0.05;
+          } else if (
+            m.name === 'Wolf3D_Outfit_Footwear' ||
+            matName === 'Wolf3D_Outfit_Footwear'
+          ) {
+            mat.map = loadRealTexture('/textures/modern_sneakers.png');
+            mat.color.set('#ffffff');
+            mat.roughness = 0.55;
+            mat.metalness = 0.1;
           } else if (
             m.name === 'Wolf3D_Skin' ||
             m.name === 'Wolf3D_Head' ||
@@ -3564,34 +3627,34 @@ export function setDrivingPose(
 
   if (vehicleType === 'motorcycle') {
     // MOTORCYCLE BIKER POSE:
-    // Thighs rotated forward hugging fuel tank (+0.72 rad on axisX), splayed outward around tank symmetrically (±0.16 rad on axisZ)
-    // Knees bent naturally back (-1.25 rad on axisX) angling shins cleanly down to footpegs
-    // Feet resting flat on footpegs (+0.45 rad on axisX)
+    // Thighs rotated forward hugging fuel tank (+0.65 rad on axisX), splayed outward around tank symmetrically (±0.18 rad on axisZ)
+    // Knees bent naturally back (-0.92 rad on axisX) angling shins cleanly down to footpegs
+    // Feet resting flat on footpegs (+0.12 rad on axisX)
     // Spine leaning forward over fuel tank (0.24 rad) + banking into steer & wheelie
-    // Arms reaching forward to grips (axisZ: ±0.72 rad, axisX: +0.42 rad)
-    // Forearms resting on handlebar controls
+    // Arms reaching forward to handlebar grips (axisX: -1.05 rad, axisZ: ±0.28 rad)
+    // Forearms bent inward onto handlebar controls (axisX: -0.65 rad, axisZ: ±0.15 rad)
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.16));
+      tmpQ.setFromAxisAngle(axisX, 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.18));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.16));
+      tmpQ.setFromAxisAngle(axisX, 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.18));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.25);
+      tmpQ.setFromAxisAngle(axisX, -0.92);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
     }
     if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.25);
+      tmpQ.setFromAxisAngle(axisX, -0.92);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
     }
     if (rig.leftFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.45);
+      tmpQ.setFromAxisAngle(axisX, 0.12);
       rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
     }
     if (rig.rightFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.45);
+      tmpQ.setFromAxisAngle(axisX, 0.12);
       rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
     }
     if (rig.spine) {
@@ -3602,19 +3665,19 @@ export function setDrivingPose(
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
+      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.28));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.72).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.42));
+      tmpQ.setFromAxisAngle(axisX, -1.05).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.28));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
     }
     if (rig.leftForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.2));
+      tmpQ.setFromAxisAngle(axisX, -0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.15));
       rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
     }
     if (rig.rightForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.2));
+      tmpQ.setFromAxisAngle(axisX, -0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.15));
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
   } else if (vehicleType === 'rickshaw') {
@@ -3643,50 +3706,50 @@ export function setDrivingPose(
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.35));
+      tmpQ.setFromAxisAngle(axisX, -0.85).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.25));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.35));
+      tmpQ.setFromAxisAngle(axisX, -0.85).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.25));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
     }
     if (rig.leftForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.25);
+      tmpQ.setFromAxisAngle(axisX, -0.55).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.15));
       rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
     }
     if (rig.rightForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.25);
+      tmpQ.setFromAxisAngle(axisX, -0.55).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.15));
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
   } else {
     // CAR, CNG, POLICE CRUISER, PICKUP, BUS SEATED DRIVER:
-    // Thighs angled forward (+1.35 rad) with slight symmetric splay (+0.20 / -0.20 on axisZ)
-    // Knees bent down (-1.40 rad) towards floor pedals
-    // Feet resting on pedals (+0.35 rad)
-    // Arms reach forward to steering wheel (axisZ: ±0.65 rad, axisX: 0.38 rad)
-    // Forearms bent inward (axisZ: ∓0.28 rad) gripping steering wheel
+    // Thighs angled forward (+1.25 rad) with slight symmetric splay (±0.18 on axisZ)
+    // Knees bent down (-1.25 rad) towards floor pedals
+    // Feet resting on pedals (+0.15 rad)
+    // Arms reach forward to steering wheel (axisX: -0.95 rad, axisZ: ±0.30 rad)
+    // Forearms bent inward (axisX: -0.45 rad, axisZ: ±0.20 rad) gripping steering wheel
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.35).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.20));
+      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.18));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, 1.35).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.20));
+      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.18));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.40);
+      tmpQ.setFromAxisAngle(axisX, -1.25);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
     }
     if (rig.rightLeg) {
-      tmpQ.setFromAxisAngle(axisX, -1.40);
+      tmpQ.setFromAxisAngle(axisX, -1.25);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
     }
     if (rig.leftFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.35);
+      tmpQ.setFromAxisAngle(axisX, 0.15);
       rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
     }
     if (rig.rightFoot) {
-      tmpQ.setFromAxisAngle(axisX, 0.35);
+      tmpQ.setFromAxisAngle(axisX, 0.15);
       rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
     }
     if (rig.spine) {
@@ -3694,19 +3757,19 @@ export function setDrivingPose(
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
     }
     if (rig.leftArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
+      tmpQ.setFromAxisAngle(axisX, -0.95).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.30));
       rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
     }
     if (rig.rightArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.65).multiply(new THREE.Quaternion().setFromAxisAngle(axisX, 0.38));
+      tmpQ.setFromAxisAngle(axisX, -0.95).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.30));
       rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
     }
     if (rig.leftForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, -0.28);
+      tmpQ.setFromAxisAngle(axisX, -0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.20));
       rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
     }
     if (rig.rightForeArm) {
-      tmpQ.setFromAxisAngle(axisZ, 0.28);
+      tmpQ.setFromAxisAngle(axisX, -0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.20));
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
   }
@@ -3723,10 +3786,28 @@ export function setDrivingPose(
 export function tintCharacterOutfit(
   limbs: CharacterLimbs,
   shirtHex: string,
-  pantsHex?: string
+  pantsHex?: string,
+  outfitId = 'modern_bomber'
 ) {
   if (!limbs.gltfRoot) return;
-  const isDefault = shirtHex === '#0f766e';
+
+  let topTexPath = '/textures/modern_street_jacket.png';
+  let botTexPath = '/textures/modern_denim_bottom.png';
+  if (outfitId === 'modern_denim') {
+    topTexPath = '/textures/modern_denim_jacket.png';
+    botTexPath = '/textures/modern_denim_bottom.png';
+  } else if (outfitId === 'street_hoodie') {
+    topTexPath = '/textures/modern_urban_hoodie.png';
+    botTexPath = '/textures/modern_black_pants.png';
+  } else if (outfitId === 'urban_techwear' || outfitId === 'executive_suit') {
+    topTexPath = '/textures/modern_street_jacket.png';
+    botTexPath = '/textures/modern_black_pants.png';
+  }
+
+  const topTex = loadRealTexture(topTexPath);
+  const botTex = loadRealTexture(botTexPath);
+  const sneakerTex = loadRealTexture('/textures/modern_sneakers.png');
+
   limbs.gltfRoot.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const m = child as THREE.Mesh;
@@ -3737,21 +3818,27 @@ export function tintCharacterOutfit(
         mat.name === 'Wolf3D_Outfit_Top' ||
         mat.name === 'T-shirt'
       ) {
-        if (isDefault) {
-          mat.color.set('#ffffff');
-        } else {
-          mat.color.set(shirtHex).lerp(new THREE.Color('#ffffff'), 0.55);
-        }
+        mat.map = topTex;
+        mat.color.set(shirtHex);
+        mat.roughness = 0.65;
+        mat.metalness = 0.12;
       } else if (
-        pantsHex &&
-        (m.name === 'Wolf3D_Outfit_Bottom' ||
-          mat.name === 'Wolf3D_Outfit_Bottom')
+        m.name === 'Wolf3D_Outfit_Bottom' ||
+        mat.name === 'Wolf3D_Outfit_Bottom' ||
+        mat.name === 'short'
       ) {
-        if (isDefault) {
-          mat.color.set('#ffffff');
-        } else {
-          mat.color.set(pantsHex).lerp(new THREE.Color('#ffffff'), 0.55);
-        }
+        mat.map = botTex;
+        if (pantsHex) mat.color.set(pantsHex);
+        mat.roughness = 0.85;
+        mat.metalness = 0.05;
+      } else if (
+        m.name === 'Wolf3D_Outfit_Footwear' ||
+        mat.name === 'Wolf3D_Outfit_Footwear'
+      ) {
+        mat.map = sneakerTex;
+        mat.color.set('#ffffff');
+      } else if (m.name === 'Mesh' && mat.name === 'Ch03_Body') {
+        mat.color.set(shirtHex);
       }
     }
   });

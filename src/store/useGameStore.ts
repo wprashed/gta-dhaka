@@ -3,6 +3,7 @@ import {
   DistrictId,
   Language,
   MissionStep,
+  PlayableCharacterId,
   PlayerOutfit,
   RadioStationId,
   ToolWeapon,
@@ -12,6 +13,7 @@ import {
   WeatherType,
 } from '../types/game';
 import {
+  PLAYABLE_CHARACTERS,
   PLAYER_OUTFITS,
   SIDE_MISSIONS,
   STORY_MISSIONS,
@@ -61,6 +63,7 @@ interface GameState {
   currentDistrict: DistrictId;
 
   // Customization & inventory
+  selectedCharacterId: PlayableCharacterId;
   outfits: PlayerOutfit[];
   equippedOutfitId: string;
   tools: ToolWeapon[];
@@ -119,6 +122,7 @@ interface GameState {
   customGlbUrlRequest: string | null;
   repairVehicleRequest: boolean;
   teleportRequest: { x: number; z: number } | null;
+  switchCharacterRequest: PlayableCharacterId | null;
 
   // Actions
   startNewGame: () => void;
@@ -169,6 +173,7 @@ interface GameState {
   resolveMissionChoice: (option: 'A' | 'B') => void;
   abandonMission: () => void;
 
+  selectCharacter: (charId: PlayableCharacterId) => void;
   equipOutfit: (outfitId: string) => void;
   equipTool: (toolId: ToolWeaponId) => void;
   cycleTool: (dir?: 1 | -1) => void;
@@ -222,8 +227,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   isWasted: false,
   isBusted: false,
 
+  selectedCharacterId: 'arif',
   outfits: PLAYER_OUTFITS,
-  equippedOutfitId: 'dhaka_casual',
+  equippedOutfitId: 'modern_bomber',
   tools: TOOL_WEAPONS,
   equippedToolId: 'fists',
   transactions: [
@@ -272,6 +278,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   customGlbUrlRequest: null,
   repairVehicleRequest: false,
   teleportRequest: null,
+  switchCharacterRequest: null,
 
   startNewGame: () => {
     dhakaAudio.init();
@@ -317,7 +324,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           completedMissionIds: data.completedMissionIds ?? [],
           activeMissionId: data.activeMissionId ?? 'm1_back_to_dhaka',
           activeMissionStepIndex: data.activeMissionStepIndex ?? 0,
-          equippedOutfitId: data.equippedOutfitId ?? 'dhaka_casual',
+          selectedCharacterId: data.selectedCharacterId ?? 'arif',
+          equippedOutfitId: data.equippedOutfitId ?? 'modern_bomber',
           equippedToolId: data.equippedToolId ?? 'fists',
           outfits: data.outfits ?? PLAYER_OUTFITS,
           tools: TOOL_WEAPONS,
@@ -871,6 +879,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
+  selectCharacter: (charId) => {
+    const char =
+      PLAYABLE_CHARACTERS.find((c) => c.id === charId) ||
+      PLAYABLE_CHARACTERS[0];
+    dhakaAudio.playSfx('ui');
+    set({
+      selectedCharacterId: charId,
+      switchCharacterRequest: charId,
+    });
+    get().showBanner({
+      titleEn: `PLAYING AS: ${char.nameEn.toUpperCase()}`,
+      titleBn: `চরিত্র: ${char.nameBn}`,
+      subtitleEn: `${char.taglineEn} • ${char.specialAbilityEn}`,
+      subtitleBn: `${char.taglineBn} • ${char.specialAbilityBn}`,
+      tone: 'gold',
+    });
+  },
+
   equipOutfit: (outfitId) => {
     const s = get();
     const target = s.outfits.find((o) => o.id === outfitId);
@@ -947,6 +973,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       customGlbUrlRequest: null,
       repairVehicleRequest: false,
       teleportRequest: null,
+      switchCharacterRequest: null,
     }),
   requestTeleport: (x, z) =>
     set({ teleportRequest: { x, z }, gamePhase: 'playing' }),
@@ -973,6 +1000,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       completedMissionIds: s.completedMissionIds,
       activeMissionId: s.activeMissionId,
       activeMissionStepIndex: s.activeMissionStepIndex,
+      selectedCharacterId: s.selectedCharacterId,
       equippedOutfitId: s.equippedOutfitId,
       equippedToolId: s.equippedToolId,
       outfits: s.outfits,
