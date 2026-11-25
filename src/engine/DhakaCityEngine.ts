@@ -26,6 +26,7 @@ import {
   createMallSignboardTexture,
   loadCustomGLBFromUrl,
   setCharacterAnimationState,
+  setDrivingPose,
   tintCharacterOutfit,
   updateWeaponAttachment,
 } from './dhakaModels';
@@ -1132,6 +1133,9 @@ export class DhakaCityEngine {
         }
       }
       this.playerPos.set(safeX, 0, safeZ);
+      if (this.playerLimbs.group.parent !== this.scene) {
+        this.scene.add(this.playerLimbs.group);
+      }
       this.playerLimbs.group.visible = true;
       this.playerLimbs.group.position.copy(this.playerPos);
       this.playerLimbs.group.scale.set(1.0, 1.0, 1.0);
@@ -1140,14 +1144,26 @@ export class DhakaCityEngine {
       this.playerLimbs.rightArm.rotation.set(0, 0, 0);
       this.playerLimbs.leftLeg.rotation.set(0, 0, 0);
       this.playerLimbs.rightLeg.rotation.set(0, 0, 0);
-      if (this.playerLimbs.rpmRig) {
-        const rig = this.playerLimbs.rpmRig;
+      if (this.playerLimbs.weaponMesh) {
+        this.playerLimbs.weaponMesh.visible = true;
+      }
+      const rig = this.playerLimbs.rpmRig || this.playerLimbs.driveRig;
+      if (rig) {
         if (rig.leftUpLeg) rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest);
         if (rig.rightUpLeg) rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest);
         if (rig.leftLeg) rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest);
         if (rig.rightLeg) rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest);
+        if (rig.leftFoot) rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest);
+        if (rig.rightFoot) rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest);
+        if (rig.spine) rig.spine.bone.quaternion.copy(rig.spine.rest);
         if (rig.leftArm) rig.leftArm.bone.quaternion.copy(rig.leftArm.rest);
         if (rig.rightArm) rig.rightArm.bone.quaternion.copy(rig.rightArm.rest);
+        if (rig.leftForeArm) rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest);
+        if (rig.rightForeArm) rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest);
+      }
+      if (this.playerLimbs.actions?.idle) {
+        this.playerLimbs.actions.idle.reset().fadeIn(0.18).play();
+        this.playerLimbs.currentActionName = 'idle';
       }
     }
     this.activeVehicleId = null;
@@ -1162,12 +1178,17 @@ export class DhakaCityEngine {
 
     let hadDriver = false;
     if (mesh) {
-      // Find driver model in top-level or descendants
-      const driverObj = mesh.getObjectByName('npc_driver');
-      if (driverObj) {
+      (mesh as any).isPlayerDriven = true;
+      if (!mesh.userData) mesh.userData = {};
+      mesh.userData.noDriver = true;
+
+      // Find and purge any driver model in top-level or descendants
+      let driverObj = mesh.getObjectByName('npc_driver');
+      while (driverObj) {
         hadDriver = true;
         driverObj.visible = false;
         driverObj.parent?.remove(driverObj);
+        driverObj = mesh.getObjectByName('npc_driver');
       }
     }
 
@@ -1292,7 +1313,7 @@ export class DhakaCityEngine {
       plateNumber: `ডিএমপি-${Math.floor(Math.random() * 80 + 10)}-${Math.floor(Math.random() * 8000 + 1000)}`,
     };
     this.vehicles.push(entity);
-    const mesh = createVehicleMesh('police', '#1e3a8a');
+    const mesh = createVehicleMesh('police', '#1e3a8a', 0, true);
     mesh.position.set(x, 0, z);
     this.scene.add(mesh);
     this.vehicleMeshes.set(id, mesh);
@@ -4139,7 +4160,7 @@ export class DhakaCityEngine {
       };
       this.vehicles.push(entity);
 
-      const mesh = createVehicleMesh(p.type, p.color, idx);
+      const mesh = createVehicleMesh(p.type, p.color, idx, p.isTraffic);
       mesh.position.set(p.x, elev, p.z);
       mesh.rotation.y = p.rot;
       this.scene.add(mesh);
@@ -5096,6 +5117,21 @@ export class DhakaCityEngine {
 
       this.activeVehicleId = closestVeh.id;
       closestVeh.isTraffic = false;
+      const mesh = this.vehicleMeshes.get(closestVeh.id);
+      if (mesh) {
+        (mesh as any).isPlayerDriven = true;
+        if (!mesh.userData) mesh.userData = {};
+        mesh.userData.noDriver = true;
+
+        let lingering = mesh.getObjectByName('npc_driver');
+        while (lingering) {
+          lingering.visible = false;
+          lingering.parent?.remove(lingering);
+          lingering = mesh.getObjectByName('npc_driver');
+        }
+
+        mesh.add(this.playerLimbs.group);
+      }
       this.playerLimbs.group.visible = true;
       this.cameraYaw = closestVeh.rotation + Math.PI;
       dhakaAudio.playSfx('pickup');
@@ -5285,7 +5321,7 @@ export class DhakaCityEngine {
     };
     this.vehicles.push(entity);
 
-    const mesh = createVehicleMesh(type, entity.color, this.vehicles.length);
+    const mesh = createVehicleMesh(type, entity.color, this.vehicles.length, false);
     mesh.position.set(spawnX, 0, spawnZ);
     mesh.rotation.y = entity.rotation;
     this.scene.add(mesh);
@@ -6443,6 +6479,18 @@ export class DhakaCityEngine {
     this.playerPos.set(veh.x, elev, veh.z);
 
     if (mesh) {
+      (mesh as any).isPlayerDriven = true;
+      if (!mesh.userData) mesh.userData = {};
+      mesh.userData.noDriver = true;
+
+      // Purge any lingering or late-loaded npc_driver from this player-driven vehicle
+      let lingeringDriver = mesh.getObjectByName('npc_driver');
+      while (lingeringDriver) {
+        lingeringDriver.visible = false;
+        lingeringDriver.parent?.remove(lingeringDriver);
+        lingeringDriver = mesh.getObjectByName('npc_driver');
+      }
+
       mesh.position.set(veh.x, elev, veh.z);
       mesh.rotation.y = veh.rotation;
 
@@ -6476,123 +6524,47 @@ export class DhakaCityEngine {
 
       // Both CarConcept.glb and ferrari.glb hubs use local X as the true axle.
       this.animateVehicleWheels(mesh, veh.speed, dt, steer);
+
+      // Mount the player character into the vehicle group so it follows the vehicle perfectly
+      if (this.playerLimbs.group.parent !== mesh) {
+        mesh.add(this.playerLimbs.group);
+      }
+
+      // Position the player in the exact driver seat in vehicle-local coordinates
+      if (veh.type === 'motorcycle') {
+        this.playerLimbs.group.position.set(0, 0.26, -0.14);
+        this.playerLimbs.group.rotation.set(-this.bikeWheeliePitch, 0, 0);
+        this.playerLimbs.group.scale.set(0.84, 0.84, 0.84);
+      } else if (veh.type === 'rickshaw') {
+        this.playerLimbs.group.position.set(0, 0.22, 0.34);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.88, 0.88, 0.88);
+      } else if (veh.type === 'cng') {
+        this.playerLimbs.group.position.set(0, 0.12, 0.28);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.78, 0.78, 0.78);
+      } else if (veh.type === 'car' || veh.type === 'police') {
+        this.playerLimbs.group.position.set(-0.35, 0.22, 0.08);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.72, 0.72, 0.72);
+      } else if (veh.type === 'pickup') {
+        this.playerLimbs.group.position.set(-0.38, 0.35, 0.35);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.75, 0.75, 0.75);
+      } else if (veh.type === 'bus') {
+        this.playerLimbs.group.position.set(-0.65, 1.15, 3.8);
+        this.playerLimbs.group.rotation.set(0, 0, 0);
+        this.playerLimbs.group.scale.set(0.85, 0.85, 0.85);
+      }
+    } else {
+      this.playerLimbs.group.position.set(veh.x, elev + 0.26, veh.z);
+      this.playerLimbs.group.rotation.set(-this.bikeWheeliePitch, veh.rotation, 0);
     }
 
-    // Visibly mount and pose the player as the active driver behind the wheel / handlebars!
     this.playerLimbs.group.visible = true;
 
-    if (veh.type === 'motorcycle') {
-      const backOffset = -0.16;
-      const seatY = 0.52;
-      const px = veh.x + Math.sin(veh.rotation) * backOffset;
-      const pz = veh.z + Math.cos(veh.rotation) * backOffset;
-      this.playerLimbs.group.position.set(px, elev + seatY, pz);
-      this.playerLimbs.group.rotation.set(
-        -this.bikeWheeliePitch,
-        veh.rotation,
-        mesh ? mesh.rotation.z : 0
-      );
-      this.playerLimbs.group.scale.set(0.85, 0.85, 0.85);
-
-      this.playerLimbs.leftArm.rotation.set(0.72, 0.22, -0.42);
-      this.playerLimbs.rightArm.rotation.set(0.72, -0.22, 0.42);
-      this.playerLimbs.leftLeg.rotation.set(1.05, 0.22, -0.2);
-      this.playerLimbs.rightLeg.rotation.set(1.05, -0.22, 0.2);
-    } else if (veh.type === 'rickshaw') {
-      const px = veh.x + Math.sin(veh.rotation) * 0.34;
-      const pz = veh.z + Math.cos(veh.rotation) * 0.34;
-      this.playerLimbs.group.position.set(px, elev + 0.38, pz);
-      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
-      this.playerLimbs.group.scale.set(0.88, 0.88, 0.88);
-
-      this.playerLimbs.leftArm.rotation.set(0.55, 0.2, -0.35);
-      this.playerLimbs.rightArm.rotation.set(0.55, -0.2, 0.35);
-      const pedal = performance.now() * 0.008 * (veh.speed || 0.6);
-      this.playerLimbs.leftLeg.rotation.set(
-        Math.sin(pedal) * 0.4 + 0.5,
-        0.1,
-        0
-      );
-      this.playerLimbs.rightLeg.rotation.set(
-        Math.sin(pedal + Math.PI) * 0.4 + 0.5,
-        -0.1,
-        0
-      );
-    } else if (veh.type === 'cng') {
-      const px = veh.x + Math.sin(veh.rotation) * 0.28;
-      const pz = veh.z + Math.cos(veh.rotation) * 0.28;
-      this.playerLimbs.group.position.set(px, elev + 0.26, pz);
-      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
-      this.playerLimbs.group.scale.set(0.82, 0.82, 0.82);
-
-      this.playerLimbs.leftArm.rotation.set(0.5, 0.2, -0.3);
-      this.playerLimbs.rightArm.rotation.set(0.5, -0.2, 0.3);
-      this.playerLimbs.leftLeg.rotation.set(0.95, 0.2, 0);
-      this.playerLimbs.rightLeg.rotation.set(0.95, -0.2, 0);
-    } else if (veh.type === 'car' || veh.type === 'police') {
-      const sideAngle = veh.rotation + Math.PI / 2;
-      const px =
-        veh.x - Math.sin(sideAngle) * 0.36 + Math.sin(veh.rotation) * 0.08;
-      const pz =
-        veh.z - Math.cos(sideAngle) * 0.36 + Math.cos(veh.rotation) * 0.08;
-      this.playerLimbs.group.position.set(px, elev + 0.22, pz);
-      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
-      this.playerLimbs.group.scale.set(0.74, 0.74, 0.74);
-
-      this.playerLimbs.leftArm.rotation.set(0.48, 0.2, -0.25);
-      this.playerLimbs.rightArm.rotation.set(0.48, -0.2, 0.25);
-      this.playerLimbs.leftLeg.rotation.set(1.1, 0.15, 0);
-      this.playerLimbs.rightLeg.rotation.set(1.1, -0.15, 0);
-    } else if (veh.type === 'pickup') {
-      const sideAngle = veh.rotation + Math.PI / 2;
-      const px =
-        veh.x - Math.sin(sideAngle) * 0.42 + Math.sin(veh.rotation) * 0.35;
-      const pz =
-        veh.z - Math.cos(sideAngle) * 0.42 + Math.cos(veh.rotation) * 0.35;
-      this.playerLimbs.group.position.set(px, elev + 0.46, pz);
-      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
-      this.playerLimbs.group.scale.set(0.78, 0.78, 0.78);
-
-      this.playerLimbs.leftArm.rotation.set(0.48, 0.2, -0.25);
-      this.playerLimbs.rightArm.rotation.set(0.48, -0.2, 0.25);
-      this.playerLimbs.leftLeg.rotation.set(1.1, 0.15, 0);
-      this.playerLimbs.rightLeg.rotation.set(1.1, -0.15, 0);
-    } else if (veh.type === 'bus') {
-      const sideAngle = veh.rotation + Math.PI / 2;
-      const px =
-        veh.x - Math.sin(sideAngle) * 0.65 + Math.sin(veh.rotation) * 3.8;
-      const pz =
-        veh.z - Math.cos(sideAngle) * 0.65 + Math.cos(veh.rotation) * 3.8;
-      this.playerLimbs.group.position.set(px, elev + 1.15, pz);
-      this.playerLimbs.group.rotation.set(0, veh.rotation, 0);
-      this.playerLimbs.group.scale.set(0.86, 0.86, 0.86);
-
-      this.playerLimbs.leftArm.rotation.set(0.5, 0.2, -0.3);
-      this.playerLimbs.rightArm.rotation.set(0.5, -0.2, 0.3);
-      this.playerLimbs.leftLeg.rotation.set(1.0, 0.15, 0);
-      this.playerLimbs.rightLeg.rotation.set(1.0, -0.15, 0);
-    }
-
-    if (this.playerLimbs.rpmRig) {
-      const rig = this.playerLimbs.rpmRig;
-      const axisX = new THREE.Vector3(1, 0, 0);
-      const tmpQuat = new THREE.Quaternion();
-      tmpQuat.setFromAxisAngle(axisX, 1.05);
-      if (rig.leftUpLeg)
-        rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQuat);
-      if (rig.rightUpLeg)
-        rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQuat);
-      tmpQuat.setFromAxisAngle(axisX, -1.15);
-      if (rig.leftLeg)
-        rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQuat);
-      if (rig.rightLeg)
-        rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQuat);
-      tmpQuat.setFromAxisAngle(axisX, 0.48);
-      if (rig.leftArm)
-        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQuat);
-      if (rig.rightArm)
-        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQuat);
-    }
+    // Apply realistic driving skeleton pose (gripping handlebars, leaning, pedals)
+    setDrivingPose(this.playerLimbs, veh.type, veh.speed, steer, this.bikeWheeliePitch, dt);
 
     dhakaAudio.updateEngine(
       true,

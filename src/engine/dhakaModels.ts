@@ -434,7 +434,8 @@ function getVehicleShadowTexture(): THREE.CanvasTexture {
 export function createVehicleMesh(
   type: VehicleType,
   customColor?: string,
-  seed = 1
+  seed = 1,
+  hasDriver = true
 ): THREE.Group {
   const group = new THREE.Group();
 
@@ -794,16 +795,24 @@ export function createVehicleMesh(
     passengerBackrest.position.set(0, 1.02, -0.88);
     group.add(passengerBackrest);
 
-    // Real 3D Human GLB CNG Driver sitting inside the cockpit
-    ensureModelLoaded('readyplayerme1', (gltf) => {
-      try {
-        const driver = SkeletonUtils.clone(gltf.scene);
-        driver.name = 'npc_driver';
-        driver.scale.setScalar(0.78);
-        driver.position.set(0, 0.12, 0.28);
-        group.add(driver);
-      } catch {}
-    });
+    // Real 3D Human GLB CNG Driver sitting inside the cockpit (traffic only)
+    if (hasDriver) {
+      ensureModelLoaded('readyplayerme1', (gltf) => {
+        if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+        try {
+          const driver = SkeletonUtils.clone(gltf.scene);
+          driver.name = 'npc_driver';
+          driver.scale.setScalar(0.78);
+          driver.position.set(0, 0.12, 0.28);
+          driver.traverse((c) => {
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+              c.visible = false;
+            }
+          });
+          group.add(driver);
+        } catch {}
+      });
+    }
 
     // 7. Chrome-Bezel Round Bajaj Headlamp, Amber Turn Indicators, Rear Bumper & Bangla Number Plate
     const headlightHousing = new THREE.Mesh(
@@ -1139,45 +1148,51 @@ export function createVehicleMesh(
     rearArtPanel.position.set(0, 1.18, -1.14);
     group.add(rearArtPanel);
 
-    // 5. Real 3D Human GLB Rickshaw Puller in Checkered Bangladeshi Lungi gripping handlebars
-    ensureModelLoaded('readyplayerme1', (gltf) => {
-      try {
-        const puller = SkeletonUtils.clone(gltf.scene);
-        puller.name = 'npc_driver';
-        puller.scale.setScalar(0.88);
-        puller.position.set(0, 0.22, 0.34);
-        const lungiTex = createLungiPatternTexture('#1e3a8a', '#facc15');
-        const reachQuat = new THREE.Quaternion()
-          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.32)
-          .multiply(
-            new THREE.Quaternion().setFromAxisAngle(
-              new THREE.Vector3(0, 0, 1),
-              -0.68
-            )
-          );
-        puller.traverse((c) => {
-          if (c.name === 'LeftArm' || c.name === 'RightArm') {
-            c.quaternion.multiply(reachQuat);
-          }
-          if ((c as THREE.Mesh).isMesh) {
-            const m = c as THREE.Mesh;
-            if (m.name === 'Wolf3D_Outfit_Bottom') {
-              m.material = new THREE.MeshStandardMaterial({
-                map: lungiTex,
-                roughness: 0.65,
-              });
-            } else if (m.name === 'Wolf3D_Outfit_Top') {
-              const mat = (
-                m.material as THREE.MeshStandardMaterial
-              ).clone() as THREE.MeshStandardMaterial;
-              mat.color.set('#d97706');
-              m.material = mat;
+    // 5. Real 3D Human GLB Rickshaw Puller in Checkered Bangladeshi Lungi gripping handlebars (traffic only)
+    if (hasDriver) {
+      ensureModelLoaded('readyplayerme1', (gltf) => {
+        if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+        try {
+          const puller = SkeletonUtils.clone(gltf.scene);
+          puller.name = 'npc_driver';
+          puller.scale.setScalar(0.88);
+          puller.position.set(0, 0.22, 0.34);
+          const lungiTex = createLungiPatternTexture('#1e3a8a', '#facc15');
+          const reachQuat = new THREE.Quaternion()
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.32)
+            .multiply(
+              new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 0, 1),
+                -0.68
+              )
+            );
+          puller.traverse((c) => {
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+              c.visible = false;
             }
-          }
-        });
-        group.add(puller);
-      } catch {}
-    });
+            if (c.name === 'LeftArm' || c.name === 'RightArm') {
+              c.quaternion.multiply(reachQuat);
+            }
+            if ((c as THREE.Mesh).isMesh) {
+              const m = c as THREE.Mesh;
+              if (m.name === 'Wolf3D_Outfit_Bottom') {
+                m.material = new THREE.MeshStandardMaterial({
+                  map: lungiTex,
+                  roughness: 0.65,
+                });
+              } else if (m.name === 'Wolf3D_Outfit_Top') {
+                const mat = (
+                  m.material as THREE.MeshStandardMaterial
+                ).clone() as THREE.MeshStandardMaterial;
+                mat.color.set('#d97706');
+                m.material = mat;
+              }
+            }
+          });
+          group.add(puller);
+        } catch {}
+      });
+    }
 
     return group;
   }
@@ -1214,17 +1229,25 @@ export function createVehicleMesh(
       group.remove(fallbackGroup);
       group.add(cloned);
 
-      // 3D Human driver seated in the car's driver seat
-      ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
-        try {
-          const driver = SkeletonUtils.clone(driverGltf.scene);
-          driver.name = 'npc_driver';
-          driver.scale.setScalar(0.72);
-          driver.position.set(-0.35, 0.22, 0.08);
-          driver.rotation.y = 0;
-          cloned.add(driver);
-        } catch {}
-      });
+      // 3D Human driver seated in the car's driver seat (traffic only)
+      if (hasDriver) {
+        ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
+          if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+          try {
+            const driver = SkeletonUtils.clone(driverGltf.scene);
+            driver.name = 'npc_driver';
+            driver.scale.setScalar(0.72);
+            driver.position.set(-0.35, 0.22, 0.08);
+            driver.rotation.y = 0;
+            driver.traverse((c) => {
+              if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+                c.visible = false;
+              }
+            });
+            cloned.add(driver);
+          } catch {}
+        });
+      }
     });
 
     return group;
@@ -1357,16 +1380,24 @@ export function createVehicleMesh(
     addWheel(-1.34, 0.48, -2.55, 1.35);
     addWheel(1.34, 0.48, -2.55, 1.35);
 
-    // Bus driver seated in the elevated front driver cabin
-    ensureModelLoaded('readyplayerme1', (driverGltf) => {
-      try {
-        const driver = SkeletonUtils.clone(driverGltf.scene);
-        driver.name = 'npc_driver';
-        driver.scale.setScalar(0.85);
-        driver.position.set(-0.65, 1.15, 3.8);
-        group.add(driver);
-      } catch {}
-    });
+    // Bus driver seated in the elevated front driver cabin (traffic only)
+    if (hasDriver) {
+      ensureModelLoaded('readyplayerme1', (driverGltf) => {
+        if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+        try {
+          const driver = SkeletonUtils.clone(driverGltf.scene);
+          driver.name = 'npc_driver';
+          driver.scale.setScalar(0.85);
+          driver.position.set(-0.65, 1.15, 3.8);
+          driver.traverse((c) => {
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+              c.visible = false;
+            }
+          });
+          group.add(driver);
+        } catch {}
+      });
+    }
 
     return group;
   }
@@ -1587,71 +1618,78 @@ export function createVehicleMesh(
     // Rear Fixed Wheel
     addWheel(0, 0.35, -0.76, 0.98);
 
-    // 3D Human GLB Rider seated on Dhaka Motorcycle gripping handlebars
-    ensureModelLoaded('readyplayerme1', (gltf) => {
-      try {
-        const rider = SkeletonUtils.clone(gltf.scene);
-        rider.name = 'npc_driver';
-        rider.scale.setScalar(0.84);
-        rider.position.set(0, 0.26, -0.14);
+    // 3D Human GLB Rider seated on Dhaka Motorcycle gripping handlebars (traffic only)
+    if (hasDriver) {
+      ensureModelLoaded('rpm_male', (gltf) => {
+        if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+        try {
+          const rider = SkeletonUtils.clone(gltf.scene);
+          rider.name = 'npc_driver';
+          rider.scale.setScalar(0.84);
+          rider.position.set(0, 0.26, -0.14);
 
-        const hipBendQuat = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(1, 0, 0),
-          1.05
-        );
-        const kneeBendQuat = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(1, 0, 0),
-          -1.15
-        );
-        const leftArmQuat = new THREE.Quaternion()
-          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
-          .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.45));
-        const rightArmQuat = new THREE.Quaternion()
-          .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
-          .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45));
+          const hipBendQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            1.05
+          );
+          const kneeBendQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            -1.15
+          );
+          const leftArmQuat = new THREE.Quaternion()
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.45));
+          const rightArmQuat = new THREE.Quaternion()
+            .setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.42)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.45));
 
-        rider.traverse((c) => {
-          if (c.name === 'Spine' || c.name === 'Spine1') {
-            c.quaternion.multiply(
-              new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.22)
-            );
-          } else if (c.name === 'LeftArm') {
-            c.quaternion.multiply(leftArmQuat);
-          } else if (c.name === 'RightArm') {
-            c.quaternion.multiply(rightArmQuat);
-          } else if (c.name === 'LeftUpLeg' || c.name === 'RightUpLeg') {
-            c.quaternion.multiply(hipBendQuat);
-          } else if (c.name === 'LeftLeg' || c.name === 'RightLeg') {
-            c.quaternion.multiply(kneeBendQuat);
-          }
-
-          // Dress biker in dark leather biker jacket and dark denim jeans
-          if ((c as THREE.Mesh).isMesh) {
-            const m = c as THREE.Mesh;
-            const nameLower = (m.name || '').toLowerCase();
-            if (nameLower.includes('top') || nameLower.includes('outfit_top')) {
-              m.material = new THREE.MeshStandardMaterial({
-                color: '#1e293b', // Sleek black leather biker jacket
-                roughness: 0.38,
-                metalness: 0.12,
-              });
-            } else if (nameLower.includes('bottom') || nameLower.includes('outfit_bottom')) {
-              m.material = new THREE.MeshStandardMaterial({
-                color: '#334155', // Charcoal denim rider trousers
-                roughness: 0.65,
-                metalness: 0.05,
-              });
-            } else if (nameLower.includes('footwear') || nameLower.includes('shoes')) {
-              m.material = new THREE.MeshStandardMaterial({
-                color: '#0f172a',
-                roughness: 0.45,
-              });
+          rider.traverse((c) => {
+            // Hide any fedora hat / headwear so traffic bikers have realistic hair/helmets
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+              c.visible = false;
             }
-          }
-        });
-        group.add(rider);
-      } catch {}
-    });
+            if (c.name === 'Spine' || c.name === 'Spine1') {
+              c.quaternion.multiply(
+                new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.22)
+              );
+            } else if (c.name === 'LeftArm') {
+              c.quaternion.multiply(leftArmQuat);
+            } else if (c.name === 'RightArm') {
+              c.quaternion.multiply(rightArmQuat);
+            } else if (c.name === 'LeftUpLeg' || c.name === 'RightUpLeg') {
+              c.quaternion.multiply(hipBendQuat);
+            } else if (c.name === 'LeftLeg' || c.name === 'RightLeg') {
+              c.quaternion.multiply(kneeBendQuat);
+            }
+
+            // Dress biker in dark leather biker jacket and dark denim jeans
+            if ((c as THREE.Mesh).isMesh) {
+              const m = c as THREE.Mesh;
+              const nameLower = (m.name || '').toLowerCase();
+              if (nameLower.includes('top') || nameLower.includes('outfit_top')) {
+                m.material = new THREE.MeshStandardMaterial({
+                  color: '#1e293b', // Sleek black leather biker jacket
+                  roughness: 0.38,
+                  metalness: 0.12,
+                });
+              } else if (nameLower.includes('bottom') || nameLower.includes('outfit_bottom')) {
+                m.material = new THREE.MeshStandardMaterial({
+                  color: '#334155', // Charcoal denim rider trousers
+                  roughness: 0.65,
+                  metalness: 0.05,
+                });
+              } else if (nameLower.includes('footwear') || nameLower.includes('shoes')) {
+                m.material = new THREE.MeshStandardMaterial({
+                  color: '#0f172a',
+                  roughness: 0.45,
+                });
+              }
+            }
+          });
+          group.add(rider);
+        } catch {}
+      });
+    }
 
     return group;
   }
@@ -1993,17 +2031,25 @@ export function createVehicleMesh(
       group.remove(fallbackGroup);
       group.add(cloned);
 
-      // 3D Human driver seated in the car's driver seat
-      ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
-        try {
-          const driver = SkeletonUtils.clone(driverGltf.scene);
-          driver.name = 'npc_driver';
-          driver.scale.setScalar(0.72);
-          driver.position.set(-0.35, 0.22, 0.08);
-          driver.rotation.y = 0;
-          cloned.add(driver);
-        } catch {}
-      });
+      // 3D Human driver seated in the car's driver seat (traffic only)
+      if (hasDriver) {
+        ensureModelLoaded(isPolice ? 'soldier' : 'readyplayerme1', (driverGltf) => {
+          if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+          try {
+            const driver = SkeletonUtils.clone(driverGltf.scene);
+            driver.name = 'npc_driver';
+            driver.scale.setScalar(0.72);
+            driver.position.set(-0.35, 0.22, 0.08);
+            driver.rotation.y = 0;
+            driver.traverse((c) => {
+              if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+                c.visible = false;
+              }
+            });
+            cloned.add(driver);
+          } catch {}
+        });
+      }
 
       // Fit plates / glow / beacon to this GLB's real bounds (local space).
       if (carModelKey === 'car_concept') {
@@ -2089,6 +2135,7 @@ export interface CharacterLimbs {
   currentActionName?: 'idle' | 'walk' | 'run';
   gltfRoot?: THREE.Object3D;
   rpmRig?: RpmBoneRig;
+  driveRig?: RpmBoneRig;
   weaponHand?: THREE.Object3D;
   fingerBones?: Array<{ bone: THREE.Object3D; rest: THREE.Quaternion }>;
   gripAmount?: number;
@@ -2458,6 +2505,7 @@ export function createCharacterMesh(
             rig.spine = { bone: node, rest: node.quaternion.clone() };
         });
         limbs.rpmRig = rig;
+        limbs.driveRig = rig;
       }
 
       // Upgrade to real 65-bone Mixamo motion capture from HVGirl.glb
@@ -3099,6 +3147,179 @@ export function setCharacterAnimationState(
       _tmpQuat.setFromAxisAngle(_axisX, -0.04);
       wm.quaternion.multiply(_tmpQuat);
       wm.position.set(0, 0.02, 0.08).applyQuaternion(wm.quaternion);
+    }
+  }
+}
+
+/**
+ * Poses the character (player Arif Rahman or NPCs) realistically inside / on any vehicle:
+ * - Motorcycle: knees bent back tightly against tank, feet on footpegs, spine leaning over tank,
+ *   hands holding handlebar grips, leaning into wheelies and cornering bank angles.
+ * - Rickshaw: standing and pedaling on pedals with alternating legs, hands on handlebars.
+ * - CNG / Car / Police Cruiser / Pickup / Bus: seated in driver seat with knees bent 90°, hands on steering wheel / handlebar.
+ */
+export function setDrivingPose(
+  limbs: CharacterLimbs,
+  vehicleType: VehicleType,
+  speed: number,
+  steer: number,
+  wheeliePitch: number,
+  dt: number
+) {
+  // 1. Hide weapon while driving so hands grip controls
+  if (limbs.weaponMesh) {
+    limbs.weaponMesh.visible = false;
+  }
+
+  // 2. Stop or mute on-foot mixer clips so they do not fight driving bone transforms
+  if (limbs.actions) {
+    if (limbs.actions.idle && limbs.actions.idle.isRunning()) {
+      limbs.actions.idle.stop();
+    }
+    if (limbs.actions.walk && limbs.actions.walk.isRunning()) {
+      limbs.actions.walk.stop();
+    }
+    if (limbs.actions.run && limbs.actions.run.isRunning()) {
+      limbs.actions.run.stop();
+    }
+    limbs.currentActionName = undefined;
+  }
+
+  // 3. Drive the bone rig into realistic vehicle postures
+  const rig = limbs.rpmRig || limbs.driveRig;
+  if (!rig) return;
+
+  const axisX = new THREE.Vector3(1, 0, 0);
+  const axisY = new THREE.Vector3(0, 1, 0);
+  const axisZ = new THREE.Vector3(0, 0, 1);
+  const tmpQ = new THREE.Quaternion();
+
+  if (vehicleType === 'motorcycle') {
+    // MOTORCYCLE BIKER POSE:
+    // Hips bent forward, knees bent back, feet planted on footpegs, spine leaning forward over tank,
+    // arms reaching forward holding handlebars, banking into turns and leaning into wheelies
+    if (rig.leftUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 1.15).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.2));
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 1.15).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.2));
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftLeg) {
+      tmpQ.setFromAxisAngle(axisX, -1.25);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightLeg) {
+      tmpQ.setFromAxisAngle(axisX, -1.25);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftFoot) {
+      tmpQ.setFromAxisAngle(axisX, 0.35);
+      rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(tmpQ);
+    }
+    if (rig.rightFoot) {
+      tmpQ.setFromAxisAngle(axisX, 0.35);
+      rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(tmpQ);
+    }
+    if (rig.spine) {
+      const speedLean = Math.min(0.25, Math.abs(speed) * 0.012);
+      const forwardLean = 0.32 + speedLean + wheeliePitch * 0.45;
+      const turnLean = -steer * 0.28;
+      tmpQ.setFromAxisAngle(axisX, forwardLean).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, turnLean));
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
+    }
+    if (rig.leftArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.52)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axisY, -0.22))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.45));
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.52)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axisY, 0.22))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.45));
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+    if (rig.leftForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, -0.25);
+      rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightForeArm) {
+      tmpQ.setFromAxisAngle(axisZ, 0.25);
+      rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
+    }
+  } else if (vehicleType === 'rickshaw') {
+    // RICKSHAW PULLER STANDING & PEDALING POSE:
+    const pedalTime = performance.now() * 0.008 * (speed || 0.6);
+    const leftPedal = Math.sin(pedalTime);
+    const rightPedal = Math.sin(pedalTime + Math.PI);
+    if (rig.leftUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.65 + leftPedal * 0.35);
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.65 + rightPedal * 0.35);
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.55 - Math.max(0, leftPedal) * 0.65);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.55 - Math.max(0, rightPedal) * 0.65);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
+    }
+    if (rig.spine) {
+      tmpQ.setFromAxisAngle(axisX, 0.22);
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
+    }
+    if (rig.leftArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.35));
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.45).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.35));
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+  } else {
+    // CAR, CNG, POLICE CRUISER, PICKUP, BUS SEATED DRIVER:
+    // Sitting with legs bent ~90 degrees, hands holding steering wheel or handlebars
+    if (rig.leftUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.12));
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 1.25).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.12));
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftLeg) {
+      tmpQ.setFromAxisAngle(axisX, -1.35);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightLeg) {
+      tmpQ.setFromAxisAngle(axisX, -1.35);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
+    }
+    if (rig.spine) {
+      tmpQ.setFromAxisAngle(axisX, 0.08);
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
+    }
+    if (rig.leftArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.48).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.28));
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightArm) {
+      tmpQ.setFromAxisAngle(axisX, 0.48).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.28));
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+  }
+
+  // Curl fingers naturally to hold grips / steering wheel
+  if (limbs.fingerBones && limbs.fingerBones.length > 0) {
+    for (const f of limbs.fingerBones) {
+      tmpQ.setFromAxisAngle(axisX, 1.15);
+      f.bone.quaternion.copy(f.rest).multiply(tmpQ);
     }
   }
 }
