@@ -3334,8 +3334,8 @@ export function setCharacterAnimationState(
         // Barrel extends UP past the right shoulder, stock rests against lower back.
         // Positioned in character root space for rock-solid stability across all skeletal GLTF models,
         // COMPLETELY CLEAR OF PELVIS, HIPS, AND LEGS!
-        wm.position.set(0.06, 1.26, -0.16);
-        wm.rotation.set(-Math.PI / 2 + 0.18, -0.15, 0.44);
+        wm.position.set(0.08, 1.28, -0.18);
+        wm.rotation.set(-Math.PI / 2 + 0.22, -0.12, 0.48);
       }
     } else if (weaponCategory === 'pistol') {
       if (isAimingGun || attackTimer > 0) {
@@ -3447,11 +3447,11 @@ export function setDrivingPose(
     // Arms reaching forward to grips (axisZ: ±0.72 rad, axisX: +0.42 rad)
     // Forearms resting on handlebar controls
     if (rig.leftUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisY, -0.26));
+      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.26));
       rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
     }
     if (rig.rightUpLeg) {
-      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisY, 0.26));
+      tmpQ.setFromAxisAngle(axisX, -0.78).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.26));
       rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
     }
     if (rig.leftLeg) {

@@ -1185,23 +1185,27 @@ export class DhakaCityEngine {
     const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
     if (veh) {
       const candidateOffsets = [
-        [-Math.cos(veh.rotation) * 2.4, Math.sin(veh.rotation) * 2.4],
-        [Math.cos(veh.rotation) * 2.4, -Math.sin(veh.rotation) * 2.4],
-        [-Math.sin(veh.rotation) * 3.2, -Math.cos(veh.rotation) * 3.2],
-        [Math.sin(veh.rotation) * 3.2, Math.cos(veh.rotation) * 3.2],
+        [-Math.cos(veh.rotation) * 2.2, Math.sin(veh.rotation) * 2.2],
+        [Math.cos(veh.rotation) * 2.2, -Math.sin(veh.rotation) * 2.2],
+        [-Math.sin(veh.rotation) * 3.0, -Math.cos(veh.rotation) * 3.0],
+        [Math.sin(veh.rotation) * 3.0, Math.cos(veh.rotation) * 3.0],
+        [-Math.cos(veh.rotation) * 1.5, Math.sin(veh.rotation) * 1.5],
+        [Math.cos(veh.rotation) * 1.5, -Math.sin(veh.rotation) * 1.5],
       ];
       let safeX = veh.x;
       let safeZ = veh.z;
       for (const [ox, oz] of candidateOffsets) {
         const tx = veh.x + ox;
         const tz = veh.z + oz;
-        if (!this.checkWorldObstacle(tx, tz, 0.6, veh.id)) {
+        const te = this.getRoadElevation(tx, tz, veh.y);
+        if (!this.checkWorldObstacle(tx, tz, 0.55, veh.id, te)) {
           safeX = tx;
           safeZ = tz;
           break;
         }
       }
-      this.playerPos.set(safeX, 0, safeZ);
+      const exitElev = this.getRoadElevation(safeX, safeZ, veh.y);
+      this.playerPos.set(safeX, exitElev, safeZ);
       if (this.playerLimbs.group.parent !== this.scene) {
         this.scene.add(this.playerLimbs.group);
       }
@@ -1706,30 +1710,30 @@ export class DhakaCityEngine {
       roughness: 0.85,
     });
 
-    // 1. Concrete Metro Viaduct Piers along Central MRT Line-6 Corridor (X = -10.5, Z: -1100 to +360)
+    // 1. Concrete Metro Viaduct Piers along Central MRT Line-6 Corridor (X = -12.2, Z: -1100 to +360)
     const ewCrossRoads = [-1100, -850, -620, -460, -315, -175, 0, 175, 285, 360];
     for (let z = -1100; z <= 360; z += 42) {
       if (ewCrossRoads.some((cr) => Math.abs(z - cr) < 18)) continue;
 
       this.circleColliders.push({
-        x: -10.5,
+        x: -12.2,
         z,
-        radius: 1.35,
+        radius: 1.15,
         tag: 'metro_pillar',
       });
       const pier = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.15, 1.35, 11.5, 14),
+        new THREE.CylinderGeometry(1.05, 1.25, 11.5, 14),
         concreteMat
       );
-      pier.position.set(-10.5, 5.75, z);
+      pier.position.set(-12.2, 5.75, z);
       pier.castShadow = true;
       this.scene.add(pier);
 
       const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(6.6, 1.4, 3.4),
+        new THREE.BoxGeometry(6.4, 1.4, 3.4),
         concreteMat
       );
-      cap.position.set(-10.5, 11.5, z);
+      cap.position.set(-12.2, 11.5, z);
       this.scene.add(cap);
     }
 
@@ -1738,12 +1742,12 @@ export class DhakaCityEngine {
       new THREE.BoxGeometry(5.4, 1.25, 1480),
       concreteMat
     );
-    girder.position.set(-10.5, 12.6, -370);
+    girder.position.set(-12.2, 12.6, -370);
     girder.castShadow = true;
     this.scene.add(girder);
 
     // Dual Steel Track Rails with Timber Sleepers
-    [-11.6, -9.4].forEach((trackX) => {
+    [-13.3, -11.1].forEach((trackX) => {
       [-0.45, 0.45].forEach((railOffsetX) => {
         const rail = this.sharedBox(
           0.12,
@@ -1849,14 +1853,14 @@ export class DhakaCityEngine {
       return trainGroup;
     };
 
-    // Train 1: Southbound on Track 1 (X = -11.6)
+    // Train 1: Southbound on Track 1 (X = -13.3)
     this.metroTrainGroup = createTrainMesh();
-    this.metroTrainGroup.position.set(-11.6, 13.2, -25);
+    this.metroTrainGroup.position.set(-13.3, 13.2, -25);
     this.scene.add(this.metroTrainGroup);
 
-    // Train 2: Northbound on Track 2 (X = -9.4)
+    // Train 2: Northbound on Track 2 (X = -11.1)
     this.metroTrainGroup2 = createTrainMesh();
-    this.metroTrainGroup2.position.set(-9.4, 13.2, -450);
+    this.metroTrainGroup2.position.set(-11.1, 13.2, -450);
     this.metroTrainGroup2.rotation.y = Math.PI;
     this.scene.add(this.metroTrainGroup2);
   }
@@ -3140,12 +3144,16 @@ export class DhakaCityEngine {
         const bx = Math.cos(angle) * radius;
         const bz = Math.sin(angle) * radius;
 
+        const width = 22 + rnd() * 26;
+        const depth = 22 + rnd() * 26;
+        const maxExtent = Math.max(width, depth) * 0.72 + 13.5;
+
         // Keep all active road corridors and flyovers unobstructed across 5000m metropolitan grid
         const onNsRoad = [0, 14, -170, -380, -480, -580, -780, -950, 220, 440, 640, 840, 950, -70].some(
-          (rx) => Math.abs(bx - rx) < 18.5
+          (rx) => Math.abs(bx - rx) < maxExtent
         );
         const onEwRoad = [-1400, -1100, -850, -620, -460, -315, -175, 0, 175, 285, 360, 460, 620, 760, 800].some(
-          (rz) => Math.abs(bz - rz) < 18.5
+          (rz) => Math.abs(bz - rz) < maxExtent
         );
         if (onNsRoad || onEwRoad) continue;
 
@@ -3167,8 +3175,6 @@ export class DhakaCityEngine {
           style = 'old_dhaka';
         }
 
-        const width = 22 + rnd() * 26;
-        const depth = 22 + rnd() * 26;
         let height = ring.baseH + rnd() * (ring.maxH - ring.baseH);
 
         if (style === 'motijheel' || style === 'gulshan') {
@@ -3292,10 +3298,10 @@ export class DhakaCityEngine {
 
         if (ring.minR <= 440) {
           this.buildingColliders.push({
-            minX: bx - width / 2 - 2,
-            maxX: bx + width / 2 + 2,
-            minZ: bz - depth / 2 - 2,
-            maxZ: bz + depth / 2 + 2,
+            minX: bx - width / 2,
+            maxX: bx + width / 2,
+            minZ: bz - depth / 2,
+            maxZ: bz + depth / 2,
             tag: 'distant_skyline',
           });
         }
@@ -5808,7 +5814,7 @@ export class DhakaCityEngine {
     ];
 
     for (const side of [-1, 1]) {
-      const railX = side * 9.6;
+      const railX = side * 11.4;
       railingSections.forEach(([zStart, zEnd]) => {
         const segLen = zEnd - zStart;
         const centerZ = (zStart + zEnd) / 2;
@@ -5939,7 +5945,7 @@ export class DhakaCityEngine {
       { type: 'rickshaw', x: -72, z: 195, rot: Math.PI, isTraffic: true, color: '#f59e0b' },
       { type: 'cng', x: 212, z: 168, rot: Math.PI, isTraffic: false, color: '#15803d' },
       { type: 'car', x: 215, z: -168, rot: 0, isTraffic: false, color: '#38bdf8' },
-      { type: 'motorcycle', x: -12, z: -170, rot: Math.PI / 2, isTraffic: false, color: '#f43f5e' },
+      { type: 'motorcycle', x: -12, z: -170, rot: Math.PI, isTraffic: false, color: '#f43f5e' },
       { type: 'pickup', x: 88, z: 98, rot: 0, isTraffic: false, color: '#0284c7' },
 
       { type: 'cng', x: 5.5, z: -60, rot: 0, isTraffic: true, color: '#15803d' },
@@ -8160,26 +8166,52 @@ export class DhakaCityEngine {
       this.walkAnimPhase = 0;
     }
 
-    // Resolve any clipping / penetration with obstacle colliders
+    // Resolve any clipping / penetration with obstacle colliders (AABB buildings, medians & flyover barriers)
+    const onFlyover = this.playerPos.y > 2.0;
+    const pRad = 0.48;
     for (const b of this.buildingColliders) {
-      const onFlyover = this.playerPos.y > 2.0;
       if (onFlyover && b.tag !== 'flyover_barrier') continue;
       if (!onFlyover && b.tag === 'flyover_barrier') continue;
-      if (
-        this.playerPos.x > b.minX &&
-        this.playerPos.x < b.maxX &&
-        this.playerPos.z > b.minZ &&
-        this.playerPos.z < b.maxZ
-      ) {
-        const dMinX = this.playerPos.x - b.minX;
-        const dMaxX = b.maxX - this.playerPos.x;
-        const dMinZ = this.playerPos.z - b.minZ;
-        const dMaxZ = b.maxZ - this.playerPos.z;
-        const minPen = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
-        if (minPen === dMinX) this.playerPos.x = b.minX - 0.45;
-        else if (minPen === dMaxX) this.playerPos.x = b.maxX + 0.45;
-        else if (minPen === dMinZ) this.playerPos.z = b.minZ - 0.45;
-        else this.playerPos.z = b.maxZ + 0.45;
+
+      const clampedX = Math.max(b.minX, Math.min(this.playerPos.x, b.maxX));
+      const clampedZ = Math.max(b.minZ, Math.min(this.playerPos.z, b.maxZ));
+      const dx = this.playerPos.x - clampedX;
+      const dz = this.playerPos.z - clampedZ;
+      const distSq = dx * dx + dz * dz;
+
+      if (distSq < pRad * pRad) {
+        if (distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          const push = pRad - dist + 0.03;
+          this.playerPos.x += (dx / dist) * push;
+          this.playerPos.z += (dz / dist) * push;
+        } else {
+          // Player center is completely inside the AABB box - push out along the nearest face
+          const dMinX = this.playerPos.x - b.minX;
+          const dMaxX = b.maxX - this.playerPos.x;
+          const dMinZ = this.playerPos.z - b.minZ;
+          const dMaxZ = b.maxZ - this.playerPos.z;
+          const minPen = Math.min(dMinX, dMaxX, dMinZ, dMaxZ);
+          if (minPen === dMinX) this.playerPos.x = b.minX - (pRad + 0.03);
+          else if (minPen === dMaxX) this.playerPos.x = b.maxX + (pRad + 0.03);
+          else if (minPen === dMinZ) this.playerPos.z = b.minZ - (pRad + 0.03);
+          else this.playerPos.z = b.maxZ + (pRad + 0.03);
+        }
+      }
+    }
+
+    // Resolve any clipping / penetration with cylindrical obstacles (metro pillars, trees, utility poles)
+    if (!onFlyover) {
+      for (const c of this.circleColliders) {
+        const dx = this.playerPos.x - c.x;
+        const dz = this.playerPos.z - c.z;
+        const distSq = dx * dx + dz * dz;
+        const minDist = pRad + c.radius;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq) || 0.001;
+          this.playerPos.x = c.x + (dx / dist) * (minDist + 0.03);
+          this.playerPos.z = c.z + (dz / dist) * (minDist + 0.03);
+        }
       }
     }
 
@@ -8427,8 +8459,8 @@ export class DhakaCityEngine {
       } else {
         // 2. Static obstacle hit (railing, median, metro pillar, pole, wall)
         // Check if vehicle can slide along X or Z axis (scraping against railing or curb)
-        const canSlideX = !this.checkWorldObstacle(nextX, veh.z, radius, veh.id);
-        const canSlideZ = !this.checkWorldObstacle(veh.x, nextZ, radius, veh.id);
+        const canSlideX = !this.checkWorldObstacle(nextX, veh.z, radius, veh.id, nextElev);
+        const canSlideZ = !this.checkWorldObstacle(veh.x, nextZ, radius, veh.id, nextElev);
 
         if (canSlideX && Math.abs(vx) > 0.05) {
           veh.x = clampWorldCoord(nextX);
