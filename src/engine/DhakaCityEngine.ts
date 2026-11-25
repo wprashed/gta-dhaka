@@ -4315,6 +4315,8 @@ export class DhakaCityEngine {
       maxX: 360,
       minZ: flyoverZ - flyoverW / 2 - 0.65,
       maxZ: flyoverZ - flyoverW / 2 + 0.65,
+      minY: 7.0,
+      maxY: 11.0,
       tag: 'flyover_barrier',
     });
 
@@ -4325,6 +4327,8 @@ export class DhakaCityEngine {
       maxX: 360,
       minZ: flyoverZ + flyoverW / 2 - 0.65,
       maxZ: flyoverZ + flyoverW / 2 + 0.65,
+      minY: 7.0,
+      maxY: 11.0,
       tag: 'flyover_barrier',
     });
 
@@ -4340,6 +4344,8 @@ export class DhakaCityEngine {
         maxX: -360,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 10.0,
         tag: 'flyover_barrier',
       });
     });
@@ -4356,6 +4362,8 @@ export class DhakaCityEngine {
         maxX: 440,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 10.0,
         tag: 'flyover_barrier',
       });
     });
@@ -4505,6 +4513,8 @@ export class DhakaCityEngine {
       maxX: 720,
       minZ: flyoverZ - flyoverW / 2 - 0.65,
       maxZ: flyoverZ - flyoverW / 2 + 0.65,
+      minY: 9.5,
+      maxY: 13.5,
       tag: 'flyover_barrier',
     });
 
@@ -4515,6 +4525,8 @@ export class DhakaCityEngine {
       maxX: 720,
       minZ: flyoverZ + flyoverW / 2 - 0.65,
       maxZ: flyoverZ + flyoverW / 2 + 0.65,
+      minY: 9.5,
+      maxY: 13.5,
       tag: 'flyover_barrier',
     });
 
@@ -4530,6 +4542,8 @@ export class DhakaCityEngine {
         maxX: 360,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 12.5,
         tag: 'flyover_barrier',
       });
     });
@@ -4546,6 +4560,8 @@ export class DhakaCityEngine {
         maxX: 800,
         minZ: flyoverZ + oz - 0.65,
         maxZ: flyoverZ + oz + 0.65,
+        minY: 0.0,
+        maxY: 12.5,
         tag: 'flyover_barrier',
       });
     });
