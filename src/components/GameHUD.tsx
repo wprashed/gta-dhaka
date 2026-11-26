@@ -89,6 +89,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     selectedCharacterId,
     storyEndingEn,
     storyEndingBn,
+    isInsideMall,
+    mallFloor,
   } = useGameStore();
 
   const [showWeaponDrawer, setShowWeaponDrawer] = useState(false);
@@ -311,6 +313,29 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
               <Compass className="w-3 h-3 text-emerald-400 shrink-0" />
               <span className="text-[11px] font-bold text-white">
                 {language === 'en' ? districtInfo.nameEn : districtInfo.nameBn}
+              </span>
+            </div>
+          )}
+
+          {isInsideMall && (
+            <div className="bg-purple-950/90 backdrop-blur-md border border-purple-400/60 rounded-full px-3 py-1 shadow-lg flex items-center gap-1.5">
+              <span className="text-xs">🏬</span>
+              <span className="text-[11px] font-black text-amber-300">
+                {language === 'en'
+                  ? `Jamuna Future Park • ${
+                      mallFloor === 0
+                        ? 'Ground Floor (Fashion & Tech)'
+                        : mallFloor === 1
+                        ? '1st Floor (Lifestyle & Gadgets)'
+                        : '2nd Floor (Food Court & Cinema)'
+                    }`
+                  : `যমুনা ফিউচার পার্ক • ${
+                      mallFloor === 0
+                        ? 'নিচতলা (ফ্যাশন ও টেক)'
+                        : mallFloor === 1
+                        ? '২য় তলা (লাইফস্টাইল ও ঘড়ি)'
+                        : '৩য় তলা (ফুড কোর্ট ও সিনেমা)'
+                    }`}
               </span>
             </div>
           )}

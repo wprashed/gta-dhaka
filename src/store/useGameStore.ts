@@ -32,7 +32,7 @@ export type PauseTab =
   | 'controls';
 
 export interface NearbyPrompt {
-  type: 'vehicle' | 'poi' | 'npc' | 'mission';
+  type: 'vehicle' | 'poi' | 'npc' | 'mission' | 'mall_shop';
   id: string;
   labelEn: string;
   labelBn: string;
@@ -123,6 +123,14 @@ interface GameState {
   repairVehicleRequest: boolean;
   teleportRequest: { x: number; z: number } | null;
   switchCharacterRequest: PlayableCharacterId | null;
+
+  // Mall interior state
+  isInsideMall: boolean;
+  mallId: string | null;
+  mallFloor: number; // 0 = ground, 1 = first, 2 = second, 3 = food court / rooftop
+  enterMall: (mallId: string) => void;
+  exitMall: () => void;
+  setMallFloor: (floor: number) => void;
 
   // Actions
   startNewGame: () => void;
@@ -279,6 +287,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   repairVehicleRequest: false,
   teleportRequest: null,
   switchCharacterRequest: null,
+
+  // Mall interior
+  isInsideMall: false,
+  mallId: null,
+  mallFloor: 0,
 
   startNewGame: () => {
     dhakaAudio.init();
@@ -974,6 +987,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
   requestTeleport: (x, z) =>
     set({ teleportRequest: { x, z }, gamePhase: 'playing' }),
+
+  enterMall: (mallId) => set({ isInsideMall: true, mallId, mallFloor: 0 }),
+  exitMall: () => set({ isInsideMall: false, mallId: null, mallFloor: 0 }),
+  setMallFloor: (floor) => set({ mallFloor: floor }),
 
   showBanner: (banner) => {
     set({ bannerAlert: banner });

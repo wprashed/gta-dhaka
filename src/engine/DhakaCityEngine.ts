@@ -161,6 +161,26 @@ export class DhakaCityEngine {
   private hatirjheelLights: THREE.PointLight[] = [];
   private lastGraphicsQuality: 'high' | 'low' = 'high';
 
+  // Jamuna Future Park Shopping Mall Interior & Interactables
+  private jfpInteriorGroup: THREE.Group | null = null;
+  private readonly jfpCenter = { x: 520, z: -385 };
+  private jfpFerrisWheel: THREE.Group | null = null;
+  private jfpChandelier: THREE.Group | null = null;
+  private wasInsideJfp = false;
+  private jfpInteractables: Array<{
+    id: string;
+    x: number;
+    y: number;
+    z: number;
+    floor: number;
+    category: 'fashion' | 'food' | 'cinema' | 'tech' | 'arcade' | 'elevator' | 'atm' | 'books' | 'footwear';
+    nameEn: string;
+    nameBn: string;
+    labelEn: string;
+    labelBn: string;
+    cost: number;
+  }> = [];
+
   // World Collision Boxes, Cylinders, Pickups & Live Dhaka Metro Train
   private buildingColliders: BuildingCollider[] = [];
   private circleColliders: CircleCollider[] = [];
@@ -3354,10 +3374,9 @@ export class DhakaCityEngine {
       { x: 560, z: -152, w: 30, d: 22, h: 22, style: 'residential', color: '#a7f3d0', signIndex: 1 },
       { x: 500, z: -250, w: 28, d: 24, h: 26, style: 'commercial', color: '#6366f1', signIndex: 6 },
 
-      // Bashundhara R/A & Jamuna Future Park Mega Complex
-      { x: 475, z: -345, w: 46, d: 36, h: 42, style: 'modern_glass', color: '#0284c7', signIndex: 7 },
+      // Bashundhara R/A Surrounding Blocks (clear of Jamuna Future Park at X=520, Z=-385)
       { x: 380, z: -341, w: 32, d: 28, h: 34, style: 'commercial', color: '#e0e7ff', signIndex: 2 },
-      { x: 470, z: -400, w: 36, d: 30, h: 38, style: 'modern_glass', color: '#38bdf8', signIndex: 3 },
+      { x: 602, z: -392, w: 28, d: 28, h: 38, style: 'modern_glass', color: '#38bdf8', signIndex: 3 },
       { x: 380, z: -400, w: 30, d: 26, h: 30, style: 'residential', color: '#fde68a', signIndex: 5 },
 
       // Uttara North & Metro Depot (Sector 18)
@@ -3754,6 +3773,7 @@ export class DhakaCityEngine {
     this.buildDhakaFootOverBridges();
     this.buildMirpurCricketStadium();
     this.buildDhakaMegaShoppingMalls();
+    this.buildJamunaFutureParkInterior();
     this.buildHatirjheelArchedBridgeAndPromenade();
     this.buildOldDhakaHeritageDistrict();
     this.buildPurbachalSmartCityAndExpressway();
@@ -4446,7 +4466,10 @@ export class DhakaCityEngine {
         const onEwRoad = [-1400, -1100, -850, -620, -460, -315, -175, 0, 175, 240, 285, 460, 620, 760, 800].some(
           (rz) => Math.abs(bz - rz) < maxExtent
         );
-        if (onNsRoad || onEwRoad) continue;
+        // Keep Jamuna Future Park Mall & Plaza footprint completely unobstructed
+        const onJamunaMall =
+          bx + maxExtent > 455 && bx - maxExtent < 585 && bz + maxExtent > -432 && bz - maxExtent < -324;
+        if (onNsRoad || onEwRoad || onJamunaMall) continue;
 
         let deg = ((angle * 180) / Math.PI) % 360;
         if (deg < 0) deg += 360;
@@ -6000,51 +6023,184 @@ export class DhakaCityEngine {
     });
     this.scene.add(bCityGroup);
 
-    // --- 2. JAMUNA FUTURE PARK (Pragati Sarani: X = 460, Z = -320) ---
+    // --- 2. JAMUNA FUTURE PARK (Pragati Sarani / Bashundhara R/A: X = 520, Z = -385) ---
+    // Hollow multi-story architectural shell with open glass entrance gates, Roman colonnade,
+    // front drop-off plaza, glass curtain facades, skylight dome & rooftop Ferris wheel.
+    const MX = this.jfpCenter.x;
+    const MZ = this.jfpCenter.z;
+    const MW = 112; // X: -56..+56 (464..576)
+    const MD = 72;  // Z: -36..+36 (-421..-349)
+    const MH = 17.6;
+
     const jfpGroup = new THREE.Group();
-    jfpGroup.position.set(460, 0, -320);
+    jfpGroup.position.set(MX, 0, MZ);
 
-    const jMain = this.sharedBox(115, 36, 74, marbleMat, 0, 18, 0);
-    jMain.castShadow = true;
-    jfpGroup.add(jMain);
+    const facadeGlassMat = new THREE.MeshStandardMaterial({
+      color: '#38bdf8',
+      metalness: 0.72,
+      roughness: 0.14,
+      transparent: true,
+      opacity: 0.42,
+    });
+    const darkTrimMat = new THREE.MeshStandardMaterial({
+      color: '#1e1b4b',
+      metalness: 0.55,
+      roughness: 0.35,
+    });
+    const plazaGraniteMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      roughness: 0.55,
+    });
 
+    // Front Drop-Off Marble Plaza (South apron Z: -349 .. -328, clear of Z=-315 road)
+    const frontPlaza = this.sharedBox(118, 0.16, 22, plazaGraniteMat, 0, 0.08, 46);
+    frontPlaza.receiveShadow = true;
+    jfpGroup.add(frontPlaza);
+
+    // Wide Crimson Entrance Red Carpet Runner leading into South Gate
+    const redCarpetMat = new THREE.MeshStandardMaterial({ color: '#991b1b', roughness: 0.85 });
+    const entryCarpet = this.sharedBox(10, 0.04, 18, redCarpetMat, 0, 0.20, 40);
+    jfpGroup.add(entryCarpet);
+
+    // Sleek Chrome Pedestrian-Only Bollards outside South, West & East Gates (blocks cars, lets player walk through!)
+    const bollardMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.9, roughness: 0.18 });
+    [-6, -4, -2, 0, 2, 4, 6].forEach((bx) => {
+      const bol = new THREE.Mesh(this.cylCache(0.14, 0.16, 0.95, 10), bollardMat);
+      bol.position.set(bx, 0.55, 42.5);
+      jfpGroup.add(bol);
+      this.circleColliders.push({ x: MX + bx, z: MZ + 42.5, radius: 0.42, tag: 'jfp_bollard' });
+    });
+    [-4, -1.5, 1.5, 4].forEach((bz) => {
+      [-58.5, 58.5].forEach((bx) => {
+        const bol = new THREE.Mesh(this.cylCache(0.14, 0.16, 0.95, 10), bollardMat);
+        bol.position.set(bx, 0.55, bz);
+        jfpGroup.add(bol);
+        this.circleColliders.push({ x: MX + bx, z: MZ + bz, radius: 0.42, tag: 'jfp_bollard' });
+      });
+    });
+
+    // Helper to build perimeter wall with lower marble + upper panoramic glass
+    const addExteriorWall = (wx: number, wz: number, ww: number, wd: number) => {
+      // Ground floor marble wall
+      const lower = this.sharedBox(ww, 5.2, wd, marbleMat, wx, 2.6, wz);
+      lower.castShadow = true;
+      lower.receiveShadow = true;
+      jfpGroup.add(lower);
+      // Upper curtain glass band (Y: 5.2..16.2)
+      const glass = this.sharedBox(ww, 10.6, wd, facadeGlassMat, wx, 10.5, wz);
+      jfpGroup.add(glass);
+      // Top cornice fascia
+      const fascia = this.sharedBox(ww + 0.4, 1.8, wd + 0.4, darkTrimMat, wx, 16.7, wz);
+      jfpGroup.add(fascia);
+    };
+
+    // North Wall (solid perimeter)
+    addExteriorWall(0, -MD / 2, MW, 1.2);
+    this.buildingColliders.push({
+      minX: MX - MW / 2 - 0.8, maxX: MX + MW / 2 + 0.8,
+      minZ: MZ - MD / 2 - 0.8, maxZ: MZ - MD / 2 + 0.8,
+      minY: 0, maxY: 22, tag: 'jfp_wall',
+    });
+
+    // South Wall (split left & right around 14m wide open South Main Entrance X: -7..+7)
+    addExteriorWall(-31.5, MD / 2, 49, 1.2);
+    addExteriorWall(31.5, MD / 2, 49, 1.2);
+    // Upper header & glass transom over South Main Entrance
+    const southPortalGlass = this.sharedBox(14, 10.6, 1.2, facadeGlassMat, 0, 10.5, MD / 2);
+    jfpGroup.add(southPortalGlass);
+    const southPortalFascia = this.sharedBox(14.6, 2.2, 1.6, darkTrimMat, 0, 16.5, MD / 2);
+    jfpGroup.add(southPortalFascia);
+    // Retracted open automatic glass door leaves flanking South Entrance
+    [-7.6, 7.6].forEach((dx) => {
+      const doorLeaf = this.sharedBox(2.4, 4.8, 0.18, facadeGlassMat, dx, 2.5, MD / 2 + 0.2);
+      jfpGroup.add(doorLeaf);
+    });
+    this.buildingColliders.push(
+      { minX: MX - MW / 2 - 0.8, maxX: MX - 7.0, minZ: MZ + MD / 2 - 0.8, maxZ: MZ + MD / 2 + 0.8, minY: 0, maxY: 22, tag: 'jfp_wall' },
+      { minX: MX + 7.0, maxX: MX + MW / 2 + 0.8, minZ: MZ + MD / 2 - 0.8, maxZ: MZ + MD / 2 + 0.8, minY: 0, maxY: 22, tag: 'jfp_wall' }
+    );
+
+    // West & East Walls (each split around 10m open Side Entrance Z: -5..+5)
+    [-MW / 2, MW / 2].forEach((wx) => {
+      addExteriorWall(wx, -20.5, 1.2, 31);
+      addExteriorWall(wx, 20.5, 1.2, 31);
+      const sideTransom = this.sharedBox(1.2, 10.6, 10, facadeGlassMat, wx, 10.5, 0);
+      jfpGroup.add(sideTransom);
+      const sideFascia = this.sharedBox(1.6, 2.2, 10.4, darkTrimMat, wx, 16.5, 0);
+      jfpGroup.add(sideFascia);
+      this.buildingColliders.push(
+        { minX: MX + wx - 0.8, maxX: MX + wx + 0.8, minZ: MZ - MD / 2 - 0.8, maxZ: MZ - 5.0, minY: 0, maxY: 22, tag: 'jfp_wall' },
+        { minX: MX + wx - 0.8, maxX: MX + wx + 0.8, minZ: MZ + 5.0, maxZ: MZ + MD / 2 + 0.8, minY: 0, maxY: 22, tag: 'jfp_wall' }
+      );
+    });
+
+    // Roman Colonnade Pillars along South Frontage (leaving center entrance bay wide open!)
     for (let c = -45; c <= 45; c += 9) {
-      const col = new THREE.Mesh(this.cylCache(1.15, 1.15, 22, 16), pillarMat);
-      col.position.set(c, 11, 38.5);
+      if (Math.abs(c) < 5) continue;
+      const col = new THREE.Mesh(this.cylCache(1.05, 1.15, 17.5, 14), pillarMat);
+      col.position.set(c, 8.75, 41.2);
       col.castShadow = true;
       jfpGroup.add(col);
+      this.circleColliders.push({ x: MX + c, z: MZ + 41.2, radius: 1.25, tag: 'jfp_pillar' });
     }
-    const colonnadeArch = this.sharedBox(102, 3.2, 8, marbleMat, 0, 23.6, 38.5);
+    const colonnadeArch = this.sharedBox(102, 2.6, 6.5, marbleMat, 0, 18.6, 40.2);
     jfpGroup.add(colonnadeArch);
 
+    // Grand Illuminated Jamuna Future Park Signboard
     const jfpSignTex = createMallSignboardTexture(
       'যমুনা ফিউচার পার্ক',
       'JAMUNA FUTURE PARK',
-      "SOUTH ASIA'S LARGEST MALL | BLOCKBUSTER CINEMAS | CARNIVAL PARK",
+      "SOUTH ASIA'S LARGEST MALL | 300+ SHOPS | FOOD COURT | BLOCKBUSTER CINEMAS",
       '#6b21a8'
     );
-    const jfpSignBoard = new THREE.Mesh(new THREE.BoxGeometry(42, 8.5, 0.4), new THREE.MeshBasicMaterial({ map: jfpSignTex }));
-    jfpSignBoard.position.set(0, 29, 39);
+    const jfpSignBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(46, 8.2, 0.45),
+      new THREE.MeshBasicMaterial({ map: jfpSignTex })
+    );
+    jfpSignBoard.position.set(0, 23.6, 41.5);
     jfpGroup.add(jfpSignBoard);
 
+    // Perimeter Roof Slabs around 32m x 24m Central Skylight Atrium Opening
+    const roofSlabMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.65 });
+    [
+      { x: -36, z: 0, w: 40, d: MD },
+      { x: 36, z: 0, w: 40, d: MD },
+      { x: 0, z: -24, w: 32, d: 24 },
+      { x: 0, z: 24, w: 32, d: 24 },
+    ].forEach((rs) => {
+      const rm = this.sharedBox(rs.w, 0.8, rs.d, roofSlabMat, rs.x, MH, rs.z);
+      jfpGroup.add(rm);
+    });
+
+    // Translucent Glass Skylight over Central Atrium (lets sunlight & sky view in!)
+    const atriumSkylight = new THREE.Mesh(
+      new THREE.BoxGeometry(32, 0.35, 24),
+      new THREE.MeshStandardMaterial({
+        color: '#bae6fd',
+        roughness: 0.1,
+        metalness: 0.3,
+        transparent: true,
+        opacity: 0.34,
+      })
+    );
+    atriumSkylight.position.set(0, MH + 0.4, 0);
+    jfpGroup.add(atriumSkylight);
+
+    // Future Park Iconic Rooftop Ferris Wheel
     const ferrisGroup = new THREE.Group();
-    ferrisGroup.position.set(0, 36, -10);
-    const wheelRim = new THREE.Mesh(new THREE.TorusGeometry(18, 0.45, 8, 28), pillarMat);
+    ferrisGroup.position.set(0, MH + 16, -22);
+    const wheelRim = new THREE.Mesh(new THREE.TorusGeometry(15, 0.45, 8, 28), pillarMat);
     ferrisGroup.add(wheelRim);
+    const innerRim = new THREE.Mesh(new THREE.TorusGeometry(10, 0.25, 6, 24), new THREE.MeshBasicMaterial({ color: '#a855f7' }));
+    ferrisGroup.add(innerRim);
     for (let sp = 0; sp < 12; sp++) {
-      const spMesh = new THREE.Mesh(this.boxCache(0.2, 36, 0.2), pillarMat);
+      const spMesh = new THREE.Mesh(this.boxCache(0.18, 30, 0.18), pillarMat);
       spMesh.rotation.z = (sp / 12) * Math.PI;
       ferrisGroup.add(spMesh);
     }
+    this.jfpFerrisWheel = ferrisGroup;
     jfpGroup.add(ferrisGroup);
 
-    this.buildingColliders.push({
-      minX: 460 - 59,
-      maxX: 460 + 59,
-      minZ: -320 - 38,
-      maxZ: -320 + 44,
-      tag: 'jamuna_future_park',
-    });
     this.scene.add(jfpGroup);
 
     // --- 3. NEW MARKET HISTORIC ARCHWAY & CLOCK TOWER (X = -170, Z = 220) ---
@@ -6062,6 +6218,679 @@ export class DhakaCityEngine {
     nmGroup.add(clockFace);
 
     this.scene.add(nmGroup);
+  }
+
+  /**
+   * Jamuna Future Park — Full 3-Floor Walkable Shopping Mall Interior at (520, 0, -385).
+   * Features:
+   *  - Ground Floor (Y=0.25m): Grand Marble Atrium, Central Water Fountain, Crystal Chandelier,
+   *    Panoramic Glass Elevator, 8 Walk-in Anchor Shops (Aarong, Samsung, Yellow, Apex, Ecstasy, Bata, iStore, DBBL ATM)
+   *  - Level 1 (Y=5.4m): 8 Walk-in Lifestyle & Tech Shops (Star Tech, Xiaomi, Time Zone, Batighar Books, Walton, Diamond World, Shajgoj, Infinity)
+   *  - Level 2 (Y=10.6m): Blockbuster Cinemas, Future World Game Zone & Grand Food Court (KFC, Pizza Hut, Gloria Jean's, Deshi Kacchi) + Dining Terrace
+   *  - Walkable Sloped Escalators with architectural floor cutouts & Mall NPCs
+   */
+  private buildJamunaFutureParkInterior() {
+    const MX = this.jfpCenter.x; // 520
+    const MZ = this.jfpCenter.z; // -385
+    const FLOOR_H = 5.15;
+    const Y0 = 0.25;
+    const Y1 = Y0 + FLOOR_H;       // 5.40m
+    const Y2 = Y0 + FLOOR_H * 2;   // 10.55m
+    const MW = 110;
+    const MD = 70;
+
+    const g = new THREE.Group();
+    g.position.set(MX, 0, MZ);
+    this.jfpInteriorGroup = g;
+
+    // Materials
+    const creamMarbleMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.22, metalness: 0.08 });
+    const slateTileMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.28, metalness: 0.06 });
+    const darkBorderTileMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.35 });
+    const shopWallMat = new THREE.MeshStandardMaterial({ color: '#f1f5f9', roughness: 0.55 });
+    const shopFloorMat = new THREE.MeshStandardMaterial({ color: '#fffbeb', roughness: 0.3 });
+    const clearGlassMat = new THREE.MeshStandardMaterial({
+      color: '#bae6fd',
+      roughness: 0.08,
+      metalness: 0.65,
+      transparent: true,
+      opacity: 0.36,
+    });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.9, roughness: 0.14 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#eab308', metalness: 0.78, roughness: 0.22 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.72 });
+    const redCarpetMat = new THREE.MeshStandardMaterial({ color: '#991b1b', roughness: 0.85 });
+    const warmLightStripMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
+
+    const makeShopSignTex = (brand: string, sub: string, bg: string, fg = '#ffffff') => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 140;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 512, 140);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(4, 4, 504, 132);
+      ctx.fillStyle = fg;
+      ctx.font = 'bold 52px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(brand, 256, 74);
+      ctx.fillStyle = '#fde68a';
+      ctx.font = 'bold 24px Arial, sans-serif';
+      ctx.fillText(sub, 256, 114);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+
+    const addFloorSlab = (lx: number, fy: number, lz: number, w: number, d: number, mat: THREE.Material) => {
+      const slab = this.sharedBox(w, 0.28, d, mat, lx, fy - 0.14, lz);
+      slab.receiveShadow = true;
+      g.add(slab);
+    };
+
+    // ─── 1. GROUND FLOOR SLAB (Y = 0.25m) ─────────────────────────────────
+    addFloorSlab(0, Y0, 0, MW, MD, creamMarbleMat);
+    // Decorative dark granite atrium border inlay
+    addFloorSlab(0, Y0 + 0.015, 0, 32, 26, darkBorderTileMat);
+    addFloorSlab(0, Y0 + 0.025, 0, 29, 23, slateTileMat);
+
+    // ─── 2. FIRST FLOOR MEZZANINE (Y = 5.40m) WITH ATRIUM & WEST ESCALATOR WELL ───
+    // North & South full-width gallery strips (Z: -35..-11 and +11..+35)
+    addFloorSlab(0, Y1, -23, MW, 24, slateTileMat);
+    addFloorSlab(0, Y1, 23, MW, 24, slateTileMat);
+    // East gallery (X: +14..+55, Z: -11..+11)
+    addFloorSlab(34.5, Y1, 0, 41, 22, slateTileMat);
+    // West gallery split around West Escalator well (well at X: -25.2..-19.8, Z: -9..+9)
+    addFloorSlab(-40.1, Y1, 0, 29.8, 22, slateTileMat);   // X: -55 .. -25.2
+    addFloorSlab(-16.9, Y1, 0, 5.8, 22, slateTileMat);    // X: -19.8 .. -14
+    addFloorSlab(-22.5, Y1, -10, 5.4, 2, slateTileMat);   // bridge strip north of well
+    addFloorSlab(-22.5, Y1, 10, 5.4, 2, slateTileMat);    // bridge strip south of well
+
+    // ─── 3. SECOND FLOOR MEZZANINE (Y = 10.55m) WITH ATRIUM & EAST ESCALATOR WELL ───
+    addFloorSlab(0, Y2, -23, MW, 24, slateTileMat);
+    addFloorSlab(0, Y2, 23, MW, 24, slateTileMat);
+    // West gallery (X: -55..-14, Z: -11..+11)
+    addFloorSlab(-34.5, Y2, 0, 41, 22, slateTileMat);
+    // East gallery split around East Escalator well (well at X: +19.8..+25.2, Z: -9..+9)
+    addFloorSlab(40.1, Y2, 0, 29.8, 22, slateTileMat);    // X: +25.2 .. +55
+    addFloorSlab(16.9, Y2, 0, 5.8, 22, slateTileMat);     // X: +14 .. +19.8
+    addFloorSlab(22.5, Y2, -10, 5.4, 2, slateTileMat);
+    addFloorSlab(22.5, Y2, 10, 5.4, 2, slateTileMat);
+
+    // ─── 4. ATRIUM GLASS SAFETY RAILINGS (1F & 2F) ────────────────────────
+    [
+      { fy: Y1, minY: 4.5, maxY: 9.8 },
+      { fy: Y2, minY: 9.9, maxY: 16.5 },
+    ].forEach(({ fy, minY, maxY }) => {
+      // North atrium edge (leave center 4m gap at X:-2..+2 for Glass Elevator landing)
+      [
+        { lx: -8, lz: -11, w: 12, d: 0.25 },
+        { lx: 8, lz: -11, w: 12, d: 0.25 },
+        { lx: 0, lz: 11, w: 28, d: 0.25 },   // South atrium edge
+        { lx: -14, lz: 0, w: 0.25, d: 22 }, // West atrium edge
+        { lx: 14, lz: 0, w: 0.25, d: 22 },  // East atrium edge
+      ].forEach((r) => {
+        const glass = this.sharedBox(r.w, 1.15, r.d, clearGlassMat, r.lx, fy + 0.58, r.lz);
+        g.add(glass);
+        const rail = this.sharedBox(r.w + 0.1, 0.08, r.d + 0.1, goldMat, r.lx, fy + 1.18, r.lz);
+        g.add(rail);
+        this.buildingColliders.push({
+          minX: MX + r.lx - r.w / 2 - 0.15,
+          maxX: MX + r.lx + r.w / 2 + 0.15,
+          minZ: MZ + r.lz - r.d / 2 - 0.15,
+          maxZ: MZ + r.lz + r.d / 2 + 0.15,
+          minY,
+          maxY,
+          tag: 'jfp_railing',
+        });
+      });
+    });
+
+    // ─── 5. WALKABLE SLOPED ESCALATORS (GF ↔ 1F West, 1F ↔ 2F East) ───────
+    const buildEscalator = (lx: number, baseFy: number, dirLabel: string, minYWell: number, maxYWell: number) => {
+      const steps = 22;
+      const runZ = 18; // Z: +9 (bottom) -> -9 (top)
+      for (let s = 0; s < steps; s++) {
+        const t = (s + 0.5) / steps;
+        const sz = 9 - t * runZ;
+        const sy = baseFy + t * FLOOR_H;
+        const tread = this.sharedBox(4.4, 0.24, runZ / steps + 0.08, s % 2 === 0 ? chromeMat : darkBorderTileMat, lx, sy - 0.12, sz);
+        g.add(tread);
+      }
+      // Angled glass balustrades & gold handrails
+      const slopeAngle = Math.atan2(FLOOR_H, runZ);
+      const slopeLen = Math.hypot(runZ, FLOOR_H);
+      [-2.35, 2.35].forEach((dx) => {
+        const bal = new THREE.Mesh(this.boxCache(0.14, 1.05, slopeLen), clearGlassMat);
+        bal.position.set(lx + dx, baseFy + FLOOR_H * 0.5 + 0.52, 0);
+        bal.rotation.x = slopeAngle;
+        g.add(bal);
+        const hr = new THREE.Mesh(this.boxCache(0.22, 0.1, slopeLen + 0.4), goldMat);
+        hr.position.set(lx + dx, baseFy + FLOOR_H * 0.5 + 1.05, 0);
+        hr.rotation.x = slopeAngle;
+        g.add(hr);
+        // Side rail collider so player stays smoothly inside escalator lane
+        this.buildingColliders.push({
+          minX: MX + lx + dx - 0.22,
+          maxX: MX + lx + dx + 0.22,
+          minZ: MZ - 9.1,
+          maxZ: MZ + 9.1,
+          minY: minYWell,
+          maxY: maxYWell,
+          tag: 'jfp_escalator_rail',
+        });
+      });
+      // Illuminated floor badge totem at bottom entry
+      const totemSign = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.75, 0.18),
+        new THREE.MeshBasicMaterial({ map: makeShopSignTex(dirLabel, 'ESCALATOR / চলন্ত সিঁড়ি', '#4c1d95') })
+      );
+      totemSign.position.set(lx, baseFy + 2.6, 9.2);
+      g.add(totemSign);
+    };
+
+    buildEscalator(-22.5, Y0, '▲ TO 1ST FLOOR', 0, 9.8);
+    buildEscalator(22.5, Y1, '▲ TO 2ND FLOOR', 4.6, 16.5);
+
+    // ─── 6. CENTRAL GRAND ATRIUM: FOUNTAIN, PALMS, BENCHES, CHANDELIER & ELEVATOR ───
+    const fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.7, 0.58, 28), creamMarbleMat);
+    fountainRim.position.set(0, Y0 + 0.29, 0);
+    g.add(fountainRim);
+    const fountainWater = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.0, 4.0, 0.35, 28),
+      new THREE.MeshStandardMaterial({ color: '#0ea5e9', roughness: 0.06, metalness: 0.2, transparent: true, opacity: 0.82 })
+    );
+    fountainWater.position.set(0, Y0 + 0.42, 0);
+    g.add(fountainWater);
+    const fountainPlinth = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.3, 1.2, 16), goldMat);
+    fountainPlinth.position.set(0, Y0 + 0.85, 0);
+    g.add(fountainPlinth);
+    const fountainJet = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.35, 3.2, 12),
+      new THREE.MeshBasicMaterial({ color: '#bae6fd', transparent: true, opacity: 0.75 })
+    );
+    fountainJet.position.set(0, Y0 + 2.6, 0);
+    g.add(fountainJet);
+    this.circleColliders.push({ x: MX, z: MZ, radius: 4.5, tag: 'jfp_fountain' });
+
+    // Indoor Marble Planters & Tropical Royal Palms in Atrium Corners
+    const palmTrunkMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 });
+    const palmLeafMat = new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.65 });
+    [
+      [-10.5, -8.5],
+      [10.5, -8.5],
+      [-10.5, 8.5],
+      [10.5, 8.5],
+    ].forEach(([px, pz]) => {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.65, 0.9, 12), creamMarbleMat);
+      pot.position.set(px, Y0 + 0.45, pz);
+      g.add(pot);
+      const trunk = new THREE.Mesh(this.cylCache(0.16, 0.22, 3.4, 8), palmTrunkMat);
+      trunk.position.set(px, Y0 + 2.2, pz);
+      g.add(trunk);
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.35, 0), palmLeafMat);
+      crown.scale.set(1.2, 0.65, 1.2);
+      crown.position.set(px, Y0 + 4.0, pz);
+      g.add(crown);
+      this.circleColliders.push({ x: MX + px, z: MZ + pz, radius: 0.9, tag: 'jfp_palm' });
+    });
+
+    // Mall Benches around the Atrium
+    [
+      { x: -6.8, z: 0, rot: Math.PI / 2 },
+      { x: 6.8, z: 0, rot: Math.PI / 2 },
+      { x: 0, z: 7.2, rot: 0 },
+    ].forEach((b) => {
+      const bench = this.sharedBox(2.8, 0.45, 0.75, woodMat, b.x, Y0 + 0.35, b.z);
+      bench.rotation.y = b.rot;
+      g.add(bench);
+    });
+
+    // Suspended Crystal & Gold Atrium Chandelier (rotates gently in animate())
+    const chandelier = new THREE.Group();
+    chandelier.position.set(0, 14.5, 0);
+    [3.8, 2.5, 1.2].forEach((rad, i) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.11, 8, 28), goldMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -i * 1.1;
+      chandelier.add(ring);
+      const glow = new THREE.Mesh(new THREE.TorusGeometry(rad - 0.14, 0.06, 6, 24), warmLightStripMat);
+      glow.rotation.x = Math.PI / 2;
+      glow.position.y = -i * 1.1;
+      chandelier.add(glow);
+    });
+    const dropCable = new THREE.Mesh(this.cylCache(0.06, 0.06, 3.6, 8), goldMat);
+    dropCable.position.y = 1.6;
+    chandelier.add(dropCable);
+    this.jfpChandelier = chandelier;
+    g.add(chandelier);
+
+    // Panoramic Glass Capsule Elevator at North Atrium Edge (localX = 0, localZ = -13.2)
+    const elevShaft = new THREE.Mesh(new THREE.BoxGeometry(3.2, 16.5, 3.0), clearGlassMat);
+    elevShaft.position.set(0, Y0 + 8.25, -13.2);
+    g.add(elevShaft);
+    [-1.55, 1.55].forEach((ex) => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.18, 16.5, 0.18), goldMat);
+      rail.position.set(ex, Y0 + 8.25, -11.7);
+      g.add(rail);
+    });
+    const elevSign = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.7, 0.14),
+      new THREE.MeshBasicMaterial({ map: makeShopSignTex('GLASS ELEVATOR', 'PRESS [E] ALL FLOORS', '#6b21a8') })
+    );
+    elevSign.position.set(0, Y0 + 3.4, -11.55);
+    g.add(elevSign);
+    // Register elevator interactable on all 3 floors
+    [
+      { id: 'jfp_elev_0', y: Y0, fl: 0 },
+      { id: 'jfp_elev_1', y: Y1, fl: 1 },
+      { id: 'jfp_elev_2', y: Y2, fl: 2 },
+    ].forEach((el) => {
+      this.jfpInteractables.push({
+        id: el.id,
+        x: MX,
+        y: el.y,
+        z: MZ - 10.0,
+        floor: el.fl,
+        category: 'elevator',
+        nameEn: 'Panoramic Glass Elevator',
+        nameBn: 'গ্লাস লিফট',
+        labelEn: `[E] Ride Glass Elevator (Currently ${el.fl === 0 ? 'Ground' : el.fl === 1 ? '1st Floor' : '2nd Floor'})`,
+        labelBn: `[E] গ্লাস লিফটে উঠুন (${el.fl === 0 ? 'নিচতলা' : el.fl === 1 ? '২য় তলা' : '৩য় তলা'})`,
+        cost: 0,
+      });
+    });
+
+    // ─── 7. WALK-IN 3D SHOPS BUILDER ──────────────────────────────────────
+    const buildWalkInShop = (opts: {
+      id: string;
+      lx: number;
+      fy: number;
+      lz: number;
+      w: number;
+      d: number;
+      facing: 'south' | 'north';
+      floor: number;
+      brand: string;
+      sub: string;
+      bg: string;
+      category: 'fashion' | 'food' | 'cinema' | 'tech' | 'arcade' | 'atm' | 'books' | 'footwear';
+      labelEn: string;
+      labelBn: string;
+      cost: number;
+    }) => {
+      const { lx, fy, lz, w, d, facing, floor, brand, sub, bg, category } = opts;
+      const sg = new THREE.Group();
+      sg.position.set(lx, fy, lz);
+      const wallH = FLOOR_H - 0.35;
+      const dir = facing === 'south' ? 1 : -1;
+      const minY = floor === 0 ? 0 : floor === 1 ? 4.6 : 10.0;
+      const maxY = floor === 0 ? 4.5 : floor === 1 ? 9.8 : 16.5;
+
+      // Shop interior light floor
+      const sf = this.sharedBox(w - 0.2, 0.06, d - 0.2, shopFloorMat, 0, 0.03, 0);
+      sg.add(sf);
+
+      // Back wall & colored feature wall
+      const backZ = -dir * (d / 2);
+      const backAccentMat = new THREE.MeshStandardMaterial({ color: bg, roughness: 0.55 });
+      sg.add(this.sharedBox(w, wallH, 0.3, backAccentMat, 0, wallH / 2, backZ));
+      this.buildingColliders.push({
+        minX: MX + lx - w / 2, maxX: MX + lx + w / 2,
+        minZ: MZ + lz + backZ - 0.25, maxZ: MZ + lz + backZ + 0.25,
+        minY, maxY, tag: 'mall_shop',
+      });
+
+      // Left & right side partition walls
+      [-w / 2, w / 2].forEach((sx) => {
+        sg.add(this.sharedBox(0.28, wallH, d, shopWallMat, sx, wallH / 2, 0));
+        this.buildingColliders.push({
+          minX: MX + lx + sx - 0.22, maxX: MX + lx + sx + 0.22,
+          minZ: MZ + lz - d / 2, maxZ: MZ + lz + d / 2,
+          minY, maxY, tag: 'mall_shop',
+        });
+      });
+
+      // Front glass storefront walls with wide 5.2m center walk-in opening
+      const frontZ = dir * (d / 2);
+      const wingW = (w - 5.2) / 2;
+      if (wingW > 0.5) {
+        [-w / 2 + wingW / 2, w / 2 - wingW / 2].forEach((wx) => {
+          sg.add(this.sharedBox(wingW, 0.9, 0.24, shopWallMat, wx, 0.45, frontZ));
+          sg.add(this.sharedBox(wingW, wallH - 1.9, 0.14, clearGlassMat, wx, 0.9 + (wallH - 1.9) / 2, frontZ));
+          this.buildingColliders.push({
+            minX: MX + lx + wx - wingW / 2, maxX: MX + lx + wx + wingW / 2,
+            minZ: MZ + lz + frontZ - 0.22, maxZ: MZ + lz + frontZ + 0.22,
+            minY, maxY, tag: 'mall_shop',
+          });
+        });
+      }
+
+      // Header lintel + glowing Brand Signboard
+      sg.add(this.sharedBox(w, 1.1, 0.32, backAccentMat, 0, wallH - 0.55, frontZ));
+      const signTex = makeShopSignTex(brand, sub, bg);
+      const signMesh = new THREE.Mesh(new THREE.BoxGeometry(w * 0.78, 0.98, 0.08), new THREE.MeshBasicMaterial({ map: signTex }));
+      signMesh.position.set(0, wallH - 0.55, frontZ + dir * 0.18);
+      if (facing === 'north') signMesh.rotation.y = Math.PI;
+      sg.add(signMesh);
+
+      // Warm ceiling light bar inside shop
+      sg.add(this.sharedBox(w * 0.65, 0.08, 0.5, warmLightStripMat, 0, wallH - 0.18, 0));
+
+      // Interior Checkout Counter (back center)
+      const counterZ = -dir * (d * 0.24);
+      sg.add(this.sharedBox(4.2, 1.0, 1.0, woodMat, 0, 0.5, counterZ));
+      // Cash register / POS monitor on counter
+      sg.add(this.sharedBox(0.6, 0.45, 0.3, new THREE.MeshBasicMaterial({ color: '#38bdf8' }), 0.6, 1.22, counterZ));
+      this.buildingColliders.push({
+        minX: MX + lx - 2.15, maxX: MX + lx + 2.15,
+        minZ: MZ + lz + counterZ - 0.55, maxZ: MZ + lz + counterZ + 0.55,
+        minY, maxY, tag: 'mall_counter',
+      });
+
+      // Category-specific 3D interior merchandise props!
+      if (category === 'fashion' || category === 'footwear') {
+        const colors = ['#ef4444', '#eab308', '#3b82f6', '#ec4899', '#10b981'];
+        [-w * 0.3, w * 0.3].forEach((rx, rIdx) => {
+          sg.add(this.sharedBox(2.4, 1.6, 0.7, chromeMat, rx, 0.8, 0));
+          for (let h = -0.8; h <= 0.8; h += 0.4) {
+            const gMat = new THREE.MeshStandardMaterial({ color: colors[(rIdx + Math.round((h + 1) * 3)) % colors.length], roughness: 0.65 });
+            sg.add(this.sharedBox(0.28, 0.9, 0.48, gMat, rx + h, 1.05, 0));
+          }
+        });
+      } else if (category === 'tech' || category === 'books') {
+        [-w * 0.28, w * 0.28].forEach((tx) => {
+          sg.add(this.sharedBox(2.6, 0.9, 1.1, chromeMat, tx, 0.45, 0.2 * dir));
+          [-0.7, 0, 0.7].forEach((dx) => {
+            const scr = this.sharedBox(0.45, 0.08, 0.35, new THREE.MeshBasicMaterial({ color: category === 'tech' ? '#38bdf8' : '#fde68a' }), tx + dx, 0.95, 0.2 * dir);
+            sg.add(scr);
+          });
+        });
+      } else if (category === 'arcade') {
+        for (let ax = -w * 0.36; ax <= w * 0.36; ax += 3.2) {
+          sg.add(this.sharedBox(1.1, 2.0, 0.9, new THREE.MeshStandardMaterial({ color: '#4c1d95', roughness: 0.4 }), ax, 1.0, 0.2 * dir));
+          sg.add(this.sharedBox(0.85, 0.65, 0.08, new THREE.MeshBasicMaterial({ color: '#22d3ee' }), ax, 1.45, 0.2 * dir + 0.45 * dir));
+        }
+      } else if (category === 'cinema') {
+        // Red velvet theater runner & golden poster frames
+        sg.add(this.sharedBox(4.8, 0.05, d - 1.2, redCarpetMat, 0, 0.07, 0));
+        [-6, 0, 6].forEach((px, pIdx) => {
+          const pCol = ['#dc2626', '#2563eb', '#d97706'][pIdx];
+          sg.add(this.sharedBox(2.2, 2.8, 0.14, new THREE.MeshBasicMaterial({ color: pCol }), px, 2.2, backZ + dir * 0.25));
+        });
+      } else if (category === 'atm') {
+        [-2.2, 2.2].forEach((ax) => {
+          sg.add(this.sharedBox(1.1, 1.9, 0.85, new THREE.MeshStandardMaterial({ color: '#065f46', roughness: 0.35 }), ax, 0.95, counterZ));
+          sg.add(this.sharedBox(0.75, 0.55, 0.08, new THREE.MeshBasicMaterial({ color: '#34d399' }), ax, 1.35, counterZ + dir * 0.44));
+        });
+      }
+
+      g.add(sg);
+
+      // Register interaction zone right in front of checkout counter
+      this.jfpInteractables.push({
+        id: opts.id,
+        x: MX + lx,
+        y: fy,
+        z: MZ + lz + dir * 1.2,
+        floor,
+        category,
+        nameEn: brand,
+        nameBn: sub,
+        labelEn: opts.labelEn,
+        labelBn: opts.labelBn,
+        cost: opts.cost,
+      });
+    };
+
+    // ─── GROUND FLOOR SHOPS (8 Anchor Flagship Stores) ──────────────────────
+    buildWalkInShop({
+      id: 'jfp_aarong', lx: -42, fy: Y0, lz: -28, w: 17, d: 11, facing: 'south', floor: 0,
+      brand: 'AARONG', sub: 'HERITAGE FASHION & CRAFT', bg: '#312e81', category: 'fashion',
+      labelEn: '[E] Aarong Flagship — Browse Outfits & Designer Panjabi', labelBn: '[E] আড়ং — নতুন পোশাক ও পাঞ্জাবি দেখুন', cost: 0,
+    });
+    buildWalkInShop({
+      id: 'jfp_samsung', lx: -21, fy: Y0, lz: -28, w: 17, d: 11, facing: 'south', floor: 0,
+      brand: 'SAMSUNG', sub: 'GALAXY EXPERIENCE STORE', bg: '#1d4ed8', category: 'tech',
+      labelEn: '[E] Samsung Store — Buy Tactical Armor Vest (৳450)', labelBn: '[E] স্যামসাং স্টোর — ট্যাকটিক্যাল বডি আর্মার কিনুন (৳৪৫০)', cost: 450,
+    });
+    buildWalkInShop({
+      id: 'jfp_yellow', lx: 21, fy: Y0, lz: -28, w: 17, d: 11, facing: 'south', floor: 0,
+      brand: 'YELLOW', sub: 'BEXIMCO TRENDWEAR', bg: '#ca8a04', category: 'fashion',
+      labelEn: '[E] Yellow by Beximco — Open Wardrobe & Style Menu', labelBn: '[E] ইয়েলো — ফ্যাশন ও পোশাক পরিবর্তন করুন', cost: 0,
+    });
+    buildWalkInShop({
+      id: 'jfp_apex', lx: 42, fy: Y0, lz: -28, w: 17, d: 11, facing: 'south', floor: 0,
+      brand: 'APEX', sub: 'FOOTWEAR & SNEAKERS', bg: '#991b1b', category: 'footwear',
+      labelEn: '[E] Apex Footwear — Fresh Running Sneakers (৳250 • Max Stamina)', labelBn: '[E] এপেক্স — স্প্রিন্ট স্নিকার্স কিনুন (৳২৫০)', cost: 250,
+    });
+
+    buildWalkInShop({
+      id: 'jfp_ecstasy', lx: -42, fy: Y0, lz: 28, w: 17, d: 11, facing: 'north', floor: 0,
+      brand: 'ECSTASY', sub: 'URBAN DHAKA STREETWEAR', bg: '#0f172a', category: 'fashion',
+      labelEn: '[E] Ecstasy — Change Outfit & Look', labelBn: '[E] এক্সট্যাসি — স্ট্রিটওয়্যার আউটফিট পরিবর্তন করুন', cost: 0,
+    });
+    buildWalkInShop({
+      id: 'jfp_bata', lx: -21, fy: Y0, lz: 28, w: 17, d: 11, facing: 'north', floor: 0,
+      brand: 'BATA MEGA', sub: 'SHOES & BAGS', bg: '#dc2626', category: 'footwear',
+      labelEn: '[E] Bata Mega Store — Boost Stamina & Comfort (৳180)', labelBn: '[E] বাটা মেগা স্টোর — নতুন জুতা কিনুন (৳১৮০)', cost: 180,
+    });
+    buildWalkInShop({
+      id: 'jfp_istore', lx: 21, fy: Y0, lz: 28, w: 17, d: 11, facing: 'north', floor: 0,
+      brand: 'iSTORE BD', sub: 'APPLE AUTHORIZED & GEAR', bg: '#334155', category: 'tech',
+      labelEn: '[E] iStore Tech — Refill Tactical Supplies & Health (৳350)', labelBn: '[E] আইস্টোর টেক — গিয়ার ও হেলথ রিস্টোর (৳৩৫০)', cost: 350,
+    });
+    buildWalkInShop({
+      id: 'jfp_atm', lx: 42, fy: Y0, lz: 28, w: 17, d: 11, facing: 'north', floor: 0,
+      brand: 'DBBL ATM', sub: 'FAST TRACK & MALL INFO', bg: '#065f46', category: 'atm',
+      labelEn: '[E] DBBL Fast Track ATM — Check Mall Directory & Cash Bonus', labelBn: '[E] ডাচ-বাংলা এটিএম — মল ডিরেক্টরি ও ক্যাশ বোনাস', cost: 0,
+    });
+
+    // ─── FIRST FLOOR SHOPS (Y = 5.40m, 8 Lifestyle & Tech Stores) ───────────
+    buildWalkInShop({
+      id: 'jfp_startech', lx: -42, fy: Y1, lz: -28, w: 17, d: 11, facing: 'south', floor: 1,
+      brand: 'STAR TECH', sub: 'GAMING PC & ELECTRONICS', bg: '#0e7490', category: 'tech',
+      labelEn: '[E] Star Tech — Tactical Comm Upgrade & Armor (+50 Armor, ৳400)', labelBn: '[E] স্টার টেক — আর্মার ও গিয়ার আপগ্রেড (৳৪০০)', cost: 400,
+    });
+    buildWalkInShop({
+      id: 'jfp_xiaomi', lx: -21, fy: Y1, lz: -28, w: 17, d: 11, facing: 'south', floor: 1,
+      brand: 'XIAOMI', sub: 'MI HOME DHAKA', bg: '#ea580c', category: 'tech',
+      labelEn: '[E] Mi Home — Smart Band Stamina Boost (৳200)', labelBn: '[E] শাওমি মি হোম — স্মার্টব্যান্ড বুস্ট (৳২০০)', cost: 200,
+    });
+    buildWalkInShop({
+      id: 'jfp_timezone', lx: 21, fy: Y1, lz: -28, w: 17, d: 11, facing: 'south', floor: 1,
+      brand: 'TIME ZONE', sub: 'LUXURY SWISS WATCHES', bg: '#451a03', category: 'fashion',
+      labelEn: '[E] Time Zone Watches — Luxury Outfit Wardrobe', labelBn: '[E] টাইম জোন — লাক্সারি ঘড়ি ও ফ্যাশন', cost: 0,
+    });
+    buildWalkInShop({
+      id: 'jfp_batighar', lx: 42, fy: Y1, lz: -28, w: 17, d: 11, facing: 'south', floor: 1,
+      brand: 'BATIGHAR', sub: 'BANGLA BOOKS & CAFE', bg: '#78350f', category: 'books',
+      labelEn: '[E] Batighar Book Cafe — Espresso & Rest (+50 HP & Wanted -1, ৳100)', labelBn: '[E] বাতিঘর বুক ক্যাফে — কফি ও বিশ্রাম (+৫০ হেলথ, ৳১০০)', cost: 100,
+    });
+
+    buildWalkInShop({
+      id: 'jfp_walton', lx: -42, fy: Y1, lz: 28, w: 17, d: 11, facing: 'north', floor: 1,
+      brand: 'WALTON', sub: 'MADE IN BANGLADESH TECH', bg: '#0369a1', category: 'tech',
+      labelEn: '[E] Walton Plaza — Power Bank & Supplies (+40 HP, ৳150)', labelBn: '[E] ওয়ালটন প্লাজা — ইলেকট্রনিক্স সাপ্লাই (৳১৫০)', cost: 150,
+    });
+    buildWalkInShop({
+      id: 'jfp_diamond', lx: -21, fy: Y1, lz: 28, w: 17, d: 11, facing: 'north', floor: 1,
+      brand: 'DIAMOND WORLD', sub: 'GOLD & BRIDAL JEWELLERY', bg: '#854d0e', category: 'fashion',
+      labelEn: '[E] Diamond World — Style & Wardrobe Menu', labelBn: '[E] ডায়মন্ড ওয়ার্ল্ড — শোরুম ভিজিট করুন', cost: 0,
+    });
+    buildWalkInShop({
+      id: 'jfp_shajgoj', lx: 21, fy: Y1, lz: 28, w: 17, d: 11, facing: 'north', floor: 1,
+      brand: 'SHAJGOJ', sub: 'BEAUTY & PERFUMES', bg: '#be185d', category: 'fashion',
+      labelEn: '[E] Shajgoj Store — Refresh & Style (+30 HP, ৳120)', labelBn: '[E] সাজগোজ — বিউটি ও পারফিউম (৳১২০)', cost: 120,
+    });
+    buildWalkInShop({
+      id: 'jfp_infinity', lx: 42, fy: Y1, lz: 28, w: 17, d: 11, facing: 'north', floor: 1,
+      brand: 'INFINITY', sub: 'DESIGNER PANJABI & SAREE', bg: '#581c87', category: 'fashion',
+      labelEn: '[E] Infinity Mega Mall — Change Outfit', labelBn: '[E] ইনফিনিটি — পোশাক পরিবর্তন করুন', cost: 0,
+    });
+
+    // ─── SECOND FLOOR: BLOCKBUSTER CINEMAS, GAME ZONE & FOOD COURT (Y = 10.55m) ───
+    buildWalkInShop({
+      id: 'jfp_cinema', lx: -32, fy: Y2, lz: -28, w: 34, d: 11, facing: 'south', floor: 2,
+      brand: 'BLOCKBUSTER CINEMAS', sub: '3D IMAX • DHAKA ATTACK 2 • TOOFAN', bg: '#7f1d1d', category: 'cinema',
+      labelEn: '[E] Blockbuster Cinemas — Watch Movie (৳200 • Full Heal & Clear Wanted!)', labelBn: '[E] ব্লকবাস্টার সিনেমাস — মুভি দেখুন (৳২০০ • ফুল হেলথ ও ওয়ান্টেড মুক্ত!)', cost: 200,
+    });
+    buildWalkInShop({
+      id: 'jfp_gamezone', lx: 32, fy: Y2, lz: -28, w: 34, d: 11, facing: 'south', floor: 2,
+      brand: 'FUTURE WORLD', sub: 'ARCADE • VR • BOWLING ZONE', bg: '#4c1d95', category: 'arcade',
+      labelEn: '[E] Future World Game Zone — Play Arcade & VR (৳50 • Max Stamina)', labelBn: '[E] ফিউচার ওয়ার্ল্ড গেম জোন — আর্কেড গেম খেলুন (৳৫০)', cost: 50,
+    });
+
+    buildWalkInShop({
+      id: 'jfp_kfc', lx: -42, fy: Y2, lz: 28, w: 17, d: 11, facing: 'north', floor: 2,
+      brand: 'KFC DHAKA', sub: 'HOT & CRISPY CHICKEN', bg: '#b91c1c', category: 'food',
+      labelEn: '[E] KFC Food Court — Crispy Bucket Meal (+80 HP & Stamina, ৳180)', labelBn: '[E] কেএফসি — ক্রিস্পি চিকেন মিল (+৮০ হেলথ, ৳১৮০)', cost: 180,
+    });
+    buildWalkInShop({
+      id: 'jfp_pizzahut', lx: -21, fy: Y2, lz: 28, w: 17, d: 11, facing: 'north', floor: 2,
+      brand: 'PIZZA HUT', sub: 'SUPREME PAN PIZZA', bg: '#991b1b', category: 'food',
+      labelEn: '[E] Pizza Hut — Cheesy Pan Pizza Feast (+90 HP & +25 Armor, ৳220)', labelBn: '[E] পিৎজা হাট — প্যান পিৎজা ফিস্ট (+৯০ হেলথ, ৳২২০)', cost: 220,
+    });
+    buildWalkInShop({
+      id: 'jfp_gloria', lx: 21, fy: Y2, lz: 28, w: 17, d: 11, facing: 'north', floor: 2,
+      brand: "GLORIA JEAN'S", sub: 'SPECIALTY ESPRESSO & CHILLERS', bg: '#451a03', category: 'food',
+      labelEn: "[E] Gloria Jean's — Iced Caramel Chiller (+50 HP & Max Stamina, ৳120)", labelBn: "[E] গ্লোরিয়া জিন্স — আইসড কফি ও স্ন্যাকস (+৫০ হেলথ, ৳১২০)", cost: 120,
+    });
+    buildWalkInShop({
+      id: 'jfp_kacchi', lx: 42, fy: Y2, lz: 28, w: 17, d: 11, facing: 'north', floor: 2,
+      brand: 'DESHI KACCHI', sub: 'SHAHI MUTTON KACCHI & BORHANI', bg: '#b45309', category: 'food',
+      labelEn: '[E] Deshi Kacchi — Royal Kacchi Platter (+100 HP & +50 Armor, ৳250)', labelBn: '[E] দেশি কাচ্চি — শাহী কাচ্চি ও বোরহানি (+১০০ হেলথ, ৳২৫০)', cost: 250,
+    });
+
+    // Food Court Dining Tables & Chairs on 2nd Floor South & West Galleries
+    const chairColors = ['#ef4444', '#f59e0b', '#0ea5e9', '#10b981'];
+    [-36, -24, -12, 0, 12, 24, 36].forEach((tx, idx) => {
+      const tz = 17;
+      const tableTop = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.08, 12), creamMarbleMat);
+      tableTop.position.set(tx, Y2 + 0.85, tz);
+      g.add(tableTop);
+      const tLeg = new THREE.Mesh(this.cylCache(0.08, 0.12, 0.82, 8), chromeMat);
+      tLeg.position.set(tx, Y2 + 0.41, tz);
+      g.add(tLeg);
+      const cMat = new THREE.MeshStandardMaterial({ color: chairColors[idx % chairColors.length], roughness: 0.55 });
+      [
+        [1.15, 0],
+        [-1.15, 0],
+        [0, 1.15],
+        [0, -1.15],
+      ].forEach(([cx, cz]) => {
+        const chair = this.sharedBox(0.45, 0.45, 0.45, cMat, tx + cx, Y2 + 0.23, tz + cz);
+        g.add(chair);
+      });
+    });
+
+    // ─── WARM MALL INTERIOR LIGHTING ────────────────────────────────────────
+    const mallAmbient = new THREE.PointLight('#fffbeb', 1.8, 95);
+    mallAmbient.position.set(0, 15.5, 0);
+    g.add(mallAmbient);
+    [
+      [-32, Y0 + 4.3, -15],
+      [32, Y0 + 4.3, -15],
+      [-32, Y0 + 4.3, 15],
+      [32, Y0 + 4.3, 15],
+      [-32, Y1 + 4.3, -15],
+      [32, Y1 + 4.3, -15],
+      [-32, Y2 + 4.8, 0],
+      [32, Y2 + 4.8, 0],
+    ].forEach(([lx, ly, lz]) => {
+      const pl = new THREE.PointLight('#fef3c7', 1.15, 36);
+      pl.position.set(lx, ly, lz);
+      g.add(pl);
+    });
+
+    this.scene.add(g);
+
+    // ─── MALL SHOPKEEPERS & SHOPPERS (Multi-floor NPCs inside JFP) ──────────
+    const mallNpcs: Array<{
+      id: string;
+      nameEn: string;
+      nameBn: string;
+      role: NPCRole;
+      lx: number;
+      y: number;
+      lz: number;
+      shirt: string;
+      pants: string;
+      lineEn: string;
+      lineBn: string;
+    }> = [
+      {
+        id: 'mall_npc_guard', nameEn: 'Mall Security Officer', nameBn: 'মল সিকিউরিটি অফিসার', role: 'police_officer',
+        lx: 5.5, y: Y0, lz: 33.5, shirt: '#1e3a8a', pants: '#0f172a',
+        lineEn: 'Welcome to Jamuna Future Park! Fashion & Electronics on Ground/1st floor, Food Court & Blockbuster Cinemas on 2nd floor!',
+        lineBn: 'যমুনা ফিউচার পার্কে স্বাগতম! নিচতলা ও ২য় তলায় শোরুম এবং ৩য় তলায় ফুড কোর্ট ও ব্লকবাস্টার সিনেমাস।',
+      },
+      {
+        id: 'mall_npc_aarong', nameEn: 'Aarong Sales Executive', nameBn: 'আড়ং বিক্রয়কর্মী', role: 'shopkeeper',
+        lx: -42, y: Y0, lz: -30.2, shirt: '#312e81', pants: '#1e293b',
+        lineEn: 'Looking for Eid Panjabi or Dhaka streetwear? Press [E] at our counter!',
+        lineBn: 'নতুন পাঞ্জাবি বা স্ট্রিটওয়্যার খুঁজছেন? কাউন্টারে [E] চাপুন!',
+      },
+      {
+        id: 'mall_npc_samsung', nameEn: 'Samsung Specialist', nameBn: 'স্যামসাং টেক এক্সপার্ট', role: 'office_worker',
+        lx: -21, y: Y0, lz: -30.2, shirt: '#1d4ed8', pants: '#0f172a',
+        lineEn: 'Galaxy S-series flagships and tactical gear in stock right here!',
+        lineBn: 'নতুন গ্যালাক্সি ফোন ও ট্যাকটিক্যাল গিয়ার স্টকে আছে!',
+      },
+      {
+        id: 'mall_npc_shopper1', nameEn: 'NSU Mall Shopper', nameBn: 'এনএসইউ শিক্ষার্থী', role: 'student',
+        lx: -8, y: Y0, lz: 8, shirt: '#ec4899', pants: '#1e293b',
+        lineEn: 'The central fountain atrium is huge! Take the West escalator up to 1st floor.',
+        lineBn: 'সেন্ট্রাল ফোয়ারা চত্বর দারুণ! পশ্চিমের চলন্ত সিঁড়ি দিয়ে ওপরের তলায় যান।',
+      },
+      {
+        id: 'mall_npc_batighar', nameEn: 'Batighar Bookseller', nameBn: 'বাতিঘর বই বিক্রেতা', role: 'shopkeeper',
+        lx: 42, y: Y1, lz: -30.2, shirt: '#78350f', pants: '#1e293b',
+        lineEn: 'Grab a fresh espresso and browse classic Bengali novels on 1st floor!',
+        lineBn: 'গরম কফির সাথে পছন্দের বাংলা বই পড়ে বিশ্রাম নিন!',
+      },
+      {
+        id: 'mall_npc_cinema', nameEn: 'Blockbuster Ticket Attendant', nameBn: 'ব্লকবাস্টার টিকিট কাউন্টার', role: 'shopkeeper',
+        lx: -32, y: Y2, lz: -30.2, shirt: '#991b1b', pants: '#0f172a',
+        lineEn: 'Dhaka Attack 2 & Toofan IMAX shows starting now! Press [E] to grab a ticket & popcorn.',
+        lineBn: 'ঢাকা অ্যাটাক ২ ও তুফান শো চলছে! টিকিট ও পপকর্নের জন্য [E] চাপুন।',
+      },
+      {
+        id: 'mall_npc_kfc', nameEn: 'Food Court Chef', nameBn: 'ফুড কোর্ট শেফ', role: 'street_vendor',
+        lx: -42, y: Y2, lz: 30.2, shirt: '#dc2626', pants: '#1e293b',
+        lineEn: 'Hot crispy chicken, pizza, and shahi kacchi served fresh on the 2nd floor!',
+        lineBn: 'গরম ক্রিস্পি চিকেন, পিৎজা আর কাচ্চি বিরিয়ানি একদম রেডি!',
+      },
+    ];
+
+    mallNpcs.forEach((mn) => {
+      const wx = MX + mn.lx;
+      const wz = MZ + mn.lz;
+      const npc: NPCEntity = {
+        id: mn.id,
+        nameEn: mn.nameEn,
+        nameBn: mn.nameBn,
+        role: mn.role,
+        x: wx,
+        z: wz,
+        rotation: mn.lz < 0 ? 0 : Math.PI,
+        shirtColor: mn.shirt,
+        pantsColor: mn.pants,
+        dialogueEn: [mn.lineEn],
+        dialogueBn: [mn.lineBn],
+        aiState: 'idle',
+        walkTargetX: wx,
+        walkTargetZ: wz,
+        health: 100,
+      };
+      this.npcs.push(npc);
+      const limbs = createCharacterMesh(mn.shirt, mn.pants, mn.role, false, mn.id, false);
+      limbs.group.position.set(wx, mn.y, wz);
+      this.scene.add(limbs.group);
+      this.npcLimbsMap.set(mn.id, limbs);
+    });
   }
 
   /**
@@ -8401,8 +9230,8 @@ export class DhakaCityEngine {
       // Bashundhara City Mega Complex (X = -170, Z = -35)
       { type: 'car', x: -170, z: -35, rot: 0, isTraffic: false, color: '#f8fafc' },
 
-      // Jamuna Future Park Drop-off (X = 460, Z = -275)
-      { type: 'motorcycle', x: 460, z: -275, rot: 0, isTraffic: false, color: '#7c3aed' },
+      // Jamuna Future Park Drop-off Plaza (X = 516, Z = -333)
+      { type: 'motorcycle', x: 516, z: -333, rot: 0, isTraffic: false, color: '#7c3aed' },
     ];
 
     presets.forEach((p, idx) => {
@@ -9008,7 +9837,10 @@ export class DhakaCityEngine {
     action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
   ) {
     dhakaAudio.init();
-    if (action === 'interact') this.handlePrimaryInteraction(true);
+    if (action === 'interact') {
+      const promptType = useGameStore.getState().nearbyPrompt?.type;
+      this.handlePrimaryInteraction(promptType === 'vehicle');
+    }
     if (action === 'horn') {
       const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
       if (veh) {
@@ -9366,6 +10198,9 @@ export class DhakaCityEngine {
     let minDist = 5.5;
 
     for (const npc of this.npcs) {
+      const limbs = this.npcLimbsMap.get(npc.id);
+      const npcY = limbs ? limbs.group.position.y : 0;
+      if (Math.abs(npcY - this.playerPos.y) > 2.8) continue;
       const d = Math.hypot(npc.x - this.playerPos.x, npc.z - this.playerPos.z);
       if (d < minDist) {
         minDist = d;
@@ -9393,6 +10228,18 @@ export class DhakaCityEngine {
       this.exitCurrentVehicle();
       dhakaAudio.playSfx('ui');
       return;
+    }
+
+    // 1.5 Check Jamuna Future Park Mall Shops, Food Court, Cinema, Arcade & Glass Elevator
+    if (!preferVehicle) {
+      for (const shop of this.jfpInteractables) {
+        if (Math.abs(shop.y - this.playerPos.y) > 2.4) continue;
+        const d = Math.hypot(shop.x - this.playerPos.x, shop.z - this.playerPos.z);
+        if (d < 4.0) {
+          this.executeMallShopInteraction(shop);
+          return;
+        }
+      }
     }
 
     // 2. Check nearby Point of Interest
@@ -9457,10 +10304,176 @@ export class DhakaCityEngine {
     this.handleTalkToNPC();
   }
 
+  private executeMallShopInteraction(shop: (typeof this.jfpInteractables)[number]) {
+    const store = useGameStore.getState();
+    dhakaAudio.playSfx('ui');
+
+    if (shop.category === 'elevator') {
+      const nextFloor = (shop.floor + 1) % 3;
+      const nextY = nextFloor === 0 ? 0.25 : nextFloor === 1 ? 5.4 : 10.55;
+      this.playerPos.set(this.jfpCenter.x, nextY, this.jfpCenter.z - 8.5);
+      this.playerLimbs.group.position.copy(this.playerPos);
+      this.isGrounded = true;
+      this.playerVelY = 0;
+      store.setMallFloor(nextFloor);
+      store.showBanner({
+        titleEn:
+          nextFloor === 0
+            ? '🛗 GROUND FLOOR: FASHION & TECH ATRIUM'
+            : nextFloor === 1
+            ? '🛗 1ST FLOOR: LIFESTYLE, WATCHES & BOOKS'
+            : '🛗 2ND FLOOR: FOOD COURT, CINEMA & GAME ZONE',
+        titleBn:
+          nextFloor === 0
+            ? '🛗 নিচতলা: ফ্যাশন ও টেক অ্যাট্রিয়াম'
+            : nextFloor === 1
+            ? '🛗 ২য় তলা: লাইফস্টাইল, ঘড়ি ও বই'
+            : '🛗 ৩য় তলা: ফুড কোর্ট, ব্লকবাস্টার সিনেমা ও গেম জোন',
+        subtitleEn: 'Panoramic Glass Elevator arrived smoothly.',
+        subtitleBn: 'গ্লাস লিফট থেকে বের হয়ে শপিং উপভোগ করুন।',
+        tone: 'blue',
+      });
+      return;
+    }
+
+    if (shop.category === 'fashion') {
+      store.setGamePhase('paused', 'character');
+      return;
+    }
+
+    if (shop.category === 'food') {
+      if (store.spendTaka(shop.cost, `${shop.nameEn} (Jamuna Food Court)`, shop.nameBn)) {
+        const hpGain = shop.id === 'jfp_kacchi' ? 100 : shop.id === 'jfp_pizzahut' ? 90 : 80;
+        const armGain = shop.id === 'jfp_kacchi' ? 50 : shop.id === 'jfp_pizzahut' ? 25 : 0;
+        store.healPlayer(hpGain, armGain);
+        this.playerStamina = 100;
+        dhakaAudio.playSfx(shop.id === 'jfp_gloria' ? 'drink' : 'eat');
+        store.showBanner({
+          titleEn: `${shop.nameEn}: DELICIOUS MEAL (+${hpGain} HP${armGain ? ` & +${armGain} ARMOR` : ''})`,
+          titleBn: `${shop.nameEn}: সুস্বাদু খাবার সম্পন্ন (+${hpGain} হেলথ)`,
+          subtitleEn: 'Energy & stamina fully topped up at Jamuna Food Court!',
+          subtitleBn: 'যমুনা ফুড কোর্টে দারুণ খাওয়াদাওয়া হলো!',
+          tone: 'gold',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'cinema') {
+      if (store.spendTaka(shop.cost, 'Blockbuster Cinemas IMAX Ticket & Popcorn', 'ব্লকবাস্টার সিনেমাস টিকিট')) {
+        store.healPlayer(100, 50);
+        store.setWantedLevel(0);
+        this.playerStamina = 100;
+        store.saveGameToStorage();
+        store.showBanner({
+          titleEn: '🎬 BLOCKBUSTER CINEMAS: FULL REST & WANTED CLEARED!',
+          titleBn: '🎬 ব্লকবাস্টার সিনেমাস: মুভি উপভোগ ও ওয়ান্টেড মুক্ত!',
+          subtitleEn: 'Watched Dhaka Attack 2 in 3D IMAX! Game saved, HP 100%, Wanted cleared.',
+          subtitleBn: 'থ্রিডি আইম্যাক্সে দারুণ সিনেমা দেখে আরিফ একদম সতেজ ও গেম সেভ!',
+          tone: 'gold',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'arcade') {
+      if (store.spendTaka(shop.cost, 'Future World VR & Arcade Tokens', 'ফিউচার ওয়ার্ল্ড গেম জোন')) {
+        this.playerStamina = 100;
+        store.healPlayer(25, 0);
+        dhakaAudio.playSfx('pickup');
+        store.showBanner({
+          titleEn: '🎮 FUTURE WORLD GAME ZONE: HIGH SCORE!',
+          titleBn: '🎮 ফিউচার ওয়ার্ল্ড: নতুন হাই স্কোর!',
+          subtitleEn: 'Stamina maxed out after VR racing & arcade rounds!',
+          subtitleBn: 'গেম জোনে খেলে পুরো স্ট্যামিনা ফিরে পেলেন!',
+          tone: 'blue',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'tech') {
+      if (store.spendTaka(shop.cost, `${shop.nameEn} Tactical Gear`, shop.nameEn)) {
+        store.healPlayer(40, 55);
+        dhakaAudio.playSfx('pickup');
+        store.showBanner({
+          titleEn: `${shop.nameEn}: TACTICAL ARMOR & GEAR EQUIPPED (+55 ARMOR)`,
+          titleBn: `${shop.nameEn}: নতুন বডি আর্মার ও গিয়ার যুক্ত (+৫৫ আর্মার)`,
+          subtitleEn: 'Top-grade protective gear purchased inside Jamuna Future Park.',
+          subtitleBn: 'যমুনা ফিউচার পার্ক থেকে মানসম্মত গিয়ার কেনা হয়েছে।',
+          tone: 'blue',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'footwear') {
+      if (store.spendTaka(shop.cost, `${shop.nameEn} Running Shoes`, shop.nameEn)) {
+        this.playerStamina = 100;
+        store.healPlayer(30, 0);
+        dhakaAudio.playSfx('pickup');
+        store.showBanner({
+          titleEn: `${shop.nameEn}: FRESH RUNNING SNEAKERS!`,
+          titleBn: `${shop.nameEn}: নতুন স্প্রিন্ট জুতা কেনা হলো!`,
+          subtitleEn: 'Stamina restored to 100% for faster city sprints.',
+          subtitleBn: 'পুরো ১০০% স্ট্যামিনা নিয়ে দৌড়ানোর জন্য প্রস্তুত!',
+          tone: 'green',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'books') {
+      if (store.spendTaka(shop.cost, 'Batighar Book & Espresso', 'বাতিঘর বই ও কফি')) {
+        store.healPlayer(50, 0);
+        store.setWantedLevel(Math.max(0, store.wantedLevel - 1));
+        this.playerStamina = 100;
+        dhakaAudio.playSfx('drink');
+        store.showBanner({
+          titleEn: '📚 BATIGHAR BOOK CAFE: CALM ESPRESSO BREAK (+50 HP)',
+          titleBn: '📚 বাতিঘর বুক ক্যাফে: কফি ও বইয়ের সাথে বিশ্রাম (+৫০ হেলথ)',
+          subtitleEn: 'Quiet reading upstairs lowered police heat and healed Arif.',
+          subtitleBn: 'শান্ত পরিবেশে বিশ্রামে হেলথ বাড়ল এবং পুলিশের চাপ কমল।',
+          tone: 'green',
+        });
+      }
+      return;
+    }
+
+    if (shop.category === 'atm') {
+      store.addTaka(500, 'DBBL Cashback & Mall Reward', 'ডাচ-বাংলা এটিএম রিওয়ার্ড');
+      dhakaAudio.playSfx('pickup');
+      store.showBanner({
+        titleEn: '🏧 DBBL ATM & DIRECTORY: +৳500 BONUS & MALL GUIDE',
+        titleBn: '🏧 ডাচ-বাংলা এটিএম ও মল গাইড: +৳৫০০ বোনাস',
+        subtitleEn: 'GF: Fashion & Tech | West Escalator -> 1F Lifestyle | East Escalator -> 2F Food Court & Cinema',
+        subtitleBn: 'নিচতলা: ফ্যাশন • পশ্চিম সিঁড়ি -> ২য় তলা • পূর্ব সিঁড়ি -> ৩য় তলা ফুড কোর্ট ও সিনেমা!',
+        tone: 'green',
+      });
+    }
+  }
+
   private executePOIInteraction(poiId: string) {
     const store = useGameStore.getState();
     const poi = POINTS_OF_INTEREST.find((p) => p.id === poiId);
     if (!poi) return;
+
+    if (poiId === 'poi_bashundhara_jamuna_mall') {
+      // Step smoothly through the South glass entrance into the Grand Atrium!
+      this.playerPos.set(520, 0.25, -356);
+      this.playerRotation = Math.PI;
+      this.playerLimbs.group.position.copy(this.playerPos);
+      this.playerLimbs.group.rotation.y = this.playerRotation;
+      dhakaAudio.playSfx('ui');
+      store.showBanner({
+        titleEn: '🏬 JAMUNA FUTURE PARK: WELCOME INSIDE!',
+        titleBn: 'যমুনা ফিউচার পার্কে স্বাগতম!',
+        subtitleEn: 'Ground Floor: Fashion & Tech • West Escalator -> 1F • East Escalator -> 2F Food Court & Cinema',
+        subtitleBn: 'নিচতলা: ফ্যাশন ও টেক • চলন্ত সিঁড়ি ও গ্লাস লিফটে ২য় ও ৩য় তলায় যান!',
+        tone: 'gold',
+      });
+      return;
+    }
 
     if (poiId === 'poi_ahsan_manzil_palace') {
       store.healPlayer(100, 100);
@@ -10060,6 +11073,47 @@ export class DhakaCityEngine {
         canopy.rotation.x = Math.sin(windTime * 1.5 + phase) * 0.024;
         canopy.rotation.z = Math.cos(windTime * 1.2 + phase) * 0.020;
       }
+    }
+
+    // Jamuna Future Park Interior Culling, Ferris Wheel/Chandelier Animation & Mall Entry State
+    const jfpDist = Math.hypot(
+      this.playerPos.x - this.jfpCenter.x,
+      this.playerPos.z - this.jfpCenter.z
+    );
+    if (this.jfpInteriorGroup) {
+      this.jfpInteriorGroup.visible = jfpDist < 190;
+    }
+    if (jfpDist < 260 && this.jfpFerrisWheel) {
+      this.jfpFerrisWheel.rotation.z += dt * 0.16;
+    }
+    if (jfpDist < 140 && this.jfpChandelier) {
+      this.jfpChandelier.rotation.y += dt * 0.25;
+    }
+    const insideJfpNow =
+      !this.activeVehicleId &&
+      this.playerPos.x >= this.jfpCenter.x - 55.5 &&
+      this.playerPos.x <= this.jfpCenter.x + 55.5 &&
+      this.playerPos.z >= this.jfpCenter.z - 35.5 &&
+      this.playerPos.z <= this.jfpCenter.z + 35.5;
+    if (insideJfpNow) {
+      const floorIdx = this.playerPos.y >= 8.2 ? 2 : this.playerPos.y >= 3.2 ? 1 : 0;
+      if (!this.wasInsideJfp) {
+        this.wasInsideJfp = true;
+        store.enterMall('jamuna_future_park');
+        store.setMallFloor(floorIdx);
+        store.showBanner({
+          titleEn: '🏬 ENTERED JAMUNA FUTURE PARK',
+          titleBn: 'যমুনা ফিউচার পার্কে প্রবেশ করেছেন',
+          subtitleEn: 'Explore Ground Floor Fashion & Tech, West Escalator -> 1F, East Escalator -> 2F Food Court & Cinema!',
+          subtitleBn: 'দোকানগুলোতে ঢুকে [E] চাপুন অথবা চলন্ত সিঁড়ি ও গ্লাস লিফটে ওপরে উঠুন!',
+          tone: 'gold',
+        });
+      } else if (store.mallFloor !== floorIdx) {
+        store.setMallFloor(floorIdx);
+      }
+    } else if (this.wasInsideJfp) {
+      this.wasInsideJfp = false;
+      store.exitMall();
     }
 
     this.updateCamera(dt, store.cameraMode);
@@ -12406,16 +13460,32 @@ export class DhakaCityEngine {
 
     let prompt: NearbyPrompt | null = null;
 
-    for (const poi of POINTS_OF_INTEREST) {
-      const d = Math.hypot(poi.x - this.playerPos.x, poi.z - this.playerPos.z);
-      if (d < 4.8) {
+    for (const shop of this.jfpInteractables) {
+      if (Math.abs(shop.y - this.playerPos.y) > 2.4) continue;
+      const d = Math.hypot(shop.x - this.playerPos.x, shop.z - this.playerPos.z);
+      if (d < 4.0) {
         prompt = {
-          type: 'poi',
-          id: poi.id,
-          labelEn: `[E] ${poi.actionLabelEn}`,
-          labelBn: `[E] ${poi.actionLabelBn}`,
+          type: 'mall_shop',
+          id: shop.id,
+          labelEn: shop.labelEn,
+          labelBn: shop.labelBn,
         };
         break;
+      }
+    }
+
+    if (!prompt) {
+      for (const poi of POINTS_OF_INTEREST) {
+        const d = Math.hypot(poi.x - this.playerPos.x, poi.z - this.playerPos.z);
+        if (d < 4.8) {
+          prompt = {
+            type: 'poi',
+            id: poi.id,
+            labelEn: `[E] ${poi.actionLabelEn}`,
+            labelBn: `[E] ${poi.actionLabelBn}`,
+          };
+          break;
+        }
       }
     }
 
@@ -12437,6 +13507,9 @@ export class DhakaCityEngine {
 
     if (!prompt) {
       for (const npc of this.npcs) {
+        const limbs = this.npcLimbsMap.get(npc.id);
+        const npcY = limbs ? limbs.group.position.y : 0;
+        if (Math.abs(npcY - this.playerPos.y) > 2.6) continue;
         const d = Math.hypot(
           npc.x - this.playerPos.x,
           npc.z - this.playerPos.z
@@ -12461,18 +13534,24 @@ export class DhakaCityEngine {
     mode: 'third_person' | 'far_chase' | 'hood_close'
   ) {
     const isDriving = Boolean(this.activeVehicleId);
+    const isInsideJfp =
+      !isDriving &&
+      this.playerPos.x >= this.jfpCenter.x - 56 &&
+      this.playerPos.x <= this.jfpCenter.x + 56 &&
+      this.playerPos.z >= this.jfpCenter.z - 36 &&
+      this.playerPos.z <= this.jfpCenter.z + 36;
 
-    let desiredDist = isDriving ? 9.2 : 6.2;
-    let heightOffset = isDriving ? 2.4 : 1.75;
+    let desiredDist = isDriving ? 9.2 : isInsideJfp ? 4.4 : 6.2;
+    let heightOffset = isDriving ? 2.4 : isInsideJfp ? 1.68 : 1.75;
 
     if (!isDriving && this.isAiming) {
       desiredDist = 3.6;
       heightOffset = 1.62;
     } else if (mode === 'far_chase') {
-      desiredDist = isDriving ? 13.5 : 9.0;
-      heightOffset = isDriving ? 3.4 : 2.3;
+      desiredDist = isDriving ? 13.5 : isInsideJfp ? 5.6 : 9.0;
+      heightOffset = isDriving ? 3.4 : isInsideJfp ? 1.85 : 2.3;
     } else if (mode === 'hood_close') {
-      desiredDist = isDriving ? 5.6 : 4.0;
+      desiredDist = isDriving ? 5.6 : isInsideJfp ? 3.4 : 4.0;
       heightOffset = isDriving ? 1.8 : 1.55;
     }
 
@@ -12500,6 +13579,9 @@ export class DhakaCityEngine {
     for (const b of this.buildingColliders) {
       if (b.tag === 'road_median') continue;
       if (b.tag === 'flyover_barrier') continue;
+      if (isInsideJfp && (b.tag === 'jfp_wall' || b.tag === 'jfp_railing' || b.tag === 'jfp_escalator_rail')) continue;
+      if (b.minY !== undefined && targetY < b.minY) continue;
+      if (b.maxY !== undefined && targetY > b.maxY) continue;
       if (
         testCamX + 0.6 > b.minX &&
         testCamX - 0.6 < b.maxX &&
@@ -12512,8 +13594,8 @@ export class DhakaCityEngine {
     }
 
     if (occluded) {
-      // Never pull camera closer than 4.5m — prevents it clipping through the character body
-      const safeDist = Math.max(4.5, desiredDist * 0.6);
+      // Never pull camera closer than 4.5m outdoors (or 3.2m inside shops) — prevents clipping through body
+      const safeDist = Math.max(isInsideJfp ? 3.2 : 4.5, desiredDist * 0.6);
       this.currentCameraDist = Math.min(this.currentCameraDist, safeDist);
     } else {
       // Smoothly ease back out to full distance without jumping or oscillating
@@ -12526,10 +13608,22 @@ export class DhakaCityEngine {
       Math.sin(this.cameraYaw) *
         Math.cos(this.cameraPitch) *
         this.currentCameraDist;
-    const camY = Math.max(
-      1.1,
+    let camY = Math.max(
+      this.playerPos.y + 0.9,
       targetY + Math.sin(this.cameraPitch) * this.currentCameraDist
     );
+    if (isInsideJfp) {
+      const inAtriumShaft =
+        Math.abs(camX - this.jfpCenter.x) < 14 &&
+        Math.abs(targetZ - this.jfpCenter.z) < 11;
+      const floorCeiling =
+        this.playerPos.y >= 8.2 ? 17.0 : this.playerPos.y >= 3.2 ? 10.1 : 5.0;
+      if (!inAtriumShaft) {
+        camY = Math.min(camY, floorCeiling);
+      } else {
+        camY = Math.min(camY, 17.0);
+      }
+    }
     const camZ =
       targetZ +
       Math.cos(this.cameraYaw) *
@@ -12566,6 +13660,51 @@ export class DhakaCityEngine {
    */
   public getRoadElevation(x: number, z: number, currentY?: number): number {
     const expDeckElev = 16.2;
+
+    // -1. Jamuna Future Park 3-Floor Shopping Mall & Escalators (X: 464..576, Z: -421..-349)
+    const jx = x - this.jfpCenter.x;
+    const jz = z - this.jfpCenter.z;
+    if (Math.abs(jx) <= 56 && Math.abs(jz) <= 36) {
+      const Y0 = 0.25;
+      const FLOOR_H = 5.15;
+      const Y1 = Y0 + FLOOR_H;     // 5.40m
+      const Y2 = Y0 + FLOOR_H * 2; // 10.55m
+
+      // West Escalator (GF Y0 <-> 1F Y1): localX in [-25.0, -20.0], localZ in [-9, +9]
+      if (jx >= -25.0 && jx <= -20.0 && jz >= -9.0 && jz <= 9.0) {
+        const t = (9.0 - jz) / 18.0;
+        const rampY = Y0 + FLOOR_H * Math.max(0, Math.min(1, t));
+        if (currentY !== undefined && currentY >= 8.2) {
+          return Y2; // 2F gallery walks over West escalator well
+        }
+        if (currentY === undefined || Math.abs(currentY - rampY) <= 2.35) {
+          return rampY;
+        }
+        return Y0;
+      }
+
+      // East Escalator (1F Y1 <-> 2F Y2): localX in [+20.0, +25.0], localZ in [-9, +9]
+      if (jx >= 20.0 && jx <= 25.0 && jz >= -9.0 && jz <= 9.0) {
+        const t = (9.0 - jz) / 18.0;
+        const rampY = Y1 + FLOOR_H * Math.max(0, Math.min(1, t));
+        if (currentY !== undefined && currentY >= 3.0 && Math.abs(currentY - rampY) <= 2.35) {
+          return rampY;
+        }
+        return Y0;
+      }
+
+      // Open Central Atrium Void (|jx| < 13.8 && |jz| < 10.8): no 1F/2F floor slab!
+      const inAtriumVoid = Math.abs(jx) < 13.8 && Math.abs(jz) < 10.8;
+      if (!inAtriumVoid && currentY !== undefined) {
+        if (currentY >= 8.2) return Y2;
+        if (currentY >= 3.2) return Y1;
+      }
+      return Y0;
+    }
+    // Jamuna Future Park South Drop-off Marble Plaza Apron
+    if (Math.abs(jx) <= 59 && jz > 36 && jz <= 57) {
+      return 0.16;
+    }
 
     // 0. High Elevated Structures (Y >= 12.0m) - Priority for top-level Expressway
     if (currentY !== undefined && currentY >= 12.0) {
