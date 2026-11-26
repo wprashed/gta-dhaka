@@ -338,6 +338,35 @@ export const METRO_STATIONS: MetroStationStop[] = [
   { id: 'mrt_gulshan', line: 'L5', nameEn: 'Gulshan-2 / Jamuna Link', nameBn: 'গুলশান-২ / যমুনা লিংক', x: 430, z: -204, fare: 50 },
 ];
 
+export const CNG_STATIONS: Array<{ x: number; z: number; isBlue: boolean; nameEn: string }> = [
+  { x: 24, z: 64, isBlue: true, nameEn: 'Farmgate South CNG Pump' },
+  { x: -24, z: -70, isBlue: false, nameEn: 'Bijoy Sarani CNG Station' },
+  { x: 70, z: 130, isBlue: true, nameEn: 'Kawran Bazar Fuel Pump' },
+  { x: 150, z: 92, isBlue: false, nameEn: 'Moghbazar CNG Pump' },
+  { x: -120, z: 118, isBlue: true, nameEn: 'Panthapath Filling Station' },
+  { x: -200, z: -80, isBlue: false, nameEn: 'Asad Gate CNG Pump' },
+];
+
+export const MARINE_DOCKS: Array<{ x: number; z: number; nameEn: string }> = [
+  { x: 192, z: -16, nameEn: 'Hatirjheel Marine Fuel Pier' },
+  { x: 20, z: 302, nameEn: 'Sadarghat Boat Fuel Jetty' },
+  { x: -202, z: 22, nameEn: 'Dhanmondi Lake Boat Dock' },
+];
+
+export const STREET_ATMS: Array<{ x: number; z: number; nameEn: string; nameBn: string }> = [
+  { x: -14, z: 14, nameEn: 'Farmgate DBBL ATM', nameBn: 'ফার্মগেট ডাচ-বাংলা এটিএম' },
+  { x: 210, z: 185, nameEn: 'Motijheel City ATM', nameBn: 'মতিঝিল সিটি এটিএম' },
+  { x: -12, z: -162, nameEn: 'Gulshan Prime ATM', nameBn: 'গুলশান প্রাইম এটিএম' },
+];
+
+export const SPEED_CAMERAS: Array<{ x: number; y: number; z: number }> = [
+  { x: 590, y: 11.2, z: -315 },
+  { x: 14, y: 16.2, z: -100 },
+  { x: 0, y: 0, z: -90 },
+  { x: 155, y: 0, z: 25 },
+  { x: 0, y: 0, z: -360 },
+];
+
 export const POINTS_OF_INTEREST: PointOfInterest[] = [
   {
     id: 'poi_farmgate_tea',

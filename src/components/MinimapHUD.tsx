@@ -1,10 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
+  CNG_STATIONS,
   DISTRICTS,
+  MARINE_DOCKS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
   STORY_MISSIONS,
+  STREET_ATMS,
 } from '../data/dhakaWorldData';
 import { Compass, Map as MapIcon } from 'lucide-react';
 
@@ -24,6 +27,7 @@ export const MinimapHUD: React.FC = () => {
     armor,
     maxArmor,
     stamina,
+    isSwimming,
     language,
     setGamePhase,
     isInsideMall,
@@ -324,6 +328,25 @@ export const MinimapHUD: React.FC = () => {
       ctx.fill();
     });
 
+    // CNG Stations (Green square), Marine Docks (Cyan square), Street ATMs (Sky diamond)
+    CNG_STATIONS.forEach((cs) => {
+      const pt = worldToRadar(cs.x, cs.z);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(pt.rx - 2.6, pt.rz - 2.6, 5.2, 5.2);
+    });
+    MARINE_DOCKS.forEach((md) => {
+      const pt = worldToRadar(md.x, md.z);
+      ctx.fillStyle = '#0ea5e9';
+      ctx.fillRect(pt.rx - 2.6, pt.rz - 2.6, 5.2, 5.2);
+    });
+    STREET_ATMS.forEach((atm) => {
+      const pt = worldToRadar(atm.x, atm.z);
+      ctx.fillStyle = '#67e8f9';
+      ctx.beginPath();
+      ctx.arc(pt.rx, pt.rz, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
     // Draw GPS Route Line & Target Marker for Active Mission or Custom Waypoint
     const allMissions = [...STORY_MISSIONS, ...SIDE_MISSIONS];
     const mission = allMissions.find((m) => m.id === activeMissionId);
@@ -498,15 +521,31 @@ export const MinimapHUD: React.FC = () => {
             </div>
           )}
         </div>
-        {/* Stamina Bar (Amber - only displays when sprinting or recovering) */}
-        {stamina < 98 && (
-          <div className="w-full bg-slate-950/90 h-1 rounded-full overflow-hidden border border-slate-800">
-            <div
-              className="bg-amber-400 h-full transition-all duration-150"
-              style={{
-                width: `${Math.max(0, Math.min(100, stamina))}%`,
-              }}
-            />
+        {/* Stamina / Swim Oxygen Bar */}
+        {(isSwimming || stamina < 98) && (
+          <div className="flex flex-col gap-0.5 w-full">
+            {isSwimming && (
+              <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider px-0.5">
+                <span className={stamina < 28 ? 'text-red-400 animate-pulse' : 'text-sky-300'}>
+                  {language === 'en' ? 'SWIM OXYGEN / STAMINA' : 'সাঁতার অক্সিজেন'}
+                </span>
+                <span className="font-mono text-sky-200">{Math.round(stamina)}%</span>
+              </div>
+            )}
+            <div className="w-full bg-slate-950/90 h-1.5 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  isSwimming
+                    ? stamina < 28
+                      ? 'bg-red-500 animate-pulse'
+                      : 'bg-sky-400'
+                    : 'bg-amber-400'
+                }`}
+                style={{
+                  width: `${Math.max(0, Math.min(100, stamina))}%`,
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

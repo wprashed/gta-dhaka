@@ -46,7 +46,7 @@ import {
 
 interface GameHUDProps {
   onTriggerAction: (
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare' | 'lights'
   ) => void;
 }
 
@@ -69,6 +69,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     currentVehicleSpeedKmh,
     currentVehicleHealth,
     currentVehicleMaxHealth,
+    currentVehicleFuel,
+    currentVehicleGear,
     currentDistrict,
     activeMissionId,
     activeMissionStepIndex,
@@ -903,6 +905,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                   📷
                 </button>
                 <button
+                  onClick={() => onTriggerAction('lights')}
+                  className="w-7 h-7 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-amber-300 flex items-center justify-center text-[11px] transition-all active:scale-90"
+                  title="Toggle Headlights [L]"
+                >
+                  💡
+                </button>
+                <button
                   onClick={() => onTriggerAction('interact')}
                   className="px-2.5 h-7 rounded-full bg-red-600/80 hover:bg-red-500 border border-red-400/50 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all active:scale-90"
                   title="Exit Vehicle [F]"
@@ -956,17 +965,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                       ? vehicleStats.nameEn
                       : vehicleStats.nameBn}
                   </p>
-                  <p className="text-[8px] text-slate-400 font-mono">
-                    [F] Exit • [H] Horn • [G] Fare
+                  <p className="text-[8px] text-slate-400 font-mono truncate">
+                    [F] Exit • [L] Lights • [G] Fare
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black font-mono text-white leading-none tabular-nums">
-                    {currentVehicleSpeedKmh}
+                <div className="text-right flex items-end gap-1.5">
+                  <span className="px-1 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9px] font-black font-mono text-emerald-400 leading-none mb-0.5">
+                    {currentVehicleGear}
                   </span>
-                  <span className="block text-[7px] font-bold text-amber-400 uppercase leading-none mt-0.5">
-                    KM/H
-                  </span>
+                  <div>
+                    <span className="text-2xl font-black font-mono text-white leading-none tabular-nums">
+                      {currentVehicleSpeedKmh}
+                    </span>
+                    <span className="block text-[7px] font-bold text-amber-400 uppercase leading-none mt-0.5">
+                      KM/H
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -990,32 +1004,75 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                 </div>
               </div>
 
-              {/* Radio Pill */}
-              <button
-                onClick={() => {
-                  const list: RadioStationId[] = [
-                    'dhaka_folk',
-                    'gully_beat',
-                    'hatirjheel_synth',
-                    'off',
-                  ];
-                  const next =
-                    list[(list.indexOf(radioStation) + 1) % list.length];
-                  setRadioStation(next);
-                }}
-                className="flex items-center justify-between text-[9px] text-amber-300 font-medium hover:text-white transition-colors pt-0.5"
-                title="Change Radio Station [R]"
-              >
-                <span className="flex items-center gap-1 truncate">
-                  <Radio className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                  <span className="truncate">
-                    {language === 'en'
-                      ? radioLabels[radioStation].en
-                      : radioLabels[radioStation].bn}
+              {/* Fuel / CNG Bar (motorized vehicles & boats) */}
+              {currentVehicleType !== 'rickshaw' && (
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`text-[7px] font-black uppercase tracking-wider shrink-0 ${
+                      currentVehicleFuel <= 18
+                        ? 'text-amber-400 animate-pulse'
+                        : 'text-sky-400'
+                    }`}
+                  >
+                    {currentVehicleType === 'boat'
+                      ? 'FUEL'
+                      : currentVehicleType === 'motorcycle'
+                      ? 'OCT'
+                      : currentVehicleType === 'bus' ||
+                        currentVehicleType === 'pickup'
+                      ? 'DSL'
+                      : 'CNG'}
                   </span>
-                </span>
-                <span className="text-[8px] text-slate-500 font-mono">[R]</span>
-              </button>
+                  <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden border border-slate-800">
+                    <div
+                      className={`h-full transition-all ${
+                        currentVehicleFuel <= 18
+                          ? 'bg-amber-400 animate-pulse'
+                          : 'bg-sky-400'
+                      }`}
+                      style={{
+                        width: `${Math.max(0, Math.min(100, currentVehicleFuel))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Radio & Headlights Pills */}
+              <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                <button
+                  onClick={() => {
+                    const list: RadioStationId[] = [
+                      'dhaka_folk',
+                      'gully_beat',
+                      'hatirjheel_synth',
+                      'off',
+                    ];
+                    const next =
+                      list[(list.indexOf(radioStation) + 1) % list.length];
+                    setRadioStation(next);
+                  }}
+                  className="flex-1 min-w-0 flex items-center justify-between text-[9px] text-amber-300 font-medium hover:text-white transition-colors"
+                  title="Change Radio Station [R]"
+                >
+                  <span className="flex items-center gap-1 truncate">
+                    <Radio className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                    <span className="truncate">
+                      {language === 'en'
+                        ? radioLabels[radioStation].en
+                        : radioLabels[radioStation].bn}
+                    </span>
+                  </span>
+                  <span className="text-[8px] text-slate-500 font-mono ml-1">[R]</span>
+                </button>
+                <button
+                  onClick={() => onTriggerAction('lights')}
+                  className="px-1.5 py-0.5 rounded bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-[8px] font-mono text-amber-300 shrink-0 transition-colors"
+                  title="Toggle Headlights [L]"
+                >
+                  💡[L]
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
@@ -1293,12 +1350,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
               </button>
             </div>
             <div className="space-y-2 max-h-72 overflow-y-auto">
+              {wantedLevel >= 3 && (
+                <div className="p-2.5 rounded-xl bg-red-950/70 border border-red-500/60 text-red-200 text-[11px] font-bold">
+                  🚨{' '}
+                  {language === 'en'
+                    ? 'MRT SECURITY LOCKDOWN: Clear Wanted ★3+ police heat before boarding Dhaka Metro!'
+                    : 'মেট্রোরেল নিরাপত্তা সতর্কতা: ★৩+ পুলিশ কেস থাকা অবস্থায় মেট্রোতে ওঠা নিষেধ!'}
+                </div>
+              )}
               {METRO_STATIONS.map((st) => {
                 const isHere = st.id === activeMetroModal;
+                const blockedByPolice = wantedLevel >= 3;
                 return (
                   <button
                     key={st.id}
-                    disabled={isHere}
+                    disabled={isHere || blockedByPolice}
                     onClick={() => {
                       if (spendTaka(st.fare, `Dhaka Metro Ticket -> ${st.nameEn}`, `মেট্রোরেল টিকিট -> ${st.nameBn}`)) {
                         requestTeleport(st.x, st.z);
@@ -1315,6 +1381,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                     className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-colors ${
                       isHere
                         ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 cursor-default'
+                        : blockedByPolice
+                        ? 'bg-slate-950/50 border-slate-800/60 text-slate-500 cursor-not-allowed opacity-60'
                         : 'bg-slate-950/85 hover:bg-slate-800 border-slate-800 text-white'
                     }`}
                   >

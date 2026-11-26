@@ -388,6 +388,12 @@ function fitCarAccents(
     tl.name = 'accent_taillight';
     tl.position.set(fit.tx * sx, fit.ty, fit.tz);
     carRoot.add(tl);
+
+    const turnMat = new THREE.MeshBasicMaterial({ color: '#451a03' });
+    const turn = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.09, 0.05), turnMat);
+    turn.name = sx < 0 ? 'accent_turn_left' : 'accent_turn_right';
+    turn.position.set(fit.tx * sx + sx * 0.22, fit.ty, fit.tz);
+    carRoot.add(turn);
   }
 
   if (isPolice) {
@@ -1625,11 +1631,13 @@ export function createVehicleMesh(
         new THREE.BoxGeometry(0.24, 0.28, 0.08),
         new THREE.MeshBasicMaterial({ color: '#ef4444' })
       );
+      brake.name = 'accent_taillight';
       brake.position.set(tx, 1.25, -4.44);
       const turn = new THREE.Mesh(
         new THREE.BoxGeometry(0.24, 0.16, 0.08),
-        new THREE.MeshBasicMaterial({ color: '#f59e0b' })
+        new THREE.MeshBasicMaterial({ color: '#451a03' })
       );
+      turn.name = tx < 0 ? 'accent_turn_left' : 'accent_turn_right';
       turn.position.set(tx, 0.98, -4.44);
       group.add(brake, turn);
     });
@@ -1881,6 +1889,7 @@ export function createVehicleMesh(
       new THREE.BoxGeometry(0.18, 0.06, 0.06),
       new THREE.MeshBasicMaterial({ color: '#ef4444' })
     );
+    tailLight.name = 'accent_taillight';
     tailLight.position.set(0, 0.74, -0.92);
     group.add(tailLight);
 
@@ -2618,6 +2627,7 @@ export interface CharacterLimbs {
     run?: THREE.AnimationAction;
   };
   currentActionName?: 'idle' | 'walk' | 'run';
+  umbrella?: THREE.Group;
   gltfRoot?: THREE.Object3D;
   rpmRig?: RpmBoneRig;
   driveRig?: RpmBoneRig;
@@ -3302,9 +3312,47 @@ const _axisY = new THREE.Vector3(0, 1, 0);
 const _axisZ = new THREE.Vector3(0, 0, 1);
 const _tmpQuat = new THREE.Quaternion();
 
+let sharedUmbrellaCanopyGeo: THREE.ConeGeometry | null = null;
+let sharedUmbrellaShaftGeo: THREE.CylinderGeometry | null = null;
+const UMBRELLA_PALETTES = ['#1e293b', '#0f766e', '#1d4ed8', '#7c2d12', '#4c1d95'];
+
+export function ensureNpcUmbrella(limbs: CharacterLimbs, visible: boolean, seed = 0) {
+  if (!limbs.umbrella) {
+    if (!visible) return;
+    if (!sharedUmbrellaCanopyGeo) {
+      sharedUmbrellaCanopyGeo = new THREE.ConeGeometry(0.58, 0.24, 10, 1, true);
+    }
+    if (!sharedUmbrellaShaftGeo) {
+      sharedUmbrellaShaftGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.85, 6);
+    }
+    const umbrella = new THREE.Group();
+    const color = UMBRELLA_PALETTES[Math.abs(Math.floor(seed)) % UMBRELLA_PALETTES.length];
+    const canopyMat = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.45,
+      side: THREE.DoubleSide,
+    });
+    const shaftMat = new THREE.MeshStandardMaterial({
+      color: '#94a3b8',
+      metalness: 0.7,
+      roughness: 0.35,
+    });
+    const canopy = new THREE.Mesh(sharedUmbrellaCanopyGeo, canopyMat);
+    canopy.position.y = 0.42;
+    const shaft = new THREE.Mesh(sharedUmbrellaShaftGeo, shaftMat);
+    shaft.position.y = 0.0;
+    umbrella.add(canopy, shaft);
+    umbrella.position.set(0.16, 1.72, 0.14);
+    umbrella.rotation.set(0.12, 0, -0.1);
+    limbs.group.add(umbrella);
+    limbs.umbrella = umbrella;
+  }
+  limbs.umbrella.visible = visible;
+}
+
 export function setCharacterAnimationState(
   limbs: CharacterLimbs,
-  targetState: 'idle' | 'walk' | 'run',
+  targetState: 'idle' | 'walk' | 'run' | 'swim',
   dt: number,
   attackTimer = 0,
   isAimingGun = false,
@@ -3336,12 +3384,13 @@ export function setCharacterAnimationState(
   // 1. Drive ReadyPlayerMe & Michelle 3D Human Skeleton Bones smoothly
   if (limbs.rpmRig) {
     const rig = limbs.rpmRig;
+    const isSwim = targetState === 'swim';
     const speed =
-      targetState === 'run' ? 14 : targetState === 'walk' ? 9 : 2.2;
+      isSwim ? 7.5 : targetState === 'run' ? 14 : targetState === 'walk' ? 9 : 2.2;
     rig.phase += dt * speed;
 
     const amp =
-      targetState === 'run' ? 0.65 : targetState === 'walk' ? 0.42 : 0.03;
+      isSwim ? 0.34 : targetState === 'run' ? 0.65 : targetState === 'walk' ? 0.42 : 0.03;
     const s = Math.sin(rig.phase) * amp;
 
     if (rig.leftUpLeg) {
@@ -3357,12 +3406,20 @@ export function setCharacterAnimationState(
         .multiply(_tmpQuat);
     }
     if (rig.leftLeg) {
-      const kneeBend = targetState === 'idle' ? 0 : -Math.max(0, -s) * 0.85;
+      const kneeBend = isSwim
+        ? -0.25 - Math.max(0, -s) * 0.45
+        : targetState === 'idle'
+        ? 0
+        : -Math.max(0, -s) * 0.85;
       _tmpQuat.setFromAxisAngle(_axisX, kneeBend);
       rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(_tmpQuat);
     }
     if (rig.rightLeg) {
-      const kneeBend = targetState === 'idle' ? 0 : -Math.max(0, s) * 0.85;
+      const kneeBend = isSwim
+        ? -0.25 - Math.max(0, s) * 0.45
+        : targetState === 'idle'
+        ? 0
+        : -Math.max(0, s) * 0.85;
       _tmpQuat.setFromAxisAngle(_axisX, kneeBend);
       rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(_tmpQuat);
     }
@@ -3378,7 +3435,9 @@ export function setCharacterAnimationState(
     }
     if (rig.spine) {
       const sprintLean =
-        targetState === 'run'
+        isSwim
+          ? 0.88 + Math.sin(rig.phase * 0.5) * 0.06
+          : targetState === 'run'
           ? 0.14
           : targetState === 'walk'
           ? 0.05
@@ -3387,8 +3446,13 @@ export function setCharacterAnimationState(
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
     }
     if (limbs.gltfRoot) {
+      limbs.gltfRoot.rotation.x = 0;
       limbs.gltfRoot.position.y =
-        targetState === 'idle' ? 0 : Math.abs(Math.sin(rig.phase)) * 0.025;
+        isSwim
+          ? 0.34 + Math.sin(rig.phase * 0.5) * 0.04
+          : targetState === 'idle'
+          ? 0
+          : Math.abs(Math.sin(rig.phase)) * 0.025;
     }
     if (rig.leftArm && rig.leftForeArm) {
       if (weaponCategory === 'rifle') {
@@ -3430,6 +3494,12 @@ export function setCharacterAnimationState(
           _tmpQuat.setFromAxisAngle(_axisZ, 0.65);
           rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
         }
+      } else if (isSwim) {
+        const stroke = Math.sin(rig.phase);
+        _tmpQuat.setFromAxisAngle(_axisZ, 0.72 + stroke * 0.55);
+        rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.42 - Math.max(0, stroke) * 0.45);
+        rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
       } else {
         _tmpQuat.setFromAxisAngle(_axisZ, -s * 0.7);
         rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat);
@@ -3446,7 +3516,13 @@ export function setCharacterAnimationState(
       }
     }
     if (rig.rightArm && rig.rightForeArm) {
-      if (weaponCategory === 'rifle') {
+      if (isSwim) {
+        const stroke = -Math.sin(rig.phase);
+        _tmpQuat.setFromAxisAngle(_axisZ, -0.72 - stroke * 0.55);
+        rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat);
+        _tmpQuat.setFromAxisAngle(_axisZ, 0.42 + Math.max(0, stroke) * 0.45);
+        rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+      } else if (weaponCategory === 'rifle') {
         const recoilKick = attackTimer > 0 ? Math.sin(attackTimer * 25) * 0.18 : 0;
         if (isAimingGun || attackTimer > 0) {
           _tmpQuat.setFromAxisAngle(_axisZ, -1.22 + recoilKick);
@@ -3531,17 +3607,23 @@ export function setCharacterAnimationState(
     }
   } else if (limbs.mixer && limbs.actions) {
     // 2. Drive native GLTF AnimationMixer for Soldier & mocap-retargeted humans
-    if (limbs.currentActionName !== targetState || !limbs.actions[targetState]?.isRunning()) {
+    const clipName: 'idle' | 'walk' | 'run' =
+      targetState === 'swim' ? 'walk' : targetState;
+    if (limbs.gltfRoot) {
+      limbs.gltfRoot.rotation.x = targetState === 'swim' ? 0.78 : 0;
+      limbs.gltfRoot.position.y = targetState === 'swim' ? 0.36 : 0;
+    }
+    if (limbs.currentActionName !== clipName || !limbs.actions[clipName]?.isRunning()) {
       const prev = limbs.currentActionName
         ? limbs.actions[limbs.currentActionName]
         : undefined;
-      const next = limbs.actions[targetState] || limbs.actions.idle;
+      const next = limbs.actions[clipName] || limbs.actions.idle;
       if (next) {
         next.reset().setEffectiveWeight(1.0).fadeIn(0.18).play();
         if (prev && prev !== next) {
           prev.fadeOut(0.18);
         }
-        limbs.currentActionName = targetState;
+        limbs.currentActionName = clipName;
       }
     }
     // Sync the gait to the character's real ground speed so the feet stop

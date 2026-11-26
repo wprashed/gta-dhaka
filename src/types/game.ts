@@ -79,6 +79,10 @@ export interface VehicleEntity {
   plateNumber: string;
   roadAxis?: 'ns' | 'ew';
   laneDirection?: 1 | -1;
+  fuel?: number;
+  waterSubmergeTimer?: number;
+  lowFuelWarned?: boolean;
+  wreckTimer?: number;
 }
 
 export type NPCRole =

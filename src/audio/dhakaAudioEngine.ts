@@ -30,8 +30,9 @@ class DhakaAudioEngine {
   private engineFilter: BiquadFilterNode | null = null;
   private rickshawClickInterval: number | null = null;
 
-  // Rain ambience nodes
+  // Rain & marine wake ambience nodes
   private rainGain: GainNode | null = null;
+  private boatWakeGain: GainNode | null = null;
   private isRaining = false;
 
   // Dhaka City Traffic Ambience (BGM) & Pedestrian Crowd Chatter
@@ -366,6 +367,24 @@ class DhakaAudioEngine {
     filter.connect(this.rainGain);
     this.rainGain.connect(this.ctx.destination);
     whiteNoise.start();
+
+    // Marine boat hull wake & water splash noise
+    const wakeSource = this.ctx.createBufferSource();
+    wakeSource.buffer = noiseBuffer;
+    wakeSource.loop = true;
+
+    const wakeFilter = this.ctx.createBiquadFilter();
+    wakeFilter.type = 'lowpass';
+    wakeFilter.frequency.value = 380;
+    wakeFilter.Q.value = 0.9;
+
+    this.boatWakeGain = this.ctx.createGain();
+    this.boatWakeGain.gain.value = 0;
+
+    wakeSource.connect(wakeFilter);
+    wakeFilter.connect(this.boatWakeGain);
+    this.boatWakeGain.connect(this.ctx.destination);
+    wakeSource.start();
   }
 
   public setRainActive(active: boolean) {
@@ -378,6 +397,11 @@ class DhakaAudioEngine {
   private startVehicleEngineLoops(type: VehicleType) {
     if (!this.ctx) return;
     this.stopVehicleEngineLoops();
+
+    // Boats use synthesized marine outboard + hull water wake instead of road car WAVs
+    if (type === "boat") {
+      return;
+    }
 
     let idleUrl = "/audio/engine_car_idle.wav";
     let revUrl: string | null = "/audio/engine_car_rev.wav";
@@ -472,6 +496,9 @@ class DhakaAudioEngine {
       this.lastVehicleSpeed = 0;
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
       this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      if (this.boatWakeGain) {
+        this.boatWakeGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
+      }
       if (this.rickshawClickInterval) {
         window.clearInterval(this.rickshawClickInterval);
         this.rickshawClickInterval = null;
@@ -492,6 +519,27 @@ class DhakaAudioEngine {
       this.playBufferOneShot("/audio/bus_air_brake.wav", 0.65);
     }
     this.lastVehicleSpeed = absSpeed;
+
+    if (this.boatWakeGain) {
+      const wakeTarget =
+        vehicleType === "boat"
+          ? (0.025 + absSpeed * 0.14) * this.sfxVolume
+          : 0;
+      this.boatWakeGain.gain.setTargetAtTime(wakeTarget, this.ctx.currentTime, 0.08);
+    }
+
+    if (vehicleType === "boat") {
+      // Dedicated Buriganga trawler / speedboat outboard rumble + hull splash
+      this.engineOsc.type = "triangle";
+      this.engineSubOsc.type = "sawtooth";
+      const freq = 36 + absSpeed * 88;
+      this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.08);
+      this.engineSubOsc.frequency.setTargetAtTime(freq * 0.5, this.ctx.currentTime, 0.08);
+      this.engineFilter.frequency.setTargetAtTime(220 + absSpeed * 280, this.ctx.currentTime, 0.09);
+      this.engineGain.gain.setTargetAtTime((0.06 + absSpeed * 0.04) * this.sfxVolume, this.ctx.currentTime, 0.08);
+      this.engineSubGain.gain.setTargetAtTime((0.04 + absSpeed * 0.025) * this.sfxVolume, this.ctx.currentTime, 0.08);
+      return;
+    }
 
     // If real recorded engine audio loop is active, update volume & pitch dynamics
     if (this.engineIdleGain && this.engineIdleSource) {
@@ -528,6 +576,9 @@ class DhakaAudioEngine {
     if (vehicleType === "rickshaw") {
       this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
       this.engineSubGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      if (this.boatWakeGain) {
+        this.boatWakeGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
+      }
       return;
     }
 
@@ -703,10 +754,55 @@ class DhakaAudioEngine {
       | 'bone_crack'
       | 'arterial_spray'
       | 'metro_chime'
+      | 'thunder'
   ) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+
+    if (effect === 'thunder') {
+      // Atmospheric rolling monsoon thunder (no car glass or metallic impact)
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(68, now);
+      subOsc.frequency.exponentialRampToValueAtTime(24, now + 1.6);
+      subGain.gain.setValueAtTime(0.01, now);
+      subGain.gain.linearRampToValueAtTime(0.42 * this.sfxVolume, now + 0.08);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.9);
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 1.95);
+
+      const dur = 2.2;
+      const bufSize = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      let lastOut = 0;
+      for (let i = 0; i < bufSize; i++) {
+        const white = Math.random() * 2 - 1;
+        lastOut = (lastOut + 0.04 * white) / 1.04;
+        const tSec = i / this.ctx.sampleRate;
+        const env =
+          (Math.exp(-tSec * 1.45) + 0.35 * Math.exp(-Math.pow((tSec - 0.65) * 3.0, 2))) *
+          Math.min(1, tSec * 14);
+        data[i] = lastOut * 3.2 * env;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(520, now);
+      lp.frequency.exponentialRampToValueAtTime(140, now + dur);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.55 * this.sfxVolume, now);
+      noise.connect(lp);
+      lp.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+      return;
+    }
 
     if (effect === 'crash') {
       // Realistic high-impact vehicular collision:

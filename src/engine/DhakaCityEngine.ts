@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import {
+  CNG_STATIONS,
   DISTRICTS,
+  MARINE_DOCKS,
   METRO_STATIONS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
+  SPEED_CAMERAS,
   STORY_MISSIONS,
+  STREET_ATMS,
   VEHICLE_STATS,
   PLAYABLE_CHARACTERS,
 } from '../data/dhakaWorldData';
@@ -24,6 +28,7 @@ import {
   createSketchfabAssetPropMesh,
   createStreetStallMesh,
   createVehicleMesh,
+  ensureNpcUmbrella,
   createFlyoverGantryTexture,
   createFobBillboardTexture,
   createStadiumScoreboardTexture,
@@ -154,6 +159,9 @@ export class DhakaCityEngine {
   private sunLight!: THREE.DirectionalLight;
   private headlightSpot!: THREE.SpotLight;
   private headlightTarget!: THREE.Object3D;
+  private heliSearchLight!: THREE.SpotLight;
+  private heliSearchTarget!: THREE.Object3D;
+  private policeNearby = false;
   private sky!: Sky;
   private sunPosition = new THREE.Vector3();
   private starField!: THREE.Points;
@@ -171,11 +179,42 @@ export class DhakaCityEngine {
   private lastMissionEnemyStepId: string | null = null;
   private vehicleSpeedBoostMap = new Map<string, number>();
   private groundRoadMat: THREE.MeshStandardMaterial | null = null;
-  private cngStationSpots: Array<{ x: number; z: number }> = [];
+  private cngStationSpots: Array<{ x: number; z: number; isMarine?: boolean }> = [];
+  private streetAtmSpots: Array<{ x: number; z: number; nameEn: string; nameBn: string }> = [];
+  private streetAtmCooldown = 0;
+  private speedCameraSpots: Array<{ x: number; z: number }> = [];
   private speedCameraCooldown = 0;
+  private patrolViolationCooldown = 0;
+  private playerTrafficHitCooldown = 0;
+  private fuelSputterCooldown = 0;
+  private headlightsManual: boolean | null = null;
+  private flashlightOn = false;
+  private fareMarkerGroup!: THREE.Group;
   private policeFireCooldown = 0;
   private isSwimming = false;
   private lightningTimer = 6.0;
+  private destructibleProps: Array<{
+    mesh: THREE.Object3D;
+    origX: number;
+    origZ: number;
+    x: number;
+    z: number;
+    vx: number;
+    vz: number;
+    vy: number;
+    hit: boolean;
+    life: number;
+  }> = [];
+  private streetLampStdMats: THREE.MeshStandardMaterial[] = [];
+  private streetLampBasicMats: THREE.MeshBasicMaterial[] = [];
+  private signalMaterials: {
+    nsRed: THREE.MeshBasicMaterial;
+    nsYellow: THREE.MeshBasicMaterial;
+    nsGreen: THREE.MeshBasicMaterial;
+    ewRed: THREE.MeshBasicMaterial;
+    ewYellow: THREE.MeshBasicMaterial;
+    ewGreen: THREE.MeshBasicMaterial;
+  } | null = null;
   private jfpInteractables: Array<{
     id: string;
     x: number;
@@ -420,6 +459,13 @@ export class DhakaCityEngine {
     this.scene.add(this.headlightTarget);
     this.headlightSpot.target = this.headlightTarget;
     this.scene.add(this.headlightSpot);
+
+    // Overhead RAB / DMP Searchlight SpotLight for Wanted ★4-5
+    this.heliSearchLight = new THREE.SpotLight('#e0f2fe', 0, 120, Math.PI / 7, 0.35, 1.0);
+    this.heliSearchTarget = new THREE.Object3D();
+    this.scene.add(this.heliSearchTarget);
+    this.heliSearchLight.target = this.heliSearchTarget;
+    this.scene.add(this.heliSearchLight);
 
     // Physically-Based Atmospheric Scattering Sky (Preetham / Rayleigh Model - No Fake Wallpaper Images)
     this.sky = new Sky();
@@ -1514,6 +1560,8 @@ export class DhakaCityEngine {
   public alertPedestriansAhead(x: number, z: number, rotation: number, range = 18) {
     const forwardX = Math.sin(rotation);
     const forwardZ = Math.cos(rotation);
+    const rightX = Math.cos(rotation);
+    const rightZ = -Math.sin(rotation);
     for (const npc of this.npcs) {
       if (npc.isDead || npc.isStoryNPC) continue;
       const dx = npc.x - x;
@@ -1526,6 +1574,24 @@ export class DhakaCityEngine {
           // Step aside onto the nearest footpath
           npc.walkTargetX = npc.x + (npc.x > 0 ? 8 : -8);
           npc.walkTargetZ = npc.z + (Math.random() - 0.5) * 6;
+        }
+      }
+    }
+    // Slow rickshaws and CNGs ahead yield slightly toward the curb on horn blast
+    for (const veh of this.vehicles) {
+      if (!veh.isTraffic || (veh.type !== 'rickshaw' && veh.type !== 'cng')) continue;
+      const dx = veh.x - x;
+      const dz = veh.z - z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 2 && dist < range + 6) {
+        const dot = (dx * forwardX + dz * forwardZ) / dist;
+        if (dot > 0.3) {
+          const yieldX = veh.x + rightX * 0.9;
+          const yieldZ = veh.z + rightZ * 0.9;
+          if (!this.checkWorldObstacle(yieldX, yieldZ, 1.0, veh.id, veh.y)) {
+            veh.x = clampWorldCoord(yieldX);
+            veh.z = clampWorldCoord(yieldZ);
+          }
         }
       }
     }
@@ -1659,12 +1725,20 @@ export class DhakaCityEngine {
       });
     }
 
-    // If it was traffic or had a driver, drop the driver out onto the street!
-    if (veh.isTraffic || hadDriver) {
+    // If it was traffic or had a driver on dry land, drop the driver out onto the street!
+    if ((veh.isTraffic || hadDriver) && veh.type !== 'boat') {
       const ejectSide = veh.type === 'bus' ? -2.2 : -1.6; // Driver door / side of bike
       const ejectAngle = veh.rotation + Math.PI / 2;
-      const dropX = clampWorldCoord(veh.x + Math.sin(ejectAngle) * ejectSide);
-      const dropZ = clampWorldCoord(veh.z + Math.cos(ejectAngle) * ejectSide);
+      let dropX = clampWorldCoord(veh.x + Math.sin(ejectAngle) * ejectSide);
+      let dropZ = clampWorldCoord(veh.z + Math.cos(ejectAngle) * ejectSide);
+      if (this.isPositionInWater(dropX, dropZ)) {
+        // Try opposite passenger side before giving up over water
+        dropX = clampWorldCoord(veh.x - Math.sin(ejectAngle) * ejectSide);
+        dropZ = clampWorldCoord(veh.z - Math.cos(ejectAngle) * ejectSide);
+      }
+      if (this.isPositionInWater(dropX, dropZ)) {
+        return;
+      }
 
       const droppedId = `ejected_driver_${Date.now()}_${Math.floor(Math.random() * 999)}`;
       const droppedNPC: NPCEntity = {
@@ -1778,8 +1852,12 @@ export class DhakaCityEngine {
     const stats = VEHICLE_STATS.police;
     const id = `veh_backup_${Date.now()}`;
     const offsetZ = Math.random() > 0.5 ? 85 : -85;
-    const x = Math.abs(this.playerPos.x) < 30 ? (Math.random() > 0.5 ? 4.5 : -4.5) : this.playerPos.x;
-    const z = clampWorldCoord(this.playerPos.z + offsetZ);
+    let x = Math.abs(this.playerPos.x) < 30 ? (Math.random() > 0.5 ? 4.5 : -4.5) : this.playerPos.x;
+    let z = clampWorldCoord(this.playerPos.z + offsetZ);
+    if (this.isPositionInWater(x, z)) {
+      x = 4.5;
+      z = -40;
+    }
     const spawnElev = this.getRoadElevation(x, z, this.playerPos.y);
     const entity: VehicleEntity = {
       id,
@@ -1795,6 +1873,7 @@ export class DhakaCityEngine {
       color: '#1e3a8a',
       isTraffic: true,
       isPolice: true,
+      fuel: 100,
       plateNumber: `ডিএমপি-${Math.floor(Math.random() * 80 + 10)}-${Math.floor(Math.random() * 8000 + 1000)}`,
     };
     this.vehicles.push(entity);
@@ -1839,6 +1918,7 @@ export class DhakaCityEngine {
       emissiveIntensity: 1.0,
       roughness: 0.2,
     });
+    this.streetLampStdMats.push(lampLightMat);
 
     // 1. First Buriganga Bridge (China-Bangladesh Friendship Bridge - Babubazar / Sadarghat Central Spine at X = 0)
     // Span: Z: 285 to 460 (Length 175m, Width 22m)
@@ -4969,6 +5049,7 @@ export class DhakaCityEngine {
     const lampLightMat = new THREE.MeshBasicMaterial({
       color: '#fef08a',
     });
+    this.streetLampBasicMats.push(lampLightMat);
 
     const flyoverX = 14;
     const flyoverW = 14.2;
@@ -5304,6 +5385,7 @@ export class DhakaCityEngine {
     });
     const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
     const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
+    this.streetLampBasicMats.push(lampLightMat);
 
     const flyoverZ = 240;
     const flyoverW = 14.2;
@@ -5526,6 +5608,7 @@ export class DhakaCityEngine {
     });
     const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
     const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
+    this.streetLampBasicMats.push(lampLightMat);
 
     const flyoverZ = -315;
     const flyoverW = 14.2;
@@ -9064,11 +9147,7 @@ export class DhakaCityEngine {
       metalness: 0.3,
       roughness: 0.45,
     });
-    const stationSpots: Array<[number, number, boolean]> = [
-      [24, 64, true], [-24, -70, false], [70, 130, true],
-      [150, 92, false], [-120, 118, true], [-200, -80, false],
-    ];
-    stationSpots.forEach(([sx, sz, blue]) => {
+    CNG_STATIONS.forEach(({ x: sx, z: sz, isBlue: blue }) => {
       this.cngStationSpots.push({ x: sx, z: sz });
       this.circleColliders.push({
         x: sx,
@@ -9104,6 +9183,157 @@ export class DhakaCityEngine {
       });
 
       this.scene.add(grp);
+    });
+
+    // 7. Visible Synchronized 3D Intersection Traffic Signals
+    const sigPoleMat = new THREE.MeshStandardMaterial({
+      color: '#334155',
+      metalness: 0.72,
+      roughness: 0.35,
+    });
+    const sigBoxMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      roughness: 0.4,
+    });
+    this.signalMaterials = {
+      nsRed: new THREE.MeshBasicMaterial({ color: '#ef4444' }),
+      nsYellow: new THREE.MeshBasicMaterial({ color: '#3f3f46' }),
+      nsGreen: new THREE.MeshBasicMaterial({ color: '#22c55e' }),
+      ewRed: new THREE.MeshBasicMaterial({ color: '#ef4444' }),
+      ewYellow: new THREE.MeshBasicMaterial({ color: '#3f3f46' }),
+      ewGreen: new THREE.MeshBasicMaterial({ color: '#22c55e' }),
+    };
+    const majorSignalX = [-170, 0, 220];
+    const majorSignalZ = [-175, 0, 175];
+    for (const ix of majorSignalX) {
+      for (const iz of majorSignalZ) {
+        if (ix === 0 && iz === 0) continue; // Keep Farmgate roundabout open
+        [
+          [ix + 11.2, iz + 11.2, 0],
+          [ix - 11.2, iz - 11.2, Math.PI],
+        ].forEach(([px, pz, rotY]) => {
+          const sigGrp = new THREE.Group();
+          sigGrp.position.set(px, 0, pz);
+          sigGrp.rotation.y = rotY;
+
+          const pole = new THREE.Mesh(this.cylCache(0.11, 0.14, 5.4, 8), sigPoleMat);
+          pole.position.y = 2.7;
+          const arm = new THREE.Mesh(this.boxCache(3.2, 0.12, 0.12), sigPoleMat);
+          arm.position.set(-1.5, 5.25, 0);
+          const housingNS = new THREE.Mesh(this.boxCache(0.45, 1.35, 0.38), sigBoxMat);
+          housingNS.position.set(-2.6, 4.95, 0);
+          const rNS = new THREE.Mesh(this.boxCache(0.24, 0.24, 0.42), this.signalMaterials!.nsRed);
+          rNS.position.set(-2.6, 5.36, 0);
+          const yNS = new THREE.Mesh(this.boxCache(0.24, 0.24, 0.42), this.signalMaterials!.nsYellow);
+          yNS.position.set(-2.6, 4.95, 0);
+          const gNS = new THREE.Mesh(this.boxCache(0.24, 0.24, 0.42), this.signalMaterials!.nsGreen);
+          gNS.position.set(-2.6, 4.54, 0);
+
+          const housingEW = new THREE.Mesh(this.boxCache(0.38, 1.35, 0.45), sigBoxMat);
+          housingEW.position.set(0.25, 4.45, 0);
+          const rEW = new THREE.Mesh(this.boxCache(0.42, 0.24, 0.24), this.signalMaterials!.ewRed);
+          rEW.position.set(0.25, 4.86, 0);
+          const yEW = new THREE.Mesh(this.boxCache(0.42, 0.24, 0.24), this.signalMaterials!.ewYellow);
+          yEW.position.set(0.25, 4.45, 0);
+          const gEW = new THREE.Mesh(this.boxCache(0.42, 0.24, 0.24), this.signalMaterials!.ewGreen);
+          gEW.position.set(0.25, 4.04, 0);
+
+          sigGrp.add(
+            pole,
+            arm,
+            housingNS,
+            rNS,
+            yNS,
+            gNS,
+            housingEW,
+            rEW,
+            yEW,
+            gEW
+          );
+          this.scene.add(sigGrp);
+        });
+      }
+    }
+
+    // 8. DMP Speed Camera Radar Poles across Major Corridors
+    const camLensMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
+    SPEED_CAMERAS.forEach(({ x: cx, y: cy, z: cz }) => {
+      this.speedCameraSpots.push({ x: cx, z: cz });
+      const camPole = new THREE.Group();
+      camPole.position.set(cx + 8.5, cy, cz);
+      const p = new THREE.Mesh(this.cylCache(0.09, 0.12, 5.2, 8), sigPoleMat);
+      p.position.y = 2.6;
+      const head = new THREE.Mesh(this.boxCache(0.65, 0.42, 0.55), sigBoxMat);
+      head.position.set(-0.35, 5.1, 0);
+      const lens = new THREE.Mesh(this.boxCache(0.22, 0.22, 0.6), camLensMat);
+      lens.position.set(-0.35, 5.1, 0);
+      camPole.add(p, head, lens);
+      this.scene.add(camPole);
+    });
+
+    // 9. Waterfront Marine Fuel Docks (Hatirjheel, Sadarghat, Dhanmondi Lake)
+    MARINE_DOCKS.forEach(({ x: mx, z: mz }) => {
+      this.cngStationSpots.push({ x: mx, z: mz, isMarine: true });
+      const dockPump = new THREE.Group();
+      dockPump.position.set(mx, 0.16, mz);
+      const body = new THREE.Mesh(this.boxCache(0.75, 1.35, 0.55), canopyGreenMat);
+      body.position.y = 0.68;
+      const top = new THREE.Mesh(this.boxCache(0.85, 0.25, 0.65), canopyBlueMat);
+      top.position.y = 1.45;
+      dockPump.add(body, top);
+      this.scene.add(dockPump);
+    });
+
+    // 10. Knockable Traffic Cones near Intersections & Speed Checkpoints
+    const coneMat = new THREE.MeshStandardMaterial({
+      color: '#f97316',
+      roughness: 0.5,
+    });
+    const coneBaseMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      roughness: 0.75,
+    });
+    const coneSpots: Array<[number, number]> = [
+      [11, -18], [-11, 18], [11, -92], [-11, -92],
+      [148, 22], [148, 28], [-164, 10], [212, -10],
+    ];
+    coneSpots.forEach(([cx, cz]) => {
+      const cGrp = new THREE.Group();
+      cGrp.position.set(cx, 0, cz);
+      const base = new THREE.Mesh(this.boxCache(0.45, 0.08, 0.45), coneBaseMat);
+      base.position.y = 0.04;
+      const cone = new THREE.Mesh(this.cylCache(0.05, 0.18, 0.65, 8), coneMat);
+      cone.position.y = 0.4;
+      cGrp.add(base, cone);
+      this.scene.add(cGrp);
+      this.destructibleProps.push({
+        mesh: cGrp,
+        origX: cx,
+        origZ: cz,
+        x: cx,
+        z: cz,
+        vx: 0,
+        vz: 0,
+        vy: 0,
+        hit: false,
+        life: 999,
+      });
+    });
+
+    // 11. Outdoor City ATM Booths (Farmgate, Motijheel, Gulshan)
+    const atmBodyMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.35, metalness: 0.5 });
+    const atmScreenMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
+    STREET_ATMS.forEach(({ x: ax, z: az, nameEn, nameBn }) => {
+      this.streetAtmSpots.push({ x: ax, z: az, nameEn, nameBn });
+      const atmGrp = new THREE.Group();
+      atmGrp.position.set(ax, 0, az);
+      const kiosk = new THREE.Mesh(this.boxCache(1.1, 2.2, 0.9), atmBodyMat);
+      kiosk.position.y = 1.1;
+      const screen = new THREE.Mesh(this.boxCache(0.6, 0.45, 0.94), atmScreenMat);
+      screen.position.y = 1.38;
+      atmGrp.add(kiosk, screen);
+      this.scene.add(atmGrp);
+      this.circleColliders.push({ x: ax, z: az, radius: 0.75, tag: 'street_atm' });
     });
   }
 
@@ -9615,6 +9845,28 @@ export class DhakaCityEngine {
     this.missionMarkerGroup.add(this.missionRingMesh);
 
     this.scene.add(this.missionMarkerGroup);
+
+    // Green Taxi / Boat Fare Destination Beacon
+    this.fareMarkerGroup = new THREE.Group();
+    const fareBeamGeo = new THREE.CylinderGeometry(1.1, 1.1, 26, 16, 1, true);
+    const fareBeamMat = new THREE.MeshBasicMaterial({
+      color: '#22c55e',
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const fareBeam = new THREE.Mesh(fareBeamGeo, fareBeamMat);
+    fareBeam.position.y = 13;
+    const fareRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.2, 3.0, 24),
+      new THREE.MeshBasicMaterial({ color: '#4ade80', side: THREE.DoubleSide })
+    );
+    fareRing.rotation.x = -Math.PI / 2;
+    fareRing.position.y = 0.2;
+    this.fareMarkerGroup.add(fareBeam, fareRing);
+    this.fareMarkerGroup.visible = false;
+    this.scene.add(this.fareMarkerGroup);
   }
 
   private setupRainParticles() {
@@ -9685,7 +9937,7 @@ export class DhakaCityEngine {
     if (store.gamePhase !== 'playing') return;
     dhakaAudio.init();
 
-    if (e.button === 2 && !this.activeVehicleId) {
+    if (e.button === 2 && !this.activeVehicleId && !this.isSwimming) {
       // Right Mouse Button: Enter Tactical Aim Mode (ADS / High-Ready)
       e.preventDefault();
       this.isAiming = true;
@@ -9694,7 +9946,7 @@ export class DhakaCityEngine {
     }
 
     if (e.button === 0) {
-      if (this.isAiming && !this.activeVehicleId) {
+      if (this.isAiming && !this.activeVehicleId && !this.isSwimming) {
         this.performMeleeAttack();
         return;
       }
@@ -9797,14 +10049,14 @@ export class DhakaCityEngine {
       Digit0: 9,
       Minus: 10,
     };
-    if (code in weaponHotkeyMap) {
+    if (!this.activeVehicleId && code in weaponHotkeyMap) {
       const targetWeapon = store.tools[weaponHotkeyMap[code]];
       if (targetWeapon) {
         store.equipTool(targetWeapon.id);
       }
       return;
     }
-    if (code === 'KeyQ') {
+    if (!this.activeVehicleId && code === 'KeyQ') {
       store.cycleTool(1);
       return;
     }
@@ -9830,7 +10082,7 @@ export class DhakaCityEngine {
       }
     }
 
-    if (code === 'KeyC' && !this.activeVehicleId) {
+    if (code === 'KeyC' && !this.activeVehicleId && !this.isSwimming) {
       this.isCrouching = !this.isCrouching;
     }
 
@@ -9840,15 +10092,17 @@ export class DhakaCityEngine {
 
     if (
       (code === 'KeyJ' || code === 'KeyK' || code === 'KeyX') &&
-      !this.activeVehicleId
+      !this.activeVehicleId &&
+      !this.isSwimming
     ) {
       this.performMeleeAttack();
     }
 
-    if (code === 'Space' && !this.activeVehicleId && this.isGrounded) {
+    if (code === 'Space' && !this.activeVehicleId && !this.isSwimming && this.isGrounded) {
       this.playerVelY = 8.2;
       this.isGrounded = false;
       this.isCrouching = false;
+      this.playerStamina = Math.max(0, this.playerStamina - 8);
       // Forward vault impulse clears low curbs, medians and vehicle bumpers
       const fX = Math.sin(this.playerRotation);
       const fZ = Math.cos(this.playerRotation);
@@ -9857,7 +10111,7 @@ export class DhakaCityEngine {
       dhakaAudio.playSfx('jump');
     }
 
-    if (code === 'KeyZ' && !this.activeVehicleId) {
+    if (code === 'KeyZ' && !this.activeVehicleId && !this.isSwimming) {
       this.isAiming = !this.isAiming;
       if (this.isAiming) {
         this.playerRotation = this.cameraYaw + Math.PI;
@@ -9868,6 +10122,41 @@ export class DhakaCityEngine {
       this.startRandomFareJob();
     }
 
+    if (code === 'KeyL') {
+      if (this.activeVehicleId) {
+        this.headlightsManual =
+          this.headlightsManual === null
+            ? true
+            : this.headlightsManual
+            ? false
+            : null;
+        const modeLabel =
+          this.headlightsManual === true
+            ? 'ON'
+            : this.headlightsManual === false
+            ? 'OFF'
+            : 'AUTO';
+        dhakaAudio.playSfx('ui');
+        store.showBanner({
+          titleEn: `HEADLIGHTS: ${modeLabel}`,
+          titleBn: `হেডলাইট: ${modeLabel}`,
+          subtitleEn: 'Press [L] to toggle headlights (On / Off / Auto).',
+          subtitleBn: 'হেডলাইট পরিবর্তন করতে [L] চাপুন।',
+          tone: 'blue',
+        });
+      } else if (!this.isSwimming) {
+        this.flashlightOn = !this.flashlightOn;
+        dhakaAudio.playSfx('ui');
+        store.showBanner({
+          titleEn: `FLASHLIGHT: ${this.flashlightOn ? 'ON' : 'OFF'}`,
+          titleBn: `টর্চলাইট: ${this.flashlightOn ? 'চালু' : 'বন্ধ'}`,
+          subtitleEn: 'Press [L] to toggle handheld flashlight.',
+          subtitleBn: 'টর্চলাইট চালু/বন্ধ করতে [L] চাপুন।',
+          tone: 'blue',
+        });
+      }
+    }
+
     if (code === 'KeyR') {
       if (this.activeVehicleId) {
         const stations: Array<
@@ -9876,15 +10165,17 @@ export class DhakaCityEngine {
         const next =
           stations[(stations.indexOf(store.radioStation) + 1) % stations.length];
         store.setRadioStation(next);
-      } else {
+      } else if (!this.isSwimming && this.fireCooldown <= 0) {
         const activeTool = store.tools.find((t) => t.id === store.equippedToolId);
         const reloaded = store.reloadCurrentWeapon();
         if (reloaded && activeTool) {
+          this.fireCooldown = 1.15;
+          this.attackAnimTimer = 0.45;
           store.showBanner({
-            titleEn: 'WEAPON RELOADED',
-            titleBn: 'অস্ত্র রিলোড সম্পন্ন',
-            subtitleEn: `${activeTool.nameEn}: Fresh clip ready.`,
-            subtitleBn: `${activeTool.nameBn}: তাজা ম্যাগাজিন প্রস্তুত।`,
+            titleEn: 'RELOADING...',
+            titleBn: 'অস্ত্র রিলোড হচ্ছে...',
+            subtitleEn: `${activeTool.nameEn}: Swapping fresh clip (1.1s).`,
+            subtitleBn: `${activeTool.nameBn}: নতুন ম্যাগাজিন লোড হচ্ছে।`,
             tone: 'blue',
           });
         }
@@ -9897,11 +10188,21 @@ export class DhakaCityEngine {
   };
 
   public triggerTouchAction(
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare' | 'lights'
   ) {
     dhakaAudio.init();
     if (action === 'fare' && this.activeVehicleId) {
       this.startRandomFareJob();
+      return;
+    }
+    if (action === 'lights' && this.activeVehicleId) {
+      this.headlightsManual =
+        this.headlightsManual === null
+          ? true
+          : this.headlightsManual
+          ? false
+          : null;
+      dhakaAudio.playSfx('ui');
       return;
     }
     if (action === 'interact') {
@@ -9917,10 +10218,11 @@ export class DhakaCityEngine {
         dhakaAudio.playHorn('bell');
       }
     }
-    if (action === 'attack') this.performMeleeAttack();
-    if (action === 'jump' && !this.activeVehicleId && this.isGrounded) {
+    if (action === 'attack' && !this.isSwimming) this.performMeleeAttack();
+    if (action === 'jump' && !this.activeVehicleId && !this.isSwimming && this.isGrounded) {
       this.playerVelY = 8.2;
       this.isGrounded = false;
+      this.playerStamina = Math.max(0, this.playerStamina - 8);
       const fX = Math.sin(this.playerRotation);
       const fZ = Math.cos(this.playerRotation);
       this.playerPos.x += fX * 0.35;
@@ -10014,7 +10316,7 @@ export class DhakaCityEngine {
   }
 
   private performMeleeAttack() {
-    if (this.fireCooldown > 0) return;
+    if (this.fireCooldown > 0 || this.isSwimming) return;
 
     const store = useGameStore.getState();
     const tool =
@@ -10061,6 +10363,22 @@ export class DhakaCityEngine {
         dhakaAudio.playSfx('rifle');
       } else {
         dhakaAudio.playSfx('gunshot');
+      }
+
+      const firedInsideJfp =
+        this.playerPos.x >= this.jfpCenter.x - 56 &&
+        this.playerPos.x <= this.jfpCenter.x + 56 &&
+        this.playerPos.z >= this.jfpCenter.z - 36 &&
+        this.playerPos.z <= this.jfpCenter.z + 36;
+      if (firedInsideJfp && store.wantedLevel < 2) {
+        store.setWantedLevel(2);
+        store.showBanner({
+          titleEn: '🚨 JFP MALL SECURITY ALERT!',
+          titleBn: '🚨 যমুনা ফিউচার পার্ক নিরাপত্তা সতর্কতা!',
+          subtitleEn: 'Gunfire inside Jamuna Future Park triggered DMP response!',
+          subtitleBn: 'শপিং মলের ভেতরে গুলির শব্দে পুলিশ তল্লাশি শুরু হয়েছে!',
+          tone: 'red',
+        });
       }
 
       const muzzleX =
@@ -10301,6 +10619,30 @@ export class DhakaCityEngine {
   private handlePrimaryInteraction(preferVehicle: boolean) {
     const store = useGameStore.getState();
 
+    // 0. If seated inside vehicle near a CNG/Marine Fuel pump and pressing [E], refuel in place!
+    if (this.activeVehicleId && !preferVehicle) {
+      const curVeh = this.vehicles.find((v) => v.id === this.activeVehicleId);
+      const nearStation = this.cngStationSpots.find(
+        (cs) => Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
+      );
+      if (curVeh && nearStation && curVeh.type !== 'rickshaw') {
+        if (store.spendTaka(100, nearStation.isMarine ? 'Marine Fuel Dock Refuel' : 'CNG Station Refuel & Tune-Up', 'জ্বালানি ও সার্ভিস')) {
+          curVeh.health = curVeh.maxHealth;
+          curVeh.fuel = 100;
+          curVeh.lowFuelWarned = false;
+          dhakaAudio.playSfx('pickup');
+          store.showBanner({
+            titleEn: nearStation.isMarine ? '⚓ PIER FUEL: FULL TANK & HULL REPAIRED!' : '⛽ CNG STATION: FULL TANK & VEHICLE RESTORED!',
+            titleBn: nearStation.isMarine ? '⚓ ঘাট ফুয়েল: ফুল ট্যাংক ও নৌকা মেরামত সম্পন্ন!' : '⛽ সিএনজি পাম্প: ফুল গ্যাস ও গাড়ি সার্ভিস সম্পন্ন!',
+            subtitleEn: 'Refueled and restored to 100% condition.',
+            subtitleBn: 'জ্বালানি ভরা ও ১০০% মেরামত সম্পন্ন হয়েছে।',
+            tone: 'green',
+          });
+          return;
+        }
+      }
+    }
+
     // 1. Safe Vehicle Exit
     if (this.activeVehicleId) {
       this.exitCurrentVehicle();
@@ -10347,7 +10689,11 @@ export class DhakaCityEngine {
             (v) => v.health > 0 && Math.hypot(v.x - cs.x, v.z - cs.z) < 12
           );
           if (store.spendTaka(100, 'CNG Station Refuel & Tune-Up', 'সিএনজি স্টেশন রিফুয়েল ও সার্ভিস')) {
-            if (nearVeh) nearVeh.health = nearVeh.maxHealth;
+            if (nearVeh) {
+              nearVeh.health = nearVeh.maxHealth;
+              nearVeh.fuel = 100;
+              nearVeh.lowFuelWarned = false;
+            }
             this.playerStamina = 100;
             dhakaAudio.playSfx('pickup');
             store.showBanner({
@@ -10361,13 +10707,42 @@ export class DhakaCityEngine {
           return;
         }
       }
+      // 2.7 Check Outdoor Street ATM Booth
+      for (const atm of this.streetAtmSpots) {
+        const d = Math.hypot(atm.x - this.playerPos.x, atm.z - this.playerPos.z);
+        if (d < 4.5) {
+          if (this.streetAtmCooldown > 0) {
+            dhakaAudio.playSfx('ui');
+            store.showBanner({
+              titleEn: 'ATM TRANSACTION LIMIT REACHED',
+              titleBn: 'এটিএম লেনদেন সীমা পূর্ণ হয়েছে',
+              subtitleEn: `Please wait ${Math.ceil(this.streetAtmCooldown)}s before next withdrawal.`,
+              subtitleBn: `পরবর্তী লেনদেনের জন্য ${Math.ceil(this.streetAtmCooldown)} সেকেন্ড অপেক্ষা করুন।`,
+              tone: 'blue',
+            });
+          } else {
+            this.streetAtmCooldown = 25;
+            store.addTaka(500, `${atm.nameEn} Cash Withdrawal`, `${atm.nameBn} থেকে নগদ উত্তোলন`);
+            store.showBanner({
+              titleEn: `🏧 ${atm.nameEn.toUpperCase()}: +৳500`,
+              titleBn: `🏧 ${atm.nameBn}: +৳৫০০ উত্তোলন সম্পন্ন`,
+              subtitleEn: 'Mobile banking cash withdrawn safely.',
+              subtitleBn: 'ব্যাংক কার্ড থেকে নগদ টাকা উত্তোলন সফল হয়েছে।',
+              rewardTaka: 500,
+              tone: 'green',
+            });
+          }
+          return;
+        }
+      }
     }
 
-    // 3. Find closest Operational Vehicle to Enter
+    // 3. Find closest Operational Vehicle on same elevation deck to Enter
     let closestVeh: VehicleEntity | null = null;
     let bestDist = 5.8;
     for (const v of this.vehicles) {
-      if (v.health <= 0) continue;
+      if (v.health <= 0 || v.y < -1.0) continue;
+      if (Math.abs(v.y - this.playerPos.y) > 2.6 && !(v.type === 'boat' && this.isSwimming)) continue;
       const d = Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z);
       if (d < bestDist) {
         bestDist = d;
@@ -10378,8 +10753,12 @@ export class DhakaCityEngine {
     if (closestVeh) {
       this.ejectDriverFromVehicle(closestVeh);
 
+      this.isSwimming = false;
+      this.isCrouching = false;
+      this.isAiming = false;
       this.activeVehicleId = closestVeh.id;
       closestVeh.isTraffic = false;
+      this.playerLimbs.group.rotation.set(0, 0, 0);
       const mesh = this.vehicleMeshes.get(closestVeh.id);
       if (mesh) {
         (mesh as any).isPlayerDriven = true;
@@ -10769,21 +11148,33 @@ export class DhakaCityEngine {
       }
       spawnX = best.x;
       spawnZ = best.z;
-      this.playerPos.set(spawnX, 0.45, spawnZ);
-      this.playerLimbs.group.position.copy(this.playerPos);
-    } else if (this.checkWorldObstacle(spawnX, spawnZ, vehRadius)) {
+    } else if (
+      this.isPositionInWater(spawnX, spawnZ) ||
+      this.checkWorldObstacle(spawnX, spawnZ, vehRadius, null, this.playerPos.y)
+    ) {
       const candidates = [
         [3.5, 0], [-3.5, 0], [0, 3.5], [0, -3.5],
-        [3, 3], [-3, 3], [3, -3], [-3, -3],
+        [4.5, 4.5], [-4.5, 4.5], [4.5, -4.5], [-4.5, -4.5],
+        [7.0, 0], [-7.0, 0], [0, 7.0], [0, -7.0],
       ];
+      let placed = false;
       for (const [ox, oz] of candidates) {
         const tx = this.playerPos.x + ox;
         const tz = this.playerPos.z + oz;
-        if (!this.checkWorldObstacle(tx, tz, vehRadius)) {
+        if (
+          !this.isPositionInWater(tx, tz) &&
+          !this.checkWorldObstacle(tx, tz, vehRadius, null, this.playerPos.y)
+        ) {
           spawnX = tx;
           spawnZ = tz;
+          placed = true;
           break;
         }
+      }
+      if (!placed && this.isPositionInWater(spawnX, spawnZ)) {
+        // Fallback onto Farmgate dry curb if player summoned a land vehicle far offshore
+        spawnX = 6;
+        spawnZ = 16;
       }
     }
 
@@ -10802,6 +11193,7 @@ export class DhakaCityEngine {
       color: type === 'cng' ? '#15803d' : type === 'boat' ? '#0284c7' : '#f59e0b',
       isTraffic: false,
       isPolice: type === 'police',
+      fuel: 100,
       plateNumber: `ঢাকা মেট্রো-গ ৯৯-${Math.floor(1000 + Math.random() * 8999)}`,
     };
     this.vehicles.push(entity);
@@ -10811,6 +11203,20 @@ export class DhakaCityEngine {
     mesh.rotation.y = entity.rotation;
     this.scene.add(mesh);
     this.vehicleMeshes.set(id, mesh);
+
+    if (type === 'boat') {
+      // Automatically place player at the helm of the summoned boat instead of dropping on open water
+      this.activeVehicleId = id;
+      this.isSwimming = false;
+      this.isCrouching = false;
+      mesh.add(this.playerLimbs.group);
+      this.playerPos.set(spawnX, spawnElev, spawnZ);
+      this.cameraYaw = entity.rotation + Math.PI;
+      useGameStore.setState({
+        inVehicleId: id,
+        currentVehicleType: 'boat',
+      });
+    }
   }
 
   public startRandomFareJob() {
@@ -10826,23 +11232,52 @@ export class DhakaCityEngine {
       });
       return;
     }
-    const destinations = [
-      { nameEn: 'Jamuna Future Park Plaza', nameBn: 'যমুনা ফিউচার পার্ক গেট', x: 516, z: -333 },
-      { nameEn: 'Sadarghat River Terminal', nameBn: 'সদরঘাট লঞ্চ টার্মিনাল', x: 0, z: 295 },
-      { nameEn: 'Gulshan-2 Circle', nameBn: 'গুলশান-২ সার্কেল', x: 220, z: -175 },
-      { nameEn: 'Motijheel Shapla Chattar', nameBn: 'মতিঝিল শাপলা চত্বর', x: 220, z: 175 },
-      { nameEn: 'Dhanmondi Lake Side', nameBn: 'ধানমন্ডি লেক', x: -170, z: 10 },
-      { nameEn: 'Uttara North Metro Hub', nameBn: 'উত্তরা নর্থ মেট্রো স্টেশন', x: -16, z: -530 },
-    ].filter((d) => Math.hypot(d.x - this.playerPos.x, d.z - this.playerPos.z) > 120);
-    const dest = destinations[Math.floor(Math.random() * destinations.length)] || destinations[0];
+
+    const activeVeh = this.activeVehicleId
+      ? this.vehicles.find((v) => v.id === this.activeVehicleId)
+      : null;
+    if (!activeVeh) return;
+
+    if (activeVeh.type === 'police') {
+      dhakaAudio.playSfx('ui');
+      store.showBanner({
+        titleEn: 'DMP PATROL CRUISER — TAXI FARES DISABLED',
+        titleBn: 'পুলিশের গাড়িতে যাত্রী পরিবহন সম্ভব নয়',
+        subtitleEn: 'Switch to a CNG, rickshaw, car, bike, or boat for fares.',
+        subtitleBn: 'ভাড়া নিতে সিএনজি, রিকশা, কার, বাইক বা নৌকা ব্যবহার করুন।',
+        tone: 'red',
+      });
+      return;
+    }
+
+    const isBoat = activeVeh.type === 'boat';
+    const rawDestList = isBoat
+      ? [
+          { nameEn: 'Sadarghat River Terminal', nameBn: 'সদরঘাট লঞ্চ টার্মিনাল', x: 20, z: 320 },
+          { nameEn: 'Hatirjheel Amphitheater Pier', nameBn: 'হাতিরঝিল বোট জেটি', x: 200, z: -14 },
+          { nameEn: 'Dhanmondi Lake Pier', nameBn: 'ধানমন্ডি লেক ঘাট', x: -215, z: 25 },
+        ]
+      : [
+          { nameEn: 'Jamuna Future Park Plaza', nameBn: 'যমুনা ফিউচার পার্ক গেট', x: 516, z: -333 },
+          { nameEn: 'Sadarghat River Terminal', nameBn: 'সদরঘাট লঞ্চ টার্মিনাল', x: 0, z: 295 },
+          { nameEn: 'Gulshan-2 Circle', nameBn: 'গুলশান-২ সার্কেল', x: 220, z: -175 },
+          { nameEn: 'Motijheel Shapla Chattar', nameBn: 'মতিঝিল শাপলা চত্বর', x: 220, z: 175 },
+          { nameEn: 'Dhanmondi Lake Side', nameBn: 'ধানমন্ডি লেক', x: -170, z: 10 },
+          { nameEn: 'Uttara North Metro Hub', nameBn: 'উত্তরা নর্থ মেট্রো স্টেশন', x: -16, z: -530 },
+        ];
+    const destinations = rawDestList.filter(
+      (d) => Math.hypot(d.x - this.playerPos.x, d.z - this.playerPos.z) > 100
+    );
+    const dest = destinations[Math.floor(Math.random() * destinations.length)] || rawDestList[0];
     const dist = Math.hypot(dest.x - this.playerPos.x, dest.z - this.playerPos.z);
-    const reward = Math.max(450, Math.round((dist * 1.4) / 50) * 50);
-    const timeLeft = Math.max(55, Math.round(dist * 0.22));
-    dhakaAudio.playHorn('cng');
+    const arifBonus = store.selectedCharacterId === 'arif' ? 1.15 : 1.0;
+    const reward = Math.max(450, Math.round(((dist * 1.4 * arifBonus) / 50)) * 50);
+    const timeLeft = Math.max(55, Math.round(dist * (isBoat ? 0.28 : 0.22)));
+    dhakaAudio.playHorn(VEHICLE_STATS[activeVeh.type].hornType);
     store.startFareJob({
       id: `fare_${Date.now()}`,
-      passengerNameEn: 'Dhaka Commuter',
-      passengerNameBn: 'ঢাকার যাত্রী',
+      passengerNameEn: isBoat ? 'River Commuter' : 'Dhaka Commuter',
+      passengerNameBn: isBoat ? 'নদীপথ যাত্রী' : 'ঢাকার যাত্রী',
       dropNameEn: dest.nameEn,
       dropNameBn: dest.nameBn,
       dropX: dest.x,
@@ -10851,10 +11286,12 @@ export class DhakaCityEngine {
       timeLeft,
     });
     store.showBanner({
-      titleEn: `🚕 NEW PASSENGER FARE: TO ${dest.nameEn.toUpperCase()}`,
-      titleBn: `🚕 নতুন ভাড়া: ${dest.nameBn}`,
-      subtitleEn: `Drive to the green radar marker within ${timeLeft}s for ৳${reward}!`,
-      subtitleBn: `${timeLeft} সেকেন্ডের মধ্যে পৌঁছে দিলে পাবেন ৳${reward}!`,
+      titleEn: isBoat
+        ? `⛵ WATER-TAXI FARE: TO ${dest.nameEn.toUpperCase()}`
+        : `🚕 NEW PASSENGER FARE: TO ${dest.nameEn.toUpperCase()}`,
+      titleBn: isBoat ? `⛵ নৌ-ট্যাক্সি ভাড়া: ${dest.nameBn}` : `🚕 নতুন ভাড়া: ${dest.nameBn}`,
+      subtitleEn: `Reach the green beacon within ${timeLeft}s for ৳${reward}!`,
+      subtitleBn: `${timeLeft} সেকেন্ডের মধ্যে সবুজ মার্কারে পৌঁছান — ৳${reward}!`,
       tone: 'green',
     });
   }
@@ -10992,7 +11429,11 @@ export class DhakaCityEngine {
         this.vehicles.find(
           (v) => Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 8
         );
-      if (targetVeh) targetVeh.health = targetVeh.maxHealth;
+      if (targetVeh) {
+        targetVeh.health = targetVeh.maxHealth;
+        targetVeh.fuel = 100;
+        targetVeh.lowFuelWarned = false;
+      }
       store.clearEngineRequests();
     }
     if (store.resprayVehicleRequest) {
@@ -11009,13 +11450,40 @@ export class DhakaCityEngine {
         const vMesh = this.vehicleMeshes.get(targetVeh.id);
         if (vMesh) {
           vMesh.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const m = child as THREE.Mesh;
-              const mat = m.material as THREE.MeshPhysicalMaterial;
-              if (mat && mat.clearcoat && mat.clearcoat > 0.4) {
-                mat.color.set(newColor);
-              }
+            if (!(child as THREE.Mesh).isMesh) return;
+            const m = child as THREE.Mesh;
+            if (
+              m.name === 'wheel' ||
+              m.name === 'contact_shadow' ||
+              m.name.startsWith('accent_') ||
+              m.name.startsWith('siren_') ||
+              m.name.includes('driver')
+            ) {
+              return;
             }
+            const mat = m.material as THREE.MeshPhysicalMaterial | THREE.MeshStandardMaterial;
+            if (!mat || Array.isArray(mat) || !('color' in mat)) return;
+            if ('clearcoat' in mat && (mat as THREE.MeshPhysicalMaterial).clearcoat > 0.4) {
+              mat.color.set(newColor);
+            } else if (
+              !mat.map &&
+              !mat.transparent &&
+              mat.opacity >= 0.95 &&
+              (mat.metalness ?? 0) <= 0.78 &&
+              (mat.color.r > 0.14 || mat.color.g > 0.14 || mat.color.b > 0.14)
+            ) {
+              mat.color.set(newColor);
+            }
+          });
+        }
+        if (store.wantedLevel > 0) {
+          store.setWantedLevel(0);
+          store.showBanner({
+            titleEn: '🎨 PAY & SPRAY: VEHICLE PAINTED — WANTED CLEARED!',
+            titleBn: '🎨 গ্যারেজ রঙ সম্পন্ন — পুলিশ কেস মুছে গেছে!',
+            subtitleEn: 'Fresh paint threw off DMP patrol units.',
+            subtitleBn: 'গাড়ির নতুন রঙ করায় পুলিশ আপনাকে আর চিনতে পারছে না!',
+            tone: 'green',
           });
         }
       }
@@ -11053,6 +11521,10 @@ export class DhakaCityEngine {
       this.playerLimbs.group.rotation.x = 0;
       this.playerLimbs.group.rotation.z = 0;
       this.isGrounded = true;
+      this.isSwimming = false;
+      this.isCrouching = false;
+      this.isAiming = false;
+      this.playerStamina = 100;
       this.playerVelY = 0;
       if (this.activeVehicleId) {
         const v = this.vehicles.find((veh) => veh.id === this.activeVehicleId);
@@ -11061,8 +11533,12 @@ export class DhakaCityEngine {
           v.y = targetElev;
           v.z = z;
           v.speed = 0;
+          v.waterSubmergeTimer = 0;
           const vMesh = this.vehicleMeshes.get(v.id);
-          if (vMesh) vMesh.position.set(x, targetElev, z);
+          if (vMesh) {
+            vMesh.position.set(x, targetElev, z);
+            vMesh.rotation.x = 0;
+          }
         }
       }
       store.clearEngineRequests();
@@ -11091,7 +11567,7 @@ export class DhakaCityEngine {
     if (store.gamePhase === 'playing') {
       this.worldClockTimer += dt;
       if (this.worldClockTimer >= 0.22) {
-        store.tickWorldClock(this.worldClockTimer);
+        store.tickWorldClock(this.worldClockTimer, this.policeNearby);
         this.worldClockTimer = 0;
       }
 
@@ -11158,9 +11634,11 @@ export class DhakaCityEngine {
       this.playerLimbs.group.rotation.y = this.playerRotation;
     }
 
-    // Gentle natural wind sway for nearby Dhaka tree foliage canopies (within 85m of player)
+    // Wind sway for nearby Dhaka tree foliage canopies (stronger gusting in monsoon rain)
     if (this.treeCanopies.length > 0) {
-      const windTime = this.clock.getElapsedTime();
+      const isMonsoon = store.weather === 'monsoon_rain';
+      const windTime = this.clock.getElapsedTime() * (isMonsoon ? 2.1 : 1.0);
+      const windAmp = isMonsoon ? 2.3 : 1.0;
       const px = this.playerPos.x;
       const pz = this.playerPos.z;
       for (let i = 0; i < this.treeCanopies.length; i++) {
@@ -11169,8 +11647,8 @@ export class DhakaCityEngine {
           continue;
         }
         const phase = i * 0.42;
-        canopy.rotation.x = Math.sin(windTime * 1.5 + phase) * 0.024;
-        canopy.rotation.z = Math.cos(windTime * 1.2 + phase) * 0.020;
+        canopy.rotation.x = Math.sin(windTime * 1.5 + phase) * 0.024 * windAmp;
+        canopy.rotation.z = Math.cos(windTime * 1.2 + phase) * 0.020 * windAmp;
       }
     }
 
@@ -11335,10 +11813,11 @@ export class DhakaCityEngine {
         }
       }
 
-      // 2. Check Vehicle & Driver Hit
+      // 2. Check Vehicle & Driver Hit (3D elevation-aware)
       if (!hitSomething) {
         for (const veh of this.vehicles) {
-          if (veh.id === this.activeVehicleId) continue;
+          if (veh.id === this.activeVehicleId || veh.y < -1.0) continue;
+          if (Math.abs(ny - (veh.y + 0.9)) > 2.2) continue;
 
           let t = 0;
           if (segLenSq > 0.0001) {
@@ -11443,8 +11922,8 @@ export class DhakaCityEngine {
         }
       }
 
-      // 3. Check Building Obstacle Hit (Sparks, Concrete Dust, Bullet Hole Decal, Ricochet)
-      if (!hitSomething && this.checkWorldObstacle(nx, nz, 0.2)) {
+      // 3. Check Building Obstacle Hit (3D elevation-aware)
+      if (!hitSomething && this.checkWorldObstacle(nx, nz, 0.2, null, ny)) {
         this.spawnImpactSparks(nx, ny, nz, '#fde047', 0.9);
         this.spawnConcreteDust(nx, ny, nz);
         this.spawnBulletHole(nx, ny, nz);
@@ -11913,7 +12392,7 @@ export class DhakaCityEngine {
       sMat.visible = sMat.opacity > 0.01;
     }
 
-    // Dynamic night window illumination on commercial towers & glass skyscrapers
+    // Dynamic night window illumination & streetlamp switching
     const nightWindowGlow = isNight ? 1.55 : isGolden ? 0.65 : 0.0;
     for (let i = 0; i < this.buildingEmissiveMats.length; i++) {
       this.buildingEmissiveMats[i].emissiveIntensity = THREE.MathUtils.lerp(
@@ -11921,6 +12400,37 @@ export class DhakaCityEngine {
         nightWindowGlow,
         dt * 2.8
       );
+    }
+    const lampLit = isNight || isRain || isGolden;
+    const stdLampIntensity = isNight ? 1.45 : isRain ? 1.05 : isGolden ? 0.75 : 0.06;
+    for (let i = 0; i < this.streetLampStdMats.length; i++) {
+      this.streetLampStdMats[i].emissiveIntensity = THREE.MathUtils.lerp(
+        this.streetLampStdMats[i].emissiveIntensity,
+        stdLampIntensity,
+        dt * 3.0
+      );
+    }
+    for (let i = 0; i < this.streetLampBasicMats.length; i++) {
+      this.streetLampBasicMats[i].color.set(lampLit ? '#fef08a' : '#475569');
+    }
+    const hatirTargetIntensity = isNight ? 2.8 : isRain || isGolden ? 1.6 : 0;
+    for (let i = 0; i < this.hatirjheelLights.length; i++) {
+      this.hatirjheelLights[i].intensity = hatirTargetIntensity;
+    }
+
+    // Sync visible 3D intersection traffic signal heads with AI 16s sigCycle
+    if (this.signalMaterials) {
+      const sigCycle = (performance.now() * 0.001) % 16;
+      const nsGreen = sigCycle < 7.0;
+      const nsYellow = sigCycle >= 7.0 && sigCycle < 8.0;
+      const ewGreen = sigCycle >= 8.0 && sigCycle < 15.0;
+      const ewYellow = sigCycle >= 15.0;
+      this.signalMaterials.nsGreen.color.set(nsGreen ? '#22c55e' : '#14532d');
+      this.signalMaterials.nsYellow.color.set(nsYellow ? '#facc15' : '#422006');
+      this.signalMaterials.nsRed.color.set(!nsGreen && !nsYellow ? '#ef4444' : '#450a0a');
+      this.signalMaterials.ewGreen.color.set(ewGreen ? '#22c55e' : '#14532d');
+      this.signalMaterials.ewYellow.color.set(ewYellow ? '#facc15' : '#422006');
+      this.signalMaterials.ewRed.color.set(!ewGreen && !ewYellow ? '#ef4444' : '#450a0a');
     }
 
     // Lift the shadow floor at night so wet asphalt keeps some detail instead
@@ -11959,13 +12469,41 @@ export class DhakaCityEngine {
         this.lightningTimer = 7.5 + Math.random() * 11;
         this.sunLight.intensity = 4.2;
         this.ambientLight.intensity = 1.65;
-        dhakaAudio.playSfx('crash');
+        dhakaAudio.playSfx('thunder');
       }
     }
 
+    const insideJfpNow =
+      useGameStore.getState().isInsideMall ||
+      (this.playerPos.x >= this.jfpCenter.x - 56 &&
+        this.playerPos.x <= this.jfpCenter.x + 56 &&
+        this.playerPos.z >= this.jfpCenter.z - 36 &&
+        this.playerPos.z <= this.jfpCenter.z + 36);
+
+    if (this.heliSearchLight) {
+      const wantedNow = useGameStore.getState().wantedLevel;
+      const showHeliBeam = wantedNow >= 4 && !insideJfpNow;
+      this.heliSearchLight.intensity = showHeliBeam ? 5.5 : 0;
+      if (showHeliBeam) {
+        const st = performance.now() * 0.0012;
+        this.heliSearchLight.position.set(
+          this.playerPos.x + Math.cos(st) * 18,
+          44,
+          this.playerPos.z + Math.sin(st) * 18
+        );
+        this.heliSearchTarget.position.set(
+          this.playerPos.x + Math.sin(st * 1.9) * 5,
+          this.playerPos.y,
+          this.playerPos.z + Math.cos(st * 1.9) * 5
+        );
+      }
+    }
+
+    dhakaAudio.setRainActive(isRain && !insideJfpNow);
+
     if (this.rainSystem) {
-      this.rainSystem.visible = isRain;
-      if (isRain) {
+      this.rainSystem.visible = isRain && !insideJfpNow;
+      if (isRain && !insideJfpNow) {
         this.rainSystem.position.set(this.playerPos.x, 0, this.playerPos.z);
         const posAttr = this.rainSystem.geometry.getAttribute(
           'position'
@@ -11982,9 +12520,17 @@ export class DhakaCityEngine {
     }
 
     const t = performance.now() * 0.0015;
+    const waveScale = isRain ? 1.8 : 1.0;
     this.launchBoats.forEach((b, idx) => {
-      b.position.y = 0.2 + Math.sin(t + idx) * 0.14;
-      b.rotation.z = Math.sin(t * 0.8 + idx) * 0.018;
+      b.position.y = 0.2 + Math.sin(t * waveScale + idx) * (0.14 * waveScale);
+      b.rotation.z = Math.sin(t * 0.8 * waveScale + idx) * (0.018 * waveScale);
+      if (idx % 2 === 0) {
+        const patrolSpan = Math.sin(t * 0.08 + idx * 1.4);
+        const dir = Math.cos(t * 0.08 + idx * 1.4);
+        b.position.x = patrolSpan * 280;
+        b.position.z = 355 + idx * 8;
+        b.rotation.y = dir >= 0 ? Math.PI / 2 : -Math.PI / 2;
+      }
     });
 
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara Diabari & Kamalapur
@@ -12046,10 +12592,12 @@ export class DhakaCityEngine {
     const isMeher = useGameStore.getState().selectedCharacterId === 'meher';
     const isSprinting = wantsSprint && this.playerStamina > 5;
 
-    if (isSprinting) {
-      this.playerStamina = Math.max(0, this.playerStamina - (isMeher ? 7.5 : 16) * dt);
-    } else {
-      this.playerStamina = Math.min(100, this.playerStamina + (isMeher ? 28 : 14) * dt);
+    if (!this.isSwimming) {
+      if (isSprinting) {
+        this.playerStamina = Math.max(0, this.playerStamina - (isMeher ? 7.5 : 16) * dt);
+      } else {
+        this.playerStamina = Math.min(100, this.playerStamina + (isMeher ? 28 : 14) * dt);
+      }
     }
 
     const prevPlayerX = this.playerPos.x;
@@ -12057,7 +12605,7 @@ export class DhakaCityEngine {
 
     const sprintSpeed = isMeher ? 13.0 * 1.15 : 13.0;
     const baseSpeed = this.isSwimming
-      ? 4.4
+      ? (isSprinting ? 6.6 : 4.2)
       : this.isCrouching
       ? 4.2
       : isSprinting
@@ -12309,12 +12857,19 @@ export class DhakaCityEngine {
       this.playerPos.y += this.playerVelY * dt;
       this.playerVelY -= 21 * dt;
       if (this.playerPos.y <= groundElev) {
+        const impactVel = this.playerVelY;
         this.playerPos.y = groundElev;
         this.playerVelY = 0;
         if (!this.isGrounded) {
           dhakaAudio.playFootstep('land');
         }
         this.isGrounded = true;
+        if (impactVel < -14.5 && !this.isPositionInWater(this.playerPos.x, this.playerPos.z)) {
+          const fallDmg = Math.min(75, Math.round((-impactVel - 13.0) * 3.5));
+          useGameStore.getState().damagePlayer(fallDmg);
+          dhakaAudio.playSfx('pain_grunt');
+          this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.35);
+        }
       }
     } else {
       if (this.playerPos.y - groundElev > 0.6) {
@@ -12327,13 +12882,21 @@ export class DhakaCityEngine {
       }
     }
 
-    // Realistic Swimming & Stamina/Oxygen Mechanic in Deep Water
+    // Realistic Swimming & Stamina/Oxygen Mechanic in Deep Water (no regen while submerged)
     if (this.isPositionInWater(this.playerPos.x, this.playerPos.z) && this.playerPos.y <= 0.35) {
       this.isSwimming = true;
       this.isGrounded = true;
+      this.isCrouching = false;
+      this.isAiming = false;
       this.playerVelY = 0;
       this.playerPos.y = -0.55 + Math.sin(performance.now() * 0.004) * 0.06;
-      this.playerStamina = Math.max(0, this.playerStamina - 13 * dt);
+      const swimDrain =
+        moveForward === 0 && moveRight === 0
+          ? 2.8
+          : isSprinting
+          ? 14.0
+          : 6.5;
+      this.playerStamina = Math.max(0, this.playerStamina - swimDrain * dt);
       if (Math.random() < dt * 3.5) {
         this.spawnImpactSparks(this.playerPos.x, 0.05, this.playerPos.z, '#bae6fd', 0.9);
       }
@@ -12363,6 +12926,7 @@ export class DhakaCityEngine {
     );
     const isFirearm = Boolean(activeTool?.isFirearm);
     const isAimingNow =
+      !this.isSwimming &&
       isFirearm &&
       (this.isAiming || this.fireCooldown > 0 || this.attackAnimTimer > 0);
 
@@ -12379,17 +12943,18 @@ export class DhakaCityEngine {
       weaponCategory = 'fists';
     }
 
-    if (this.isAiming) {
+    if (this.isAiming && !this.isSwimming) {
       this.playerRotation = this.cameraYaw + Math.PI;
     }
 
     // Gate the gait so feet stay planted: crouch 0.55x, walk 1x, sprint 1.45x.
     const gaitScale = this.isCrouching ? 0.55 : isSprinting ? 1.45 : 1.0;
+    const effectiveAnimState = this.isSwimming ? 'swim' : targetAnimState;
     setCharacterAnimationState(
       this.playerLimbs,
-      targetAnimState,
+      effectiveAnimState,
       dt,
-      this.attackAnimTimer,
+      this.isSwimming ? 0 : this.attackAnimTimer,
       isAimingNow,
       gaitScale,
       weaponCategory,
@@ -12397,33 +12962,117 @@ export class DhakaCityEngine {
     );
 
     // Also update fallback capsule limbs if visible
-    const swing = Math.sin(this.walkAnimPhase) * 0.65;
-    this.playerLimbs.leftLeg.rotation.x = swing;
-    this.playerLimbs.rightLeg.rotation.x = -swing;
-    this.playerLimbs.leftArm.rotation.x = -swing * 0.8;
-
-    if (this.attackAnimTimer > 0) {
-      this.attackAnimTimer -= dt;
-      this.playerLimbs.rightArm.rotation.x =
-        -1.9 + Math.sin(this.attackAnimTimer * 18) * 0.8;
+    if (this.isSwimming) {
+      const swimPhase = performance.now() * 0.0065;
+      this.playerLimbs.leftArm.rotation.x = -1.2 + Math.sin(swimPhase) * 0.85;
+      this.playerLimbs.rightArm.rotation.x = -1.2 - Math.sin(swimPhase) * 0.85;
+      this.playerLimbs.leftLeg.rotation.x = Math.sin(swimPhase * 1.4) * 0.35;
+      this.playerLimbs.rightLeg.rotation.x = -Math.sin(swimPhase * 1.4) * 0.35;
     } else {
-      this.playerLimbs.rightArm.rotation.x = swing * 0.8;
+      const swing = Math.sin(this.walkAnimPhase) * 0.65;
+      this.playerLimbs.leftLeg.rotation.x = swing;
+      this.playerLimbs.rightLeg.rotation.x = -swing;
+      this.playerLimbs.leftArm.rotation.x = -swing * 0.8;
+
+      if (this.attackAnimTimer > 0) {
+        this.attackAnimTimer -= dt;
+        this.playerLimbs.rightArm.rotation.x =
+          -1.9 + Math.sin(this.attackAnimTimer * 18) * 0.8;
+      } else {
+        this.playerLimbs.rightArm.rotation.x = swing * 0.8;
+      }
     }
 
     this.playerLimbs.group.scale.y = this.isCrouching ? 0.74 : 1.0;
     this.playerLimbs.group.position.copy(this.playerPos);
-    this.playerLimbs.group.rotation.y = this.playerRotation;
+    this.playerLimbs.group.rotation.set(0, this.playerRotation, 0);
+
+    // On-foot handheld flashlight beam ([L] toggle)
+    if (this.flashlightOn && !this.isSwimming) {
+      this.headlightSpot.intensity = 3.2;
+      this.headlightSpot.position.set(
+        this.playerPos.x + Math.sin(this.playerRotation) * 0.4,
+        this.playerPos.y + 1.35,
+        this.playerPos.z + Math.cos(this.playerRotation) * 0.4
+      );
+      this.headlightTarget.position.set(
+        this.playerPos.x + Math.sin(this.playerRotation) * 18,
+        this.playerPos.y + 0.5,
+        this.playerPos.z + Math.cos(this.playerRotation) * 18
+      );
+    } else {
+      this.headlightSpot.intensity = 0;
+    }
+  }
+
+  private updateVehicleTailLightGlow(
+    mesh: THREE.Object3D,
+    isBraking: boolean,
+    isReversing: boolean,
+    steer = 0,
+    headlightsOn = true
+  ) {
+    if (!mesh.userData.tailMatCache) {
+      const mats: THREE.MeshBasicMaterial[] = [];
+      const headMats: THREE.MeshBasicMaterial[] = [];
+      const leftTurns: THREE.MeshBasicMaterial[] = [];
+      const rightTurns: THREE.MeshBasicMaterial[] = [];
+      mesh.traverse((child) => {
+        if (!(child as THREE.Mesh).isMesh) return;
+        const mat = (child as THREE.Mesh).material;
+        if (!mat || Array.isArray(mat)) return;
+        if (child.name === 'accent_taillight') {
+          mats.push(mat as THREE.MeshBasicMaterial);
+        } else if (child.name === 'accent_headlight') {
+          headMats.push(mat as THREE.MeshBasicMaterial);
+        } else if (child.name === 'accent_turn_left') {
+          leftTurns.push(mat as THREE.MeshBasicMaterial);
+        } else if (child.name === 'accent_turn_right') {
+          rightTurns.push(mat as THREE.MeshBasicMaterial);
+        }
+      });
+      mesh.userData.tailMatCache = mats;
+      mesh.userData.headMatCache = headMats;
+      mesh.userData.turnLeftCache = leftTurns;
+      mesh.userData.turnRightCache = rightTurns;
+    }
+    const mats = mesh.userData.tailMatCache as THREE.MeshBasicMaterial[];
+    const hex = isReversing ? '#f8fafc' : isBraking ? '#ff1f1f' : '#6b1212';
+    for (let i = 0; i < mats.length; i++) {
+      mats[i].color.set(hex);
+    }
+    const headMats = mesh.userData.headMatCache as THREE.MeshBasicMaterial[];
+    for (let i = 0; i < headMats.length; i++) {
+      headMats[i].color.set(headlightsOn ? '#fef9c3' : '#475569');
+      headMats[i].opacity = headlightsOn ? 0.9 : 0.25;
+    }
+    const blinkOn = Math.floor(performance.now() / 320) % 2 === 0;
+    const leftActive = steer > 0.25 && blinkOn;
+    const rightActive = steer < -0.25 && blinkOn;
+    const leftMats = mesh.userData.turnLeftCache as THREE.MeshBasicMaterial[];
+    const rightMats = mesh.userData.turnRightCache as THREE.MeshBasicMaterial[];
+    for (let i = 0; i < leftMats.length; i++) {
+      leftMats[i].color.set(leftActive ? '#facc15' : '#451a03');
+    }
+    for (let i = 0; i < rightMats.length; i++) {
+      rightMats[i].color.set(rightActive ? '#facc15' : '#451a03');
+    }
   }
 
   private updateDrivenVehicle(dt: number) {
     const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
     if (!veh) return;
 
+    this.isSwimming = false;
+    this.playerStamina = Math.min(100, this.playerStamina + 14 * dt);
+
     const store = useGameStore.getState();
     const stats = VEHICLE_STATS[veh.type];
     const boostMult = this.vehicleSpeedBoostMap.get(veh.id) ?? 1.0;
+    const isTireDamaged = veh.type !== 'boat' && veh.type !== 'rickshaw' && veh.health < veh.maxHealth * 0.25;
+    const damageSpeedMult = isTireDamaged ? 0.68 : 1.0;
     const accelMult = (store.selectedCharacterId === 'arif' ? 1.2 : 1.0) * boostMult;
-    const topSpeed = stats.maxSpeed * boostMult;
+    const topSpeed = stats.maxSpeed * boostMult * damageSpeedMult;
     let throttle = 0;
     let steer = 0;
 
@@ -12432,7 +13081,47 @@ export class DhakaCityEngine {
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer += 1;
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer -= 1;
 
+    // Realistic Fuel / CNG consumption (motorized vehicles & boats)
+    if (this.fuelSputterCooldown > 0) this.fuelSputterCooldown -= dt;
+    if (veh.type !== 'rickshaw') {
+      const curFuel = veh.fuel ?? 100;
+      const drainRate = Math.abs(throttle) > 0 ? 0.68 : Math.abs(veh.speed) > 1 ? 0.22 : 0.04;
+      veh.fuel = Math.max(0, curFuel - drainRate * dt);
+      if (veh.fuel <= 16 && !veh.lowFuelWarned) {
+        veh.lowFuelWarned = true;
+        store.showBanner({
+          titleEn: '⛽ LOW CNG / FUEL RESERVE (< 15%)',
+          titleBn: '⛽ জ্বালানি প্রায় শেষ (< ১৫%)!',
+          subtitleEn: 'Visit a nearby CNG Filling Station or Pier Fuel Dock to refuel.',
+          subtitleBn: 'কাছাকাছি সিএনজি পাম্প বা ঘাট থেকে জ্বালানি নিন।',
+          tone: 'gold',
+        });
+      }
+      if (veh.fuel <= 0) {
+        if (throttle > 0 && this.fuelSputterCooldown <= 0) {
+          this.fuelSputterCooldown = 1.1;
+          dhakaAudio.playSfx('dry_fire');
+          store.showBanner({
+            titleEn: '⛽ TANK EMPTY — OUT OF FUEL!',
+            titleBn: '⛽ জ্বালানি শেষ হয়ে গেছে!',
+            subtitleEn: 'Drive or walk to a CNG Station / Marine Pier Dock to refuel.',
+            subtitleBn: 'রিফুয়েল করতে সিএনজি স্টেশন বা নৌ ঘাটে যান।',
+            tone: 'red',
+          });
+        }
+        throttle = 0; // Engine sputters out of fuel
+      }
+    }
+
+    // Tire blowout steering pull wobble when heavily damaged
+    if (isTireDamaged && Math.abs(veh.speed) > 4.0) {
+      steer += Math.sin(performance.now() * 0.008) * 0.35;
+    }
+
     const isDrifting = this.keys.has('Space');
+    const isWetAsphalt =
+      store.weather === 'monsoon_rain' && veh.type !== 'boat';
+    const brakeGrip = isWetAsphalt ? 0.72 : 1.0;
 
     if (throttle > 0) {
       veh.speed = Math.min(
@@ -12441,7 +13130,7 @@ export class DhakaCityEngine {
       );
     } else if (throttle < 0) {
       if (veh.speed > 0.4) {
-        veh.speed = Math.max(0, veh.speed - stats.braking * dt);
+        veh.speed = Math.max(0, veh.speed - stats.braking * brakeGrip * dt);
       } else {
         veh.speed = Math.max(
           -topSpeed * 0.42,
@@ -12449,12 +13138,12 @@ export class DhakaCityEngine {
         );
       }
     } else {
-      veh.speed *= Math.pow(0.25, dt);
+      veh.speed *= Math.pow(isWetAsphalt ? 0.36 : 0.25, dt);
       if (Math.abs(veh.speed) < 0.15) veh.speed = 0;
     }
 
     if (isDrifting && Math.abs(veh.speed) > 4.2) {
-      veh.speed *= Math.pow(0.48, dt);
+      veh.speed *= Math.pow(isWetAsphalt ? 0.62 : 0.48, dt);
       this.tireSmokeTimer += dt;
       if (this.tireSmokeTimer > 0.08) {
         this.tireSmokeTimer = 0;
@@ -12480,30 +13169,55 @@ export class DhakaCityEngine {
         steer * stats.turnSpeed * turnMult * speedFactor * dir * dt;
     }
 
-    // Vehicle Water Submersion: Boats cruise safely on water; land vehicles sink & drown once!
+    // Vehicle Water Submersion: Boats cruise safely; land vehicles sink over 2.6s so player can bail out!
     if (veh.type !== 'boat' && this.isPositionInWater(veh.x, veh.z) && veh.y <= 1.2) {
-      veh.speed = 0;
-      veh.steering = 0;
-      veh.y = -2.2;
-      const mesh = this.vehicleMeshes.get(veh.id);
-      if (mesh) mesh.position.y = veh.y;
-      if (!store.isWasted) {
-        this.spawnImpactSparks(veh.x, 0.1, veh.z, '#38bdf8', 4.5);
+      const subTimer = veh.waterSubmergeTimer ?? 0;
+      if (subTimer === 0) {
+        this.spawnImpactSparks(veh.x, 0.15, veh.z, '#bae6fd', 3.2);
         dhakaAudio.playSfx('hit');
-        store.damagePlayer(999);
         store.showBanner({
-          titleEn: 'WASTED: DROWNED IN WATER',
-          titleBn: 'পানিতে ডুবে মৃত্যু!',
-          subtitleEn: 'Vehicle sank into deep water. Arif drowned!',
-          subtitleBn: 'গাড়িটি পানিতে নিমজ্জিত হয়ে আরিফের সলিল সমাধি ঘটেছে!',
+          titleEn: '🌊 VEHICLE TAKING ON WATER — PRESS [F] TO BAIL OUT!',
+          titleBn: '🌊 গাড়িতে পানি ঢুকছে — [F] চেপে সাঁতরে বের হন!',
+          subtitleEn: 'Jump out before it sinks beneath the surface!',
+          subtitleBn: 'গাড়ি সম্পূর্ণ ডুবে যাওয়ার আগেই বের হয়ে পড়ুন!',
           tone: 'red',
         });
       }
-      this.activeVehicleId = null;
-      this.playerLimbs.group.visible = true;
-      this.playerPos.set(veh.x, -0.5, veh.z);
-      this.playerLimbs.group.position.copy(this.playerPos);
+      veh.waterSubmergeTimer = subTimer + dt;
+      veh.speed *= Math.pow(0.18, dt);
+      veh.steering = 0;
+      veh.y = -0.35 - Math.min(1, veh.waterSubmergeTimer / 2.6) * 1.85;
+      this.playerPos.set(veh.x, veh.y, veh.z);
+      const mesh = this.vehicleMeshes.get(veh.id);
+      if (mesh) {
+        mesh.position.y = veh.y;
+        mesh.rotation.x = Math.min(0.35, veh.waterSubmergeTimer * 0.14);
+      }
+      if (Math.random() < dt * 8) {
+        this.spawnImpactSparks(veh.x, 0.08, veh.z, '#bae6fd', 1.4);
+      }
+      if (veh.waterSubmergeTimer >= 2.6) {
+        if (!store.isWasted) {
+          this.spawnImpactSparks(veh.x, 0.1, veh.z, '#38bdf8', 4.5);
+          dhakaAudio.playSfx('hit');
+          store.damagePlayer(999);
+          store.showBanner({
+            titleEn: 'WASTED: DROWNED IN SUNKEN VEHICLE',
+            titleBn: 'ডুবে যাওয়া গাড়িতে প্রাণহানি!',
+            subtitleEn: 'Stayed inside submerged vehicle too long.',
+            subtitleBn: 'ডুবন্ত গাড়ি থেকে সময়মতো বের হতে পারেননি!',
+            tone: 'red',
+          });
+        }
+        this.activeVehicleId = null;
+        this.isSwimming = true;
+        this.playerLimbs.group.visible = true;
+        this.playerPos.set(veh.x, -0.5, veh.z);
+        this.playerLimbs.group.position.copy(this.playerPos);
+      }
       return;
+    } else {
+      veh.waterSubmergeTimer = 0;
     }
 
     const vx = Math.sin(veh.rotation) * veh.speed * dt;
@@ -12515,9 +13229,18 @@ export class DhakaCityEngine {
     const nextElev = veh.type === 'boat' ? 0.32 : this.getRoadElevation(nextX, nextZ, veh.y);
     const radius = Math.max(stats.width, stats.length) * 0.45;
     const boatHitsShore = veh.type === 'boat' && !this.isPositionInWater(nextX, nextZ);
-    if (!boatHitsShore && !this.checkWorldObstacle(nextX, nextZ, radius, veh.id, nextElev)) {
+    const boatHitsLaunch =
+      veh.type === 'boat' &&
+      this.launchBoats.some(
+        (lb) => Math.abs(nextX - lb.position.x) < 16.5 && Math.abs(nextZ - lb.position.z) < 5.5
+      );
+    if (!boatHitsShore && !boatHitsLaunch && !this.checkWorldObstacle(nextX, nextZ, radius, veh.id, nextElev)) {
       veh.x = clampWorldCoord(nextX);
       veh.z = clampWorldCoord(nextZ);
+    } else if (boatHitsLaunch) {
+      dhakaAudio.playSfx('hit');
+      this.spawnImpactSparks(nextX, 0.4, nextZ, '#bae6fd', 1.8);
+      veh.speed = -veh.speed * 0.35;
     } else if (boatHitsShore) {
       // Gently slide boats along shorelines/piers
       const canSlideX = this.isPositionInWater(nextX, veh.z);
@@ -12582,6 +13305,13 @@ export class DhakaCityEngine {
 
           dhakaAudio.playHorn(oStats.hornType);
           veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.5);
+          if (Math.abs(veh.speed) > 14.5 && !store.isWasted) {
+            const crashMitigation =
+              veh.type === 'motorcycle' || veh.type === 'rickshaw' ? 1.0 : 0.6;
+            store.damagePlayer(
+              Math.round((Math.abs(veh.speed) - 13.0) * 1.35 * crashMitigation)
+            );
+          }
           if (veh.health <= 0) {
             this.explodeVehicle(veh);
             return;
@@ -12621,6 +13351,13 @@ export class DhakaCityEngine {
             this.spawnRadiatorDamage(frontX, 0.7, frontZ);
             this.spawnImpactSparks(frontX, 0.7, frontZ, '#e2e8f0', 2.5);
             veh.health = Math.max(0, veh.health - Math.abs(veh.speed) * 0.55);
+            if (Math.abs(veh.speed) > 14.5 && !store.isWasted) {
+              const crashMitigation =
+                veh.type === 'motorcycle' || veh.type === 'rickshaw' ? 1.0 : 0.6;
+              store.damagePlayer(
+                Math.round((Math.abs(veh.speed) - 13.0) * 1.45 * crashMitigation)
+              );
+            }
             if (veh.health <= 0) {
               this.explodeVehicle(veh);
               return;
@@ -12637,14 +13374,16 @@ export class DhakaCityEngine {
     this.playerPos.set(veh.x, veh.y, veh.z);
     this.playerRotation = veh.rotation;
 
-    // Position dynamic vehicle headlight cone ahead of car (only at night/rain)
+    // Position dynamic vehicle headlight cone ahead of car (auto at night/rain or manual [L])
     const storeState = useGameStore.getState();
     const isNightOrRain =
       storeState.weather === 'night' ||
       storeState.weather === 'monsoon_rain' ||
       storeState.timeOfDay < 5.8 ||
       storeState.timeOfDay > 19.2;
-    this.headlightSpot.intensity = isNightOrRain ? 3.5 : 0;
+    const headlightsOn =
+      this.headlightsManual !== null ? this.headlightsManual : isNightOrRain;
+    this.headlightSpot.intensity = headlightsOn ? 3.5 : 0;
     this.headlightSpot.position.set(
       veh.x + Math.sin(veh.rotation) * 1.5,
       1.2,
@@ -12677,13 +13416,13 @@ export class DhakaCityEngine {
       this.spawnRadiatorDamage(hoodX, elev + 0.85, hoodZ);
     }
 
-    // DMP Speed Cameras (Purbachal 300ft & Elevated Expressway): > 105 km/h triggers e-challan flash!
+    // DMP Speed Cameras across Dhaka Corridors: > 105 km/h triggers e-challan flash!
     if (this.speedCameraCooldown > 0) this.speedCameraCooldown -= dt;
     const kmhNow = Math.abs(veh.speed) * 2.6;
     if (this.speedCameraCooldown <= 0 && kmhNow > 105 && veh.type !== 'police' && veh.type !== 'boat') {
-      const nearCam =
-        Math.hypot(veh.x - 590, veh.z - (-315)) < 22 ||
-        Math.hypot(veh.x - 14, veh.z - (-100)) < 18;
+      const nearCam = this.speedCameraSpots.some(
+        (cam) => Math.hypot(veh.x - cam.x, veh.z - cam.z) < 22
+      );
       if (nearCam) {
         this.speedCameraCooldown = 25;
         this.spawnImpactSparks(veh.x, elev + 2.2, veh.z, '#ffffff', 3.5);
@@ -12774,6 +13513,17 @@ export class DhakaCityEngine {
         const brakeDive = throttle < 0 && veh.speed > 4 ? 0.042 : throttle > 0 ? -0.02 : 0;
         mesh.rotation.z = THREE.MathUtils.lerp(mesh.rotation.z, rollTarget, Math.min(1, dt * 8));
         mesh.rotation.x = roadPitch + brakeDive;
+      }
+
+      const isReversing = veh.speed < -0.45 && throttle < 0;
+      const isBraking = (throttle < 0 && veh.speed > 0.45) || (isDrifting && Math.abs(veh.speed) > 1.0);
+      this.updateVehicleTailLightGlow(mesh, isBraking, isReversing, steer, headlightsOn);
+
+      // Wet-road water spray behind fast wheels in monsoon rain
+      if (isWetAsphalt && Math.abs(veh.speed) > 9.0 && Math.random() < dt * 10) {
+        const rearX = veh.x - Math.sin(veh.rotation) * 1.5;
+        const rearZ = veh.z - Math.cos(veh.rotation) * 1.5;
+        this.spawnImpactSparks(rearX, elev + 0.14, rearZ, '#bae6fd', 0.65);
       }
 
       // Both CarConcept.glb and ferrari.glb hubs use local X as the true axle.
@@ -12871,6 +13621,20 @@ export class DhakaCityEngine {
 
   private updateTrafficAndPoliceAI(dt: number, wantedLevel: number) {
     const store = useGameStore.getState();
+    this.policeNearby = false;
+    if (wantedLevel > 0) {
+      for (const v of this.vehicles) {
+        if (
+          v.isPolice &&
+          v.health > 0 &&
+          Math.abs(v.y - this.playerPos.y) <= 4.0 &&
+          Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 55
+        ) {
+          this.policeNearby = true;
+          break;
+        }
+      }
+    }
 
     // Dynamic Police Backup Spawning at Wanted ★2+
     if (wantedLevel >= 2) {
@@ -12902,7 +13666,61 @@ export class DhakaCityEngine {
     const px = this.playerPos.x;
     const pz = this.playerPos.z;
 
-    for (const veh of this.vehicles) {
+    // Update knockable roadside traffic cones for all moving vehicles & respawn when player leaves
+    for (let pi = 0; pi < this.destructibleProps.length; pi++) {
+      const prop = this.destructibleProps[pi];
+      if (!prop.hit) {
+        for (const v of this.vehicles) {
+          if (v.health <= 0 || Math.abs(v.speed) < 1.5 || v.y >= 1.5) continue;
+          const pd = Math.hypot(prop.x - v.x, prop.z - v.z);
+          if (pd < 2.2) {
+            prop.hit = true;
+            prop.life = 12;
+            prop.vx = Math.sin(v.rotation) * Math.max(5, Math.abs(v.speed) * 0.7) + (Math.random() - 0.5) * 3;
+            prop.vz = Math.cos(v.rotation) * Math.max(5, Math.abs(v.speed) * 0.7) + (Math.random() - 0.5) * 3;
+            prop.vy = 4.2;
+            if (v.id === this.activeVehicleId) dhakaAudio.playSfx('hit');
+            break;
+          }
+        }
+      } else {
+        prop.life -= dt;
+        prop.vy -= 14 * dt;
+        prop.x += prop.vx * dt;
+        prop.z += prop.vz * dt;
+        prop.mesh.position.x = prop.x;
+        prop.mesh.position.z = prop.z;
+        prop.mesh.position.y = Math.max(0.15, prop.mesh.position.y + prop.vy * dt);
+        if (prop.mesh.position.y <= 0.16) {
+          prop.vy = 0;
+          prop.vx *= 0.85;
+          prop.vz *= 0.85;
+        }
+        prop.mesh.rotation.x += 5.5 * dt;
+        prop.mesh.rotation.z += 4.2 * dt;
+        if (prop.life <= 0) {
+          if (Math.hypot(prop.origX - px, prop.origZ - pz) > 85) {
+            prop.hit = false;
+            prop.x = prop.origX;
+            prop.z = prop.origZ;
+            prop.vx = 0;
+            prop.vz = 0;
+            prop.vy = 0;
+            prop.life = 999;
+            prop.mesh.position.set(prop.origX, 0, prop.origZ);
+            prop.mesh.rotation.set(0, 0, 0);
+            prop.mesh.visible = true;
+          } else {
+            prop.mesh.visible = false;
+          }
+        } else {
+          prop.mesh.visible = true;
+        }
+      }
+    }
+
+    for (let vi = this.vehicles.length - 1; vi >= 0; vi--) {
+      const veh = this.vehicles[vi];
       if (veh.id === this.activeVehicleId) continue;
 
       const mesh = this.vehicleMeshes.get(veh.id);
@@ -12911,9 +13729,16 @@ export class DhakaCityEngine {
       const distToPlayer = Math.hypot(veh.x - px, veh.z - pz);
 
       if (veh.health <= 0) {
+        veh.wreckTimer = (veh.wreckTimer ?? 0) + dt;
         mesh.visible = distToPlayer < 160;
-        if (mesh.visible && Math.random() < dt * 5) {
+        if (mesh.visible && veh.wreckTimer < 20 && Math.random() < dt * 5) {
           this.spawnRadiatorDamage(veh.x, veh.y + 0.9, veh.z);
+        }
+        // Clean up charred wrecks once out of immediate player view after 35s
+        if (veh.wreckTimer > 35 && distToPlayer > 45) {
+          this.scene.remove(mesh);
+          this.vehicleMeshes.delete(veh.id);
+          this.vehicles.splice(vi, 1);
         }
         continue;
       }
@@ -13002,6 +13827,28 @@ export class DhakaCityEngine {
 
       if (!veh.isTraffic && !(veh.isPolice && wantedLevel > 0)) continue;
 
+      if (this.patrolViolationCooldown > 0) this.patrolViolationCooldown -= dt;
+
+      if (veh.isPolice && wantedLevel === 0 && this.activeVehicleId && this.patrolViolationCooldown <= 0) {
+        const playerVeh = this.vehicles.find((v) => v.id === this.activeVehicleId);
+        if (playerVeh && playerVeh.type !== 'police' && playerVeh.type !== 'boat') {
+          const dPatrol = Math.hypot(veh.x - playerVeh.x, veh.z - playerVeh.z);
+          const sameDeck = Math.abs(veh.y - playerVeh.y) < 3.0;
+          const playerKmh = Math.abs(playerVeh.speed) * 2.6;
+          if (sameDeck && dPatrol < 26 && playerKmh > 95) {
+            this.patrolViolationCooldown = 18;
+            store.setWantedLevel(1);
+            store.showBanner({
+              titleEn: `🚔 DMP PATROL: OVER-SPEEDING (${Math.round(playerKmh)} KM/H)`,
+              titleBn: `🚔 ডিএমপি টহল: অতিরিক্ত গতি (${Math.round(playerKmh)} কিমি/ঘণ্টা)`,
+              subtitleEn: 'Police patrol spotted reckless driving! Wanted Level 1.',
+              subtitleBn: 'পুলিশের সামনে বেপরোয়া গতিতে চালানোয় ওয়ান্টেড লেভেল ১!',
+              tone: 'red',
+            });
+          }
+        }
+      }
+
       if (veh.isPolice && wantedLevel > 0) {
         const dx = this.playerPos.x - veh.x;
         const dz = this.playerPos.z - veh.z;
@@ -13013,17 +13860,26 @@ export class DhakaCityEngine {
           veh.rotation += diff * Math.min(1, dt * 3.0);
           const chaseSpeed = 17 + wantedLevel * 3.4;
 
+          const curElev = this.getRoadElevation(veh.x, veh.z, veh.y);
           const nx = veh.x + Math.sin(veh.rotation) * chaseSpeed * dt;
           const nz = veh.z + Math.cos(veh.rotation) * chaseSpeed * dt;
+          const nextElev = this.getRoadElevation(nx, nz, veh.y);
 
-          if (!this.checkWorldObstacle(nx, nz, 1.4, veh.id)) {
+          if (
+            !this.isPositionInWater(nx, nz) &&
+            Math.abs(nextElev - curElev) <= 2.2 &&
+            !this.checkWorldObstacle(nx, nz, 1.4, veh.id, curElev)
+          ) {
             veh.x = nx;
             veh.z = nz;
           } else {
             // Intelligent obstacle unstuck: back up cleanly along reverse vector without spinning
             const backX = veh.x - Math.sin(veh.rotation) * 4 * dt;
             const backZ = veh.z - Math.cos(veh.rotation) * 4 * dt;
-            if (!this.checkWorldObstacle(backX, backZ, 1.4, veh.id)) {
+            if (
+              !this.isPositionInWater(backX, backZ) &&
+              !this.checkWorldObstacle(backX, backZ, 1.4, veh.id, curElev)
+            ) {
               veh.x = backX;
               veh.z = backZ;
             }
@@ -13086,8 +13942,38 @@ export class DhakaCityEngine {
               dhakaAudio.playSfx('gunshot');
               this.spawnImpactSparks(veh.x, veh.y + 1.5, veh.z, '#facc15', 0.9);
               if (Math.random() < 0.45) {
-                store.damagePlayer(7);
-                this.spawnImpactSparks(this.playerPos.x, this.playerPos.y + 1.1, this.playerPos.z, '#ef4444', 1.1);
+                const pVeh = this.activeVehicleId
+                  ? this.vehicles.find((pv) => pv.id === this.activeVehicleId)
+                  : null;
+                const enclosedVeh =
+                  pVeh &&
+                  (pVeh.type === 'car' ||
+                    pVeh.type === 'pickup' ||
+                    pVeh.type === 'bus' ||
+                    pVeh.type === 'police');
+                if (pVeh && enclosedVeh) {
+                  pVeh.health = Math.max(0, pVeh.health - 8);
+                  store.damagePlayer(2);
+                  this.spawnImpactSparks(
+                    pVeh.x,
+                    pVeh.y + 1.1,
+                    pVeh.z,
+                    '#facc15',
+                    1.2
+                  );
+                  if (pVeh.health <= 0) {
+                    this.explodeVehicle(pVeh);
+                  }
+                } else {
+                  store.damagePlayer(7);
+                  this.spawnImpactSparks(
+                    this.playerPos.x,
+                    this.playerPos.y + 1.1,
+                    this.playerPos.z,
+                    '#ef4444',
+                    1.1
+                  );
+                }
               }
             }
           }
@@ -13131,24 +14017,46 @@ export class DhakaCityEngine {
 
       let blockedAhead = false;
 
-      // 1. Check distance to player directly ahead in this lane
+      // 1. Check distance to player directly ahead in this lane (same road deck)
       const pDx = this.playerPos.x - veh.x;
       const pDz = this.playerPos.z - veh.z;
       const pForward = pDx * forwardX + pDz * forwardZ;
       const pLateral = Math.abs(pDx * rightX + pDz * rightZ);
 
-      if (pForward > 0.2 && pForward < 8.0 && pLateral < 2.5) {
+      if (Math.abs(veh.y - this.playerPos.y) <= 2.5 && pForward > 0.2 && pForward < 8.0 && pLateral < 2.5) {
         blockedAhead = true;
         if (Math.random() < 0.015) {
           dhakaAudio.playHorn(stats.hornType);
         }
       }
 
-      // 2. Directional forward lane queueing check: checks only vehicles ahead in the SAME lane
+      // Fast moving AI vehicle knocks back & damages player on foot if collided
+      if (
+        !this.activeVehicleId &&
+        this.playerTrafficHitCooldown <= 0 &&
+        Math.abs(veh.y - this.playerPos.y) <= 2.4 &&
+        Math.abs(veh.speed) > 5.0 &&
+        distToPlayer < 2.15
+      ) {
+        this.playerTrafficHitCooldown = 0.85;
+        dhakaAudio.playSfx('hit');
+        dhakaAudio.playSfx('pain_grunt');
+        this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.35);
+        store.damagePlayer(Math.round(Math.min(22, Math.abs(veh.speed) * 1.1)));
+        const knockX = this.playerPos.x + forwardX * 2.2 + rightX * 0.8;
+        const knockZ = this.playerPos.z + forwardZ * 2.2 + rightZ * 0.8;
+        if (!this.checkBuildingCollision(knockX, knockZ, 0.35, this.playerPos.y)) {
+          this.playerPos.x = clampWorldCoord(knockX);
+          this.playerPos.z = clampWorldCoord(knockZ);
+        }
+        veh.speed *= 0.4;
+      }
+
+      // 2. Directional forward lane queueing check (same deck, including cross-traffic inside intersections)
       if (!blockedAhead && distToPlayer < 110) {
         for (const otherVeh of this.vehicles) {
           if (otherVeh.id === veh.id) continue;
-          if (otherVeh.roadAxis !== veh.roadAxis) continue;
+          if (Math.abs(otherVeh.y - veh.y) > 2.5) continue;
           if (Math.abs(otherVeh.x - veh.x) > 28 || Math.abs(otherVeh.z - veh.z) > 28) continue;
           const dx = otherVeh.x - veh.x;
           const dz = otherVeh.z - veh.z;
@@ -13156,10 +14064,11 @@ export class DhakaCityEngine {
           const lateralDist = Math.abs(dx * rightX + dz * rightZ);
 
           const oStats = VEHICLE_STATS[otherVeh.type];
-          const safeFollowDist = (stats.length + oStats.length) * 0.5 + 2.8;
+          const isSameAxis = otherVeh.roadAxis === veh.roadAxis;
+          const safeFollowDist = (stats.length + oStats.length) * 0.5 + (isSameAxis ? 2.8 : 1.8);
+          const latLimit = isSameAxis ? 2.4 : 3.1;
 
-          // Only vehicle directly ahead in our lane: forwardDist in (0.3, safeFollowDist), lateralDist < 2.4m
-          if (forwardDist > 0.3 && forwardDist < safeFollowDist && lateralDist < 2.4) {
+          if (forwardDist > 0.3 && forwardDist < safeFollowDist && lateralDist < latLimit) {
             blockedAhead = true;
             if (Math.random() < 0.008) {
               dhakaAudio.playHorn(stats.hornType);
@@ -13208,12 +14117,14 @@ export class DhakaCityEngine {
           const majorZ = [-175, 0, 175];
           const probeStopX = veh.x + forwardX * (stats.length * 0.5 + 4.5);
           const probeStopZ = veh.z + forwardZ * (stats.length * 0.5 + 4.5);
+          const nearFarmgateRoundabout = Math.hypot(probeStopX, probeStopZ) < 22;
           const nearCross =
-            veh.roadAxis === 'ns'
+            !nearFarmgateRoundabout &&
+            (veh.roadAxis === 'ns'
               ? majorX.some((mx) => Math.abs(veh.x - mx) < 12) &&
                 majorZ.some((mz) => Math.abs(probeStopZ - mz) < 14 && Math.abs(veh.z - mz) > 10)
               : majorZ.some((mz) => Math.abs(veh.z - mz) < 12) &&
-                majorX.some((mx) => Math.abs(probeStopX - mx) < 14 && Math.abs(veh.x - mx) > 10);
+                majorX.some((mx) => Math.abs(probeStopX - mx) < 14 && Math.abs(veh.x - mx) > 10));
           if (nearCross) {
             blockedAhead = true;
           }
@@ -13260,6 +14171,12 @@ export class DhakaCityEngine {
         const tBackY = this.getRoadElevation(veh.x - forwardX * tProbeDist, veh.z - forwardZ * tProbeDist, veh.y);
         mesh.rotation.x = Math.atan2(tFrontY - tBackY, tProbeDist * 2);
         this.animateVehicleWheels(mesh, veh.speed, dt, 0);
+        const aiHeadlights =
+          store.weather === 'night' ||
+          store.weather === 'monsoon_rain' ||
+          store.timeOfDay < 5.8 ||
+          store.timeOfDay > 19.2;
+        this.updateVehicleTailLightGlow(mesh, blockedAhead || veh.speed < 0.8, false, 0, aiHeadlights);
       } else {
         mesh.rotation.x = 0;
       }
@@ -13413,10 +14330,11 @@ export class DhakaCityEngine {
         }
       }
 
-      // Check Fatal Collisions with Player Vehicle
+      // Check Fatal Collisions with Player Vehicle (3D elevation-aware)
       if (this.activeVehicleId) {
         const pv = this.vehicles.find((v) => v.id === this.activeVehicleId);
-        if (pv && Math.abs(pv.speed) > 4.5) {
+        const npcY = limbs.group.position.y;
+        if (pv && Math.abs(pv.speed) > 4.5 && Math.abs(npcY - pv.y) <= 2.5) {
           const d = Math.hypot(npc.x - pv.x, npc.z - pv.z);
           if (d < 2.3 && !npc.isDead) {
             const impactSpeed = Math.abs(pv.speed);
@@ -13448,13 +14366,13 @@ export class DhakaCityEngine {
               this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.45);
 
               // Arterial blood spray & expanding blood pool
-              this.spawnDirectionalBloodSpray(npc.x, 0.8, npc.z, npc.deathVx, npc.deathVz, 36);
+              this.spawnDirectionalBloodSpray(npc.x, npcY + 0.8, npc.z, npc.deathVx, npc.deathVz, 36);
               this.spawnBloodDecal(npc.x, npc.z, 1.6);
-              this.spawnImpactSparks(npc.x, 0.25, npc.z, '#7f1d1d', 3.0);
-              this.spawnImpactSparks(npc.x, 0.45, npc.z, '#b91c1c', 2.2);
+              this.spawnImpactSparks(npc.x, npcY + 0.25, npc.z, '#7f1d1d', 3.0);
+              this.spawnImpactSparks(npc.x, npcY + 0.45, npc.z, '#b91c1c', 2.2);
               this.spawnGlassShatter(
                 pv.x + Math.sin(pv.rotation) * 1.8,
-                0.75,
+                pv.y + 0.75,
                 pv.z + Math.cos(pv.rotation) * 1.8,
                 12
               );
@@ -13496,9 +14414,11 @@ export class DhakaCityEngine {
         }
       }
 
-      // Check Fatal Collisions with AI Traffic Vehicles (fast broadphase rejection)
+      // Check Fatal Collisions with AI Traffic Vehicles (3D elevation-aware)
+      const npcElevNow = limbs.group.position.y;
       for (const tv of this.vehicles) {
         if (tv.id === this.activeVehicleId) continue;
+        if (Math.abs(npcElevNow - tv.y) > 2.5) continue;
         if (Math.abs(npc.x - tv.x) > 10 || Math.abs(npc.z - tv.z) > 10) continue;
         if (Math.abs(tv.speed) > 6.5) {
           const d = Math.hypot(npc.x - tv.x, npc.z - tv.z);
@@ -13545,11 +14465,33 @@ export class DhakaCityEngine {
         continue;
       }
 
+      const isRainingNow = store.weather === 'monsoon_rain';
+      if (!npc.isStoryNPC && !npc.isEjectedDriver) {
+        ensureNpcUmbrella(limbs, isRainingNow, npc.x + npc.z);
+      } else if (limbs.umbrella) {
+        limbs.umbrella.visible = false;
+      }
+
       const isFleeing = npc.aiState === 'flee';
-      const speed = isFleeing ? 6.5 : 2.3;
+      let speed = isFleeing ? 6.5 : isRainingNow ? 3.1 : 2.3;
+
+      // Crosswalk wait at major signalized intersections (excluding open Farmgate roundabout)
+      if (!isFleeing && distToPlayer < 95 && Math.hypot(npc.x, npc.z) > 22) {
+        const sigCycle = (performance.now() * 0.001) % 16;
+        const ewActive = sigCycle >= 8.0 && sigCycle < 15.0;
+        const nsActive = sigCycle < 7.0;
+        const majorX = [-170, 0, 220];
+        const majorZ = [-175, 0, 175];
+        const nearCurbEW = ewActive && majorZ.some((mz) => Math.abs(npc.z - mz) > 8.5 && Math.abs(npc.z - mz) < 12.5) && majorX.some((mx) => Math.abs(npc.x - mx) < 11);
+        const nearCurbNS = nsActive && majorX.some((mx) => Math.abs(npc.x - mx) > 8.5 && Math.abs(npc.x - mx) < 12.5) && majorZ.some((mz) => Math.abs(npc.z - mz) < 11);
+        if (nearCurbEW || nearCurbNS) {
+          speed = 0;
+        }
+      }
+
       const shouldAnimate = distToPlayer < 60 || (i + this.npcAnimFrame) % 2 === 0;
       if (shouldAnimate) {
-        setCharacterAnimationState(limbs, isFleeing ? 'run' : 'walk', dt * (distToPlayer < 60 ? 1.0 : 2.0));
+        setCharacterAnimationState(limbs, speed === 0 ? 'idle' : isFleeing ? 'run' : 'walk', dt * (distToPlayer < 60 ? 1.0 : 2.0));
       }
 
       const dx = npc.walkTargetX - npc.x;
@@ -13657,12 +14599,21 @@ export class DhakaCityEngine {
       store.tickFareJob(dt);
       const job = useGameStore.getState().activeFareJob;
       if (job) {
+        if (this.fareMarkerGroup) {
+          this.fareMarkerGroup.visible = true;
+          const dropY = this.getRoadElevation(job.dropX, job.dropZ);
+          this.fareMarkerGroup.position.set(job.dropX, dropY, job.dropZ);
+        }
         const dJob = Math.hypot(this.playerPos.x - job.dropX, this.playerPos.z - job.dropZ);
         if (dJob < 13) {
           store.completeFareJob();
           dhakaAudio.playSfx('mission_complete');
         }
+      } else if (this.fareMarkerGroup) {
+        this.fareMarkerGroup.visible = false;
       }
+    } else if (this.fareMarkerGroup) {
+      this.fareMarkerGroup.visible = false;
     }
 
     if (activeMission) {
@@ -13739,6 +14690,9 @@ export class DhakaCityEngine {
       this.missionMarkerGroup.visible = false;
     }
 
+    if (this.streetAtmCooldown > 0) this.streetAtmCooldown = Math.max(0, this.streetAtmCooldown - dt);
+    if (this.playerTrafficHitCooldown > 0) this.playerTrafficHitCooldown = Math.max(0, this.playerTrafficHitCooldown - dt);
+
     this.telemetryTimer += dt;
     if (this.telemetryTimer < 0.09) return;
     this.telemetryTimer = 0;
@@ -13760,6 +14714,27 @@ export class DhakaCityEngine {
       ? this.vehicles.find((v) => v.id === this.activeVehicleId) || null
       : null;
 
+    let vehicleGear = 'P';
+    if (activeVeh) {
+      if (activeVeh.type === 'boat') {
+        vehicleGear =
+          activeVeh.speed < -0.35
+            ? 'R'
+            : activeVeh.speed > 0.35
+            ? 'FWD'
+            : 'N';
+      } else if (Math.abs(activeVeh.speed) < 0.35) {
+        vehicleGear = 'N';
+      } else if (activeVeh.speed < -0.35) {
+        vehicleGear = 'R';
+      } else {
+        const ratio =
+          Math.abs(activeVeh.speed) /
+          Math.max(1, VEHICLE_STATS[activeVeh.type].maxSpeed);
+        vehicleGear = String(Math.min(5, Math.max(1, Math.ceil(ratio * 5))));
+      }
+    }
+
     store.updateTelemetry({
       x: this.playerPos.x,
       z: this.playerPos.z,
@@ -13770,11 +14745,30 @@ export class DhakaCityEngine {
       speedKmh: activeVeh ? Math.round(Math.abs(activeVeh.speed) * 2.6) : 0,
       vehicleHealth: activeVeh ? Math.round(activeVeh.health) : 100,
       vehicleMaxHealth: activeVeh ? activeVeh.maxHealth : 100,
+      vehicleFuel: activeVeh ? Math.round(activeVeh.fuel ?? 100) : 100,
+      vehicleGear,
       stamina: Math.round(this.playerStamina),
+      isSwimming: this.isSwimming,
     });
 
     if (this.activeVehicleId) {
-      store.setNearbyPrompt(null);
+      const nearStation = this.cngStationSpots.find(
+        (cs) => Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
+      );
+      if (nearStation && activeVeh && activeVeh.type !== 'rickshaw') {
+        store.setNearbyPrompt({
+          type: 'poi',
+          id: 'cng_station',
+          labelEn: nearStation.isMarine
+            ? '[E] Marine Fuel Dock: Refuel & Repair Boat — ৳100'
+            : '[E] CNG Station: Refuel & Repair Vehicle — ৳100',
+          labelBn: nearStation.isMarine
+            ? '[E] নৌ ঘাট ফুয়েল: ট্যাংক ফুল ও মেরামত — ৳১০০'
+            : '[E] সিএনজি পাম্প: গ্যাস ও গাড়ি মেরামত — ৳১০০',
+        });
+      } else {
+        store.setNearbyPrompt(null);
+      }
       return;
     }
 
@@ -13833,6 +14827,21 @@ export class DhakaCityEngine {
             id: 'cng_station',
             labelEn: '[E] CNG Station: Refuel & Repair Nearby Vehicle — ৳100',
             labelBn: '[E] সিএনজি পাম্প: গ্যাস ও গাড়ি মেরামত — ৳১০০',
+          };
+          break;
+        }
+      }
+    }
+
+    if (!prompt) {
+      for (const atm of this.streetAtmSpots) {
+        const d = Math.hypot(atm.x - this.playerPos.x, atm.z - this.playerPos.z);
+        if (d < 4.5) {
+          prompt = {
+            type: 'poi',
+            id: 'street_atm',
+            labelEn: `[E] ${atm.nameEn}: Withdraw ৳500 Quick Cash`,
+            labelBn: `[E] ${atm.nameBn}: ৳৫০০ নগদ উত্তোলন`,
           };
           break;
         }
@@ -13959,8 +14968,11 @@ export class DhakaCityEngine {
       Math.sin(this.cameraYaw) *
         Math.cos(this.cameraPitch) *
         this.currentCameraDist;
+    const minCamY = this.isSwimming
+      ? Math.max(0.85, this.playerPos.y + 1.45)
+      : this.playerPos.y + 0.9;
     let camY = Math.max(
-      this.playerPos.y + 0.9,
+      minCamY,
       targetY + Math.sin(this.cameraPitch) * this.currentCameraDist
     );
     if (isInsideJfp) {
@@ -14298,6 +15310,7 @@ export class DhakaCityEngine {
     if (this.vehicles) {
       for (const otherVeh of this.vehicles) {
         if (ignoreVehicleId && otherVeh.id === ignoreVehicleId) continue;
+        if (otherVeh.y < -1.0) continue; // Sunken vehicles underwater do not block surface boats/swimmers
         const otherElev = this.getRoadElevation(otherVeh.x, otherVeh.z, otherVeh.y);
         if (Math.abs(elev - otherElev) > 2.5) continue; // Separated vertical levels
         const oStats = VEHICLE_STATS[otherVeh.type];

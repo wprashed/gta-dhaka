@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { PauseTab, useGameStore } from '../store/useGameStore';
 import {
+  CNG_STATIONS,
   DISTRICTS,
+  MARINE_DOCKS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
+  SPEED_CAMERAS,
   STORY_MISSIONS,
+  STREET_ATMS,
   VEHICLE_STATS,
   PLAYABLE_CHARACTERS,
 } from '../data/dhakaWorldData';
@@ -445,6 +449,71 @@ export const PauseMenuModal: React.FC = () => {
                         strokeWidth={4}
                       />
                     </g>
+                  ))}
+
+                  {/* CNG Stations, Marine Fuel Docks, ATMs & Speed Cameras */}
+                  {CNG_STATIONS.map((cs, idx) => (
+                    <rect
+                      key={`cng_${idx}`}
+                      x={cs.x - 11}
+                      y={cs.z - 11}
+                      width={22}
+                      height={22}
+                      rx={4}
+                      fill="#16a34a"
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      className="cursor-pointer"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setCustomWaypoint({ x: cs.x, z: cs.z, name: cs.nameEn });
+                      }}
+                    />
+                  ))}
+                  {MARINE_DOCKS.map((md, idx) => (
+                    <rect
+                      key={`marine_${idx}`}
+                      x={md.x - 11}
+                      y={md.z - 11}
+                      width={22}
+                      height={22}
+                      rx={4}
+                      fill="#0284c7"
+                      stroke="#ffffff"
+                      strokeWidth={3}
+                      className="cursor-pointer"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setCustomWaypoint({ x: md.x, z: md.z, name: md.nameEn });
+                      }}
+                    />
+                  ))}
+                  {STREET_ATMS.map((atm, idx) => (
+                    <circle
+                      key={`atm_${idx}`}
+                      cx={atm.x}
+                      cy={atm.z}
+                      r={11}
+                      fill="#38bdf8"
+                      stroke="#0f172a"
+                      strokeWidth={3}
+                      className="cursor-pointer"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setCustomWaypoint({ x: atm.x, z: atm.z, name: atm.nameEn });
+                      }}
+                    />
+                  ))}
+                  {SPEED_CAMERAS.map((cam, idx) => (
+                    <circle
+                      key={`cam_${idx}`}
+                      cx={cam.x}
+                      cy={cam.z}
+                      r={9}
+                      fill="#ef4444"
+                      stroke="#fef08a"
+                      strokeWidth={2.5}
+                    />
                   ))}
 
                   {customWaypoint && (
@@ -1479,18 +1548,22 @@ export const PauseMenuModal: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {[
-                ['W, A, S, D / Arrow Keys', 'Walk, Run, Steer & Drive Vehicle'],
-                ['Left Shift (Hold)', 'Sprint on Foot (Drains Stamina)'],
-                ['F or E', 'Enter / Exit Vehicle, Buy Street Food, Use Shop'],
-                ['H', 'Honk CNG/Bus Horn or Ring Cycle Rickshaw Bell'],
+                ['W, A, S, D / Arrow Keys', 'Walk, Swim, Steer & Drive Vehicle'],
+                ['Left Shift (Hold)', 'Sprint on Foot / Fast Crawl Stroke in Water'],
+                ['F or E', 'Board / Bail Out Vehicle, Refuel at CNG/Pier, Buy Food, Use ATM & Shop'],
+                ['H', 'Honk Horn (Parts Traffic) or Ring Rickshaw Bell'],
+                ['L', 'Toggle Vehicle Headlights (Auto / On / Off)'],
+                ['G', 'Start / Cancel Passenger Taxi/CNG Fare Job'],
                 ['Spacebar', 'Jump (On Foot) / Handbrake Drift (In Vehicle)'],
                 ['C', 'Toggle Crouch (On Foot)'],
                 ['T', 'Talk to Nearby Dhaka Citizens & Contacts'],
-                ['J or K', 'Melee Punch / Swing Cricket Bat or Lathi'],
+                ['1-9, 0, - / Q', 'Equip or Cycle Firearms & Deshi Weapons'],
+                ['Right-Click or Z', 'Toggle Tactical Aim Down Sights (ADS)'],
+                ['J, K, X / Left-Click', 'Melee Strike / Fire Weapon'],
+                ['R', 'Reload Firearm (On Foot) / Switch FM Radio (In Vehicle)'],
                 ['Mouse Drag', 'Orbit 360° Third-Person Camera'],
                 ['V', 'Cycle Camera Distance (Close, Standard, Far Chase)'],
-                ['R', 'Switch Bangladeshi FM Radio Station'],
-                ['M or ESC', 'Open Interactive Dhaka GPS Map & Pause Menu'],
+                ['M, Tab, or ESC', 'Open Interactive Dhaka GPS Map & Pause Menu'],
               ].map(([key, desc]) => (
                 <div
                   key={key}

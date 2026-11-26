@@ -54,12 +54,15 @@ interface GameState {
   armor: number;
   maxArmor: number;
   stamina: number;
+  isSwimming: boolean;
   taka: number;
   inVehicleId: string | null;
   currentVehicleType: VehicleType | null;
   currentVehicleSpeedKmh: number;
   currentVehicleHealth: number;
   currentVehicleMaxHealth: number;
+  currentVehicleFuel: number;
+  currentVehicleGear: string;
   currentDistrict: DistrictId;
 
   // Customization & inventory
@@ -189,7 +192,10 @@ interface GameState {
     speedKmh: number;
     vehicleHealth: number;
     vehicleMaxHealth: number;
+    vehicleFuel?: number;
+    vehicleGear?: string;
     stamina?: number;
+    isSwimming?: boolean;
   }) => void;
 
   setNearbyPrompt: (prompt: NearbyPrompt | null) => void;
@@ -208,7 +214,7 @@ interface GameState {
   healPlayer: (healthGain: number, armorGain?: number) => void;
 
   setWantedLevel: (level: number) => void;
-  tickWorldClock: (dt: number) => void;
+  tickWorldClock: (dt: number, policePursuing?: boolean) => void;
   setWeather: (weather: WeatherType) => void;
   setTimeOfDay: (hour: number) => void;
   setRadioStation: (station: RadioStationId) => void;
@@ -263,12 +269,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   armor: 35,
   maxArmor: 100,
   stamina: 100,
+  isSwimming: false,
   taka: 1850,
   inVehicleId: null,
   currentVehicleType: null,
   currentVehicleSpeedKmh: 0,
   currentVehicleHealth: 120,
   currentVehicleMaxHealth: 120,
+  currentVehicleFuel: 100,
+  currentVehicleGear: 'P',
   currentDistrict: 'farmgate',
   isWasted: false,
   isBusted: false,
@@ -491,7 +500,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentVehicleSpeedKmh: data.speedKmh,
       currentVehicleHealth: data.vehicleHealth,
       currentVehicleMaxHealth: data.vehicleMaxHealth,
+      currentVehicleFuel: data.vehicleFuel ?? 100,
+      currentVehicleGear: data.vehicleGear ?? 'P',
       stamina: data.stamina ?? s.stamina,
+      isSwimming: data.isSwimming ?? false,
     }));
   },
 
@@ -625,12 +637,21 @@ export const useGameStore = create<GameState>((set, get) => ({
         wantedLevel: 0,
         wantedCooldown: 0,
         taka: Math.max(0, st.taka - 500),
+        tools: st.tools.map((t) =>
+          t.isFirearm
+            ? {
+                ...t,
+                currentClip: 0,
+                reserveAmmo: Math.floor((t.reserveAmmo ?? 0) * 0.5),
+              }
+            : t
+        ),
         teleportRequest: { x: 10, z: -10 }, // Farmgate Police Box
         bannerAlert: {
           titleEn: 'RELEASED FROM DMP POLICE BOX',
           titleBn: 'ফার্মগেট পুলিশ বক্স থেকে মুক্তি',
-          subtitleEn: 'Traffic violation & bail fine ৳500 settled.',
-          subtitleBn: 'ট্রাফিক লঙ্ঘন ও জামিন জরিমানা বাবদ ৳৫০০ পরিশোধিত।',
+          subtitleEn: 'Bail fine ৳500 paid & loose firearm ammo confiscated.',
+          subtitleBn: 'জামিন ৳৫০০ পরিশোধিত ও অবৈধ গুলি জব্দ করা হয়েছে।',
           tone: 'green',
         },
       }));
@@ -716,7 +737,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  tickWorldClock: (dt) => {
+  tickWorldClock: (dt, policePursuing = false) => {
     const s = get();
     if (s.gamePhase !== 'playing') return;
 
@@ -725,12 +746,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     let nextWanted = s.wantedLevel;
     let nextCooldown = s.wantedCooldown;
     if (nextWanted > 0) {
-      // Nadia "Digital Ghost": wanted level cools down 35% faster
-      const decayMult = s.selectedCharacterId === 'nadia' ? 1.35 : 1.0;
-      nextCooldown = Math.max(0, nextCooldown - dt * decayMult);
-      if (nextCooldown <= 0) {
-        nextWanted = Math.max(0, nextWanted - 1);
-        nextCooldown = nextWanted > 0 ? 18 : 0;
+      if (policePursuing) {
+        // Hold wanted cooldown steady while pursuing police cruisers are within 55m
+        nextCooldown = Math.max(nextCooldown, 14);
+      } else {
+        // Nadia "Digital Ghost": wanted level cools down 35% faster
+        const decayMult = s.selectedCharacterId === 'nadia' ? 1.35 : 1.0;
+        nextCooldown = Math.max(0, nextCooldown - dt * decayMult);
+        if (nextCooldown <= 0) {
+          nextWanted = Math.max(0, nextWanted - 1);
+          nextCooldown = nextWanted > 0 ? 18 : 0;
+        }
       }
     }
 

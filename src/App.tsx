@@ -28,7 +28,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleTriggerAction = (
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare' | 'lights'
   ) => {
     engineRef.current?.triggerTouchAction(action);
   };
