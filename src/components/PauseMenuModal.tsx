@@ -180,7 +180,7 @@ export const PauseMenuModal: React.FC = () => {
           <img
             src={CHARACTER_PORTRAITS.arif}
             alt="Arif Rahman"
-            className="w-11 h-11 rounded-xl object-cover border-2 border-amber-400 shadow-lg"
+            className="w-11 h-11 rounded-xl object-cover object-top border-2 border-amber-400 shadow-lg"
           />
           <div>
             <h2 className="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-2">
@@ -1231,7 +1231,7 @@ export const PauseMenuModal: React.FC = () => {
                         <img
                           src={resolveAssetUrl(char.avatar)}
                           alt={char.nameEn}
-                          className={`w-14 h-14 rounded-xl object-cover border-2 shrink-0 ${
+                          className={`w-14 h-14 rounded-xl object-cover object-top border-2 shrink-0 ${
                             isSelected ? 'border-emerald-400 shadow-md ring-2 ring-emerald-500/40' : 'border-slate-700'
                           }`}
                           onError={(e) => {

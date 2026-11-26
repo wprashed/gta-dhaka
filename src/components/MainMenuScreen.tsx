@@ -373,7 +373,7 @@ export const MainMenuScreen: React.FC = () => {
                         <img
                           src={resolveAssetUrl(char.avatar)}
                           alt={char.nameEn}
-                          className={`w-12 h-12 rounded-xl object-cover border-2 shrink-0 ${
+                          className={`w-12 h-12 rounded-xl object-cover object-top border-2 shrink-0 ${
                             isSelected ? 'border-emerald-400 shadow-md ring-2 ring-emerald-500/40' : 'border-slate-700'
                           }`}
                           onError={(e) => {
@@ -470,7 +470,7 @@ export const MainMenuScreen: React.FC = () => {
                   <img
                     src={CHARACTER_PORTRAITS.nadia}
                     alt="Nadia Hasan"
-                    className="w-16 h-16 rounded-xl object-cover border border-pink-500/40 shrink-0"
+                    className="w-16 h-16 rounded-xl object-cover object-top border border-pink-500/40 shrink-0"
                   />
                   <div>
                     <h4 className="text-sm font-black text-white">

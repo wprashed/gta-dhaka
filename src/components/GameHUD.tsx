@@ -215,7 +215,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             <img
               src={resolveAssetUrl(currentChar.avatar)}
               alt={currentChar.nameEn}
-              className="w-5 h-5 rounded-full object-cover border border-emerald-400 shrink-0"
+              className="w-5 h-5 rounded-full object-cover object-top border border-emerald-400 shrink-0"
               onError={(e) => {
                 const el = e.currentTarget;
                 if (!el.src.includes('arif_portrait.jpg')) {
@@ -435,7 +435,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             <img
               src={CHARACTER_PORTRAITS.arif}
               alt="Arif"
-              className="w-5 h-5 rounded-full object-cover border border-amber-400/80 shrink-0"
+              className="w-5 h-5 rounded-full object-cover object-top border border-amber-400/80 shrink-0"
             />
 
             {/* Taka Wallet */}
@@ -779,7 +779,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
               <img
                 src={getPortraitForSpeaker(activeDialogue.speakerEn)}
                 alt={activeDialogue.speakerEn}
-                className="w-10 h-10 rounded-lg object-cover border border-amber-400/80 shrink-0 shadow"
+                className="w-10 h-10 rounded-lg object-cover object-top border border-amber-400/80 shrink-0 shadow"
                 onError={(e) => {
                   const el = e.currentTarget;
                   if (!el.src.includes('arif_portrait.jpg')) {
