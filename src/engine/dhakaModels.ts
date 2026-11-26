@@ -3885,6 +3885,44 @@ export function setDrivingPose(
       tmpQ.setFromAxisAngle(axisX, -0.55).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.15));
       rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
     }
+  } else if (vehicleType === 'boat') {
+    // WATER TAXI / BOAT HELM STEERING POSE (standing / leaning at helm):
+    if (rig.leftUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.08).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.06));
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightUpLeg) {
+      tmpQ.setFromAxisAngle(axisX, 0.08).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.06));
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(tmpQ);
+    }
+    if (rig.leftLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.15);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(tmpQ);
+    }
+    if (rig.rightLeg) {
+      tmpQ.setFromAxisAngle(axisX, -0.15);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(tmpQ);
+    }
+    if (rig.spine) {
+      tmpQ.setFromAxisAngle(axisX, 0.14);
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(tmpQ);
+    }
+    if (rig.leftArm) {
+      tmpQ.setFromAxisAngle(axisX, -0.95).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, 0.22));
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightArm) {
+      tmpQ.setFromAxisAngle(axisX, -0.95).multiply(new THREE.Quaternion().setFromAxisAngle(axisZ, -0.22));
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(tmpQ);
+    }
+    if (rig.leftForeArm) {
+      tmpQ.setFromAxisAngle(axisX, -0.65);
+      rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(tmpQ);
+    }
+    if (rig.rightForeArm) {
+      tmpQ.setFromAxisAngle(axisX, -0.65);
+      rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(tmpQ);
+    }
   } else {
     // CAR, CNG, POLICE CRUISER, PICKUP, BUS SEATED DRIVER:
     // Thighs angled forward (+1.25 rad) with slight symmetric splay (±0.18 on axisZ)
