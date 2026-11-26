@@ -12512,7 +12512,8 @@ export class DhakaCityEngine {
     }
 
     if (occluded) {
-      const safeDist = desiredDist * 0.52;
+      // Never pull camera closer than 4.5m — prevents it clipping through the character body
+      const safeDist = Math.max(4.5, desiredDist * 0.6);
       this.currentCameraDist = Math.min(this.currentCameraDist, safeDist);
     } else {
       // Smoothly ease back out to full distance without jumping or oscillating

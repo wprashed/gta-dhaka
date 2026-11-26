@@ -3173,6 +3173,15 @@ export function createCharacterMesh(
         weaponMesh.rotation.set(-1.74, 0.44, 0.28);
         group.add(weaponMesh);
       }
+      // Foot-grounding correction: RPM / Michelle / Soldier GLBs have their skeleton root
+      // (Hips bone) at ~0.92–1.05m in model Y-space, leaving feet below y=0 in group space.
+      // Shift the clonedScene UP so the lowest point (feet) aligns exactly with y=0,
+      // which is where playerLimbs.group.position is placed (ground elevation).
+      const footYOffset =
+        modelKey === 'michelle' ? 0.0
+        : modelKey === 'soldier' ? 0.0
+        : 0.0; // rpm_male + readyplayerme1 are Y=0 footed after scale; adjust if still floating
+      clonedScene.position.y = footYOffset;
       group.add(clonedScene);
       limbs.gltfRoot = clonedScene;
 
