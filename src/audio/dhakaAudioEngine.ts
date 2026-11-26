@@ -43,8 +43,8 @@ class DhakaAudioEngine {
   private lastCalloutTime = 0;
   private trafficHornInterval: number | null = null;
 
-  // Radio sequencer
-  private currentStation: RadioStationId = 'dhaka_folk';
+  // Radio sequencer (default off to prevent unsolicited synthetic bg music)
+  private currentStation: RadioStationId = 'off';
   private radioInterval: number | null = null;
   private radioStep = 0;
 
@@ -67,7 +67,6 @@ class DhakaAudioEngine {
       this.setupEngineSound();
       this.setupRainAmbience();
       this.setupTrafficAmbience();
-      this.startRadioSequencer();
     } catch {
       // Web Audio not allowed yet
     }
@@ -94,7 +93,6 @@ class DhakaAudioEngine {
       '/audio/horn_cng.wav',
       '/audio/horn_bus_air.wav',
       '/audio/horn_car.wav',
-      '/audio/horn_siren.wav',
       '/audio/dhaka_traffic_bg.wav',
       '/audio/dhaka_crowd_chatter.wav',
       '/audio/voice_cha_vendor.wav',
@@ -234,29 +232,20 @@ class DhakaAudioEngine {
   private setupTrafficAmbience() {
     if (!this.ctx) return;
 
-    // Master gains for traffic drone and crowd street chatter
+    // Master gains for clean organic city atmosphere
     this.trafficGain = this.ctx.createGain();
-    this.trafficGain.gain.value = 0.22 * this.ambienceVolume;
+    this.trafficGain.gain.value = 0.14 * this.ambienceVolume;
     this.trafficGain.connect(this.ctx.destination);
 
     this.crowdGain = this.ctx.createGain();
-    this.crowdGain.gain.value = this.currentCrowdDensity * 0.18 * this.ambienceVolume;
+    this.crowdGain.gain.value = this.currentCrowdDensity * 0.12 * this.ambienceVolume;
     this.crowdGain.connect(this.ctx.destination);
 
-    // 1. Play real Dhaka Traffic Ambience AudioBuffer loop
+    // 1. Play real Dhaka Traffic Ambience AudioBuffer loop (clean, atmospheric, zero repetitive beeps)
     this.startTrafficBufferLoop();
 
     // 2. Play real Dhaka Pedestrian Crowd / Market Chatter AudioBuffer loop
     this.startCrowdBufferLoop();
-
-    // 3. Periodic distant Dhaka traffic echoes (random bus airhorn or rickshaw chime echoing in background)
-    if (this.trafficHornInterval) window.clearInterval(this.trafficHornInterval);
-    this.trafficHornInterval = window.setInterval(() => {
-      if (!this.ctx || this.trafficGain?.gain.value === 0) return;
-      if (Math.random() < 0.60) {
-        this.playDistantTrafficChirp();
-      }
-    }, 6000);
   }
 
   private startTrafficBufferLoop() {
@@ -350,53 +339,6 @@ class DhakaAudioEngine {
     }
 
     this.playBufferOneShot(path, 0.50 * this.sfxVolume, 0.05);
-  }
-
-  private playDistantTrafficChirp() {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const r = Math.random();
-
-    if (r < 0.45) {
-      // Distant cycle rickshaw bell chime
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1450, now);
-      gain.gain.setValueAtTime(0.018 * this.ambienceVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.3);
-    } else if (r < 0.75) {
-      // Distant CNG auto-rickshaw horn chirp
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(520, now);
-      gain.gain.setValueAtTime(0.022 * this.ambienceVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.18);
-    } else {
-      // Distant Dhaka City Bus dual airhorn blast echo
-      [220, 277].forEach((f) => {
-        if (!this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(f, now);
-        gain.gain.setValueAtTime(0.015 * this.ambienceVolume, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.4);
-      });
-    }
   }
 
   private setupRainAmbience() {
@@ -657,6 +599,9 @@ class DhakaAudioEngine {
   }
 
   public playHorn(type: "cng" | "bell" | "airhorn" | "car" | "siren" = "cng") {
+    // Police case sound / siren completely deleted per user request
+    if (type === "siren") return;
+
     this.init();
     if (!this.ctx) return;
 
@@ -664,7 +609,6 @@ class DhakaAudioEngine {
     if (type === "bell") hornUrl = "/audio/horn_rickshaw_bell.wav";
     else if (type === "cng") hornUrl = "/audio/horn_cng.wav";
     else if (type === "airhorn") hornUrl = "/audio/horn_bus_air.wav";
-    else if (type === "siren") hornUrl = "/audio/horn_siren.wav";
 
     // Play real recorded audio if loaded
     if (this.playBufferOneShot(hornUrl, 0.75)) {
@@ -713,33 +657,21 @@ class DhakaAudioEngine {
       return;
     }
 
-    if (type === "siren") {
+    // Car / CNG dual-tone acoustic horn
+    const freqs = type === "cng" ? [392, 494] : [349, 440];
+    freqs.forEach((freq) => {
+      if (!this.ctx) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(620, now);
-      osc.frequency.linearRampToValueAtTime(920, now + 0.22);
-      osc.frequency.linearRampToValueAtTime(620, now + 0.44);
-      gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.46);
+      osc.type = type === "cng" ? "sawtooth" : "triangle";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.10 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.47);
-      return;
-    }
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = "square";
-    const base = type === "cng" ? 480 : 370;
-    osc.frequency.setValueAtTime(base, now);
-    gain.gain.setValueAtTime(0.14 * this.sfxVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.24);
+      osc.stop(now + 0.28);
+    });
   }
 
   public playSfx(
@@ -767,53 +699,71 @@ class DhakaAudioEngine {
       | 'casing_drop'
       | 'ricochet'
       | 'pain_grunt'
+      | 'death_groan'
+      | 'bone_crack'
+      | 'arterial_spray'
+      | 'metro_chime'
   ) {
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
 
     if (effect === 'crash') {
-      // Violent metal crunch + shattering tempered safety glass
-      const dur = 0.46;
-      const bufSize = Math.floor(this.ctx.sampleRate * dur);
-      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) {
-        data[i] =
-          (Math.random() * 2 - 1) *
-          Math.exp(-i / (this.ctx.sampleRate * 0.12));
-      }
-      const noise = this.ctx.createBufferSource();
-      noise.buffer = buf;
-
-      // Heavy metal low-frequency impact crunch
+      // Realistic high-impact vehicular collision:
+      // 1. Heavy structural chassis shockwave (deep sub-bass impact)
       const lowOsc = this.ctx.createOscillator();
       const lowGain = this.ctx.createGain();
       lowOsc.type = 'sawtooth';
-      lowOsc.frequency.setValueAtTime(145, now);
-      lowOsc.frequency.exponentialRampToValueAtTime(30, now + 0.38);
-      lowGain.gain.setValueAtTime(0.38 * this.sfxVolume, now);
+      lowOsc.frequency.setValueAtTime(110, now);
+      lowOsc.frequency.exponentialRampToValueAtTime(22, now + 0.38);
+      lowGain.gain.setValueAtTime(0.48 * this.sfxVolume, now);
       lowGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
       lowOsc.connect(lowGain);
       lowGain.connect(this.ctx.destination);
       lowOsc.start(now);
       lowOsc.stop(now + 0.44);
 
-      // Glass shatter high-frequency fizz
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(3400, now);
-      filter.Q.value = 2.2;
+      // 2. Crumpled sheet metal & bumper crush
+      const crashDur = 0.42;
+      const crashBufSize = Math.floor(this.ctx.sampleRate * crashDur);
+      const crashBuf = this.ctx.createBuffer(1, crashBufSize, this.ctx.sampleRate);
+      const crashData = crashBuf.getChannelData(0);
+      for (let i = 0; i < crashBufSize; i++) {
+        const decay = Math.exp(-i / (this.ctx.sampleRate * 0.09));
+        crashData[i] = (Math.random() * 2 - 1) * decay;
+      }
+      const metalNoise = this.ctx.createBufferSource();
+      metalNoise.buffer = crashBuf;
 
-      const nGain = this.ctx.createGain();
-      nGain.gain.setValueAtTime(0.32 * this.sfxVolume, now);
-      nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      const metalFilter = this.ctx.createBiquadFilter();
+      metalFilter.type = 'bandpass';
+      metalFilter.frequency.setValueAtTime(750, now);
+      metalFilter.Q.value = 1.4;
 
-      noise.connect(filter);
-      filter.connect(nGain);
-      nGain.connect(this.ctx.destination);
-      noise.start(now);
-      noise.stop(now + 0.46);
+      const metalGain = this.ctx.createGain();
+      metalGain.gain.setValueAtTime(0.40 * this.sfxVolume, now);
+      metalGain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      metalNoise.connect(metalFilter);
+      metalFilter.connect(metalGain);
+      metalGain.connect(this.ctx.destination);
+      metalNoise.start(now);
+
+      // 3. Shattered safety glass fragmentation & tinkling scatter
+      [0.04, 0.09, 0.16, 0.24].forEach((gOffset, gIdx) => {
+        if (!this.ctx) return;
+        const gOsc = this.ctx.createOscillator();
+        const gGain = this.ctx.createGain();
+        gOsc.type = 'sine';
+        gOsc.frequency.setValueAtTime(3200 + gIdx * 750, now + gOffset);
+        gOsc.frequency.exponentialRampToValueAtTime(1800, now + gOffset + 0.08);
+        gGain.gain.setValueAtTime(0.12 * this.sfxVolume, now + gOffset);
+        gGain.gain.exponentialRampToValueAtTime(0.001, now + gOffset + 0.085);
+        gOsc.connect(gGain);
+        gGain.connect(this.ctx.destination);
+        gOsc.start(now + gOffset);
+        gOsc.stop(now + gOffset + 0.09);
+      });
       return;
     }
 
@@ -878,18 +828,32 @@ class DhakaAudioEngine {
     }
 
     if (effect === 'skid') {
-      // High-pitched friction noise for tires drifting on Dhaka asphalt
-      const osc = this.ctx.createOscillator();
+      // Realistic abrasive rubber friction screech on gritty asphalt
+      const dur = 0.24;
+      const bufSize = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        const tEnv = Math.sin((i / bufSize) * Math.PI);
+        data[i] = (Math.random() * 2 - 1) * tEnv;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1150, now);
+      filter.frequency.exponentialRampToValueAtTime(820, now + dur);
+      filter.Q.value = 3.2;
+
       const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(840, now);
-      osc.frequency.linearRampToValueAtTime(710, now + 0.18);
-      gain.gain.setValueAtTime(0.08 * this.sfxVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-      osc.connect(gain);
+      gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      noise.connect(filter);
+      filter.connect(gain);
       gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.21);
+      noise.start(now);
       return;
     }
 
@@ -913,46 +877,78 @@ class DhakaAudioEngine {
       effect === 'shotgun' ||
       effect === 'rifle'
     ) {
-      // Synthesized ballistic transient + filtered noise tail
-      const duration = effect === 'shotgun' ? 0.28 : effect === 'rifle' ? 0.16 : 0.2;
-      const bufSize = Math.floor(this.ctx.sampleRate * duration);
-      const noiseBuf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
-      const data = noiseBuf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.28));
+      // High-Fidelity 4-Stage Procedural Firearm Acoustics:
+      // Stage 1: Supersonic Muzzle Crack (0.015s sharp pressure impulse)
+      const crackBufSize = Math.floor(this.ctx.sampleRate * 0.018);
+      const crackBuf = this.ctx.createBuffer(1, crackBufSize, this.ctx.sampleRate);
+      const crackData = crackBuf.getChannelData(0);
+      for (let i = 0; i < crackBufSize; i++) {
+        crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (crackBufSize * 0.25));
       }
-      const noiseSrc = this.ctx.createBufferSource();
-      noiseSrc.buffer = noiseBuf;
+      const crackSrc = this.ctx.createBufferSource();
+      crackSrc.buffer = crackBuf;
+      const crackFilter = this.ctx.createBiquadFilter();
+      crackFilter.type = 'highpass';
+      crackFilter.frequency.setValueAtTime(2600, now);
+      const crackGain = this.ctx.createGain();
+      crackGain.gain.setValueAtTime(0.55 * this.sfxVolume, now);
+      crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+      crackSrc.connect(crackFilter);
+      crackFilter.connect(crackGain);
+      crackGain.connect(this.ctx.destination);
+      crackSrc.start(now);
 
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(
-        effect === 'shotgun' ? 950 : effect === 'rifle' ? 1850 : 1400,
-        now
-      );
-      filter.frequency.exponentialRampToValueAtTime(160, now + duration);
+      // Stage 2: Gunpowder Expansion Explosion Body
+      const blastDur = effect === 'shotgun' ? 0.32 : effect === 'rifle' ? 0.20 : 0.24;
+      const blastBufSize = Math.floor(this.ctx.sampleRate * blastDur);
+      const blastBuf = this.ctx.createBuffer(1, blastBufSize, this.ctx.sampleRate);
+      const blastData = blastBuf.getChannelData(0);
+      for (let i = 0; i < blastBufSize; i++) {
+        blastData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (blastBufSize * 0.32));
+      }
+      const blastSrc = this.ctx.createBufferSource();
+      blastSrc.buffer = blastBuf;
+      const blastFilter = this.ctx.createBiquadFilter();
+      blastFilter.type = 'lowpass';
+      const cutoff = effect === 'shotgun' ? 780 : effect === 'rifle' ? 1650 : 1200;
+      blastFilter.frequency.setValueAtTime(cutoff, now);
+      blastFilter.frequency.exponentialRampToValueAtTime(140, now + blastDur);
+      const blastGain = this.ctx.createGain();
+      blastGain.gain.setValueAtTime(0.50 * this.sfxVolume, now);
+      blastGain.gain.exponentialRampToValueAtTime(0.001, now + blastDur);
+      blastSrc.connect(blastFilter);
+      blastFilter.connect(blastGain);
+      blastGain.connect(this.ctx.destination);
+      blastSrc.start(now);
 
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.42 * this.sfxVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-      noiseSrc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.ctx.destination);
-      noiseSrc.start(now);
-
-      // Low-end punch oscillator
+      // Stage 3: Low-End Mechanical Shockwave Punch
       const punch = this.ctx.createOscillator();
       const punchGain = this.ctx.createGain();
       punch.type = 'triangle';
-      punch.frequency.setValueAtTime(effect === 'shotgun' ? 140 : 210, now);
-      punch.frequency.exponentialRampToValueAtTime(34, now + 0.11);
-      punchGain.gain.setValueAtTime(0.32 * this.sfxVolume, now);
-      punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      const punchStartFreq = effect === 'shotgun' ? 95 : effect === 'rifle' ? 175 : 135;
+      punch.frequency.setValueAtTime(punchStartFreq, now);
+      punch.frequency.exponentialRampToValueAtTime(26, now + 0.12);
+      punchGain.gain.setValueAtTime(0.45 * this.sfxVolume, now);
+      punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
       punch.connect(punchGain);
       punchGain.connect(this.ctx.destination);
       punch.start(now);
-      punch.stop(now + 0.12);
+      punch.stop(now + 0.15);
+
+      // Stage 4: Urban Concrete Canyon Reverb Tail (Dhaka street wall slapback)
+      [0.045, 0.11, 0.19].forEach((echoDelay, eIdx) => {
+        if (!this.ctx) return;
+        const eOsc = this.ctx.createOscillator();
+        const eGain = this.ctx.createGain();
+        eOsc.type = 'sine';
+        eOsc.frequency.setValueAtTime(180 - eIdx * 35, now + echoDelay);
+        eGain.gain.setValueAtTime((0.14 / (eIdx + 1)) * this.sfxVolume, now + echoDelay);
+        eGain.gain.exponentialRampToValueAtTime(0.001, now + echoDelay + 0.12);
+        eOsc.connect(eGain);
+        eGain.connect(this.ctx.destination);
+        eOsc.start(now + echoDelay);
+        eOsc.stop(now + echoDelay + 0.13);
+      });
       return;
     }
 
@@ -1100,6 +1096,122 @@ class DhakaAudioEngine {
       return;
     }
 
+    if (effect === 'death_groan') {
+      // Visceral deep throat collapse groan / fatal death rattle
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(145, now);
+      osc1.frequency.exponentialRampToValueAtTime(48, now + 0.42);
+
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(110, now);
+      osc2.frequency.exponentialRampToValueAtTime(36, now + 0.45);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(420, now);
+      filter.frequency.exponentialRampToValueAtTime(180, now + 0.4);
+      filter.Q.setValueAtTime(3.2, now);
+
+      gain.gain.setValueAtTime(0.32 * this.sfxVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.46);
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.47);
+      osc2.stop(now + 0.47);
+      return;
+    }
+
+    if (effect === 'bone_crack') {
+      // High-impact blunt bone fracture / crunch
+      const dur = 0.08;
+      const bufSize = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.015));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(950, now);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.45 * this.sfxVolume, now);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+      return;
+    }
+
+    if (effect === 'arterial_spray') {
+      // High-pressure ballistic arterial blood squirt
+      const dur = 0.22;
+      const bufSize = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buf;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2600, now);
+      filter.frequency.exponentialRampToValueAtTime(1400, now + 0.2);
+      filter.Q.setValueAtTime(4.0, now);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.28 * this.sfxVolume, now);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start(now);
+      return;
+    }
+
+    if (effect === 'metro_chime') {
+      // Official Dhaka Metro 4-tone melodic arrival chime (C5 -> E5 -> G5 -> C6) + traction motor resonance
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, idx) => {
+        const t0 = now + idx * 0.13;
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t0);
+        gain.gain.setValueAtTime(0.22 * this.sfxVolume, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx!.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.36);
+      });
+      // Soft electric traction motor hum
+      const humOsc = this.ctx.createOscillator();
+      const humGain = this.ctx.createGain();
+      humOsc.type = 'triangle';
+      humOsc.frequency.setValueAtTime(110, now);
+      humOsc.frequency.linearRampToValueAtTime(165, now + 0.5);
+      humGain.gain.setValueAtTime(0.08 * this.sfxVolume, now);
+      humGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      humOsc.connect(humGain);
+      humGain.connect(this.ctx.destination);
+      humOsc.start(now);
+      humOsc.stop(now + 0.56);
+      return;
+    }
+
     if (effect === 'hit') {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -1135,56 +1247,10 @@ class DhakaAudioEngine {
   public setRadioStation(station: RadioStationId) {
     this.currentStation = station;
     this.radioStep = 0;
-    if (station === 'off') {
-      if (this.radioInterval) {
-        window.clearInterval(this.radioInterval);
-        this.radioInterval = null;
-      }
-    } else if (!this.radioInterval) {
-      this.startRadioSequencer();
+    if (this.radioInterval) {
+      window.clearInterval(this.radioInterval);
+      this.radioInterval = null;
     }
-  }
-
-  private startRadioSequencer() {
-    if (this.radioInterval) window.clearInterval(this.radioInterval);
-
-    // Pentatonic / Bhairavi / Urban scales for authentic Dhaka vibe
-    const folkScale = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 392.0, 329.63];
-    const gullyScale = [110.0, 110.0, 130.81, 146.83, 110.0, 164.81, 146.83, 130.81];
-    const synthScale = [220.0, 277.18, 329.63, 440.0, 329.63, 277.18, 246.94, 329.63];
-
-    this.radioInterval = window.setInterval(() => {
-      if (!this.ctx || this.ctx.state !== 'running') return;
-      if (this.currentStation === 'off' || this.musicVolume <= 0.01) return;
-
-      const now = this.ctx.currentTime;
-      const step = this.radioStep % 8;
-      this.radioStep++;
-
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      let freq = 261.63;
-      if (this.currentStation === 'dhaka_folk') {
-        osc.type = 'triangle';
-        freq = folkScale[step];
-      } else if (this.currentStation === 'gully_beat') {
-        osc.type = 'sawtooth';
-        freq = gullyScale[step];
-      } else {
-        osc.type = 'sine';
-        freq = synthScale[step];
-      }
-
-      osc.frequency.setValueAtTime(freq, now);
-      gain.gain.setValueAtTime(0.035 * this.musicVolume, now);
-      gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.32);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.34);
-    }, 360);
   }
 
   public setVolumes(music: number, sfx: number, ambience: number) {

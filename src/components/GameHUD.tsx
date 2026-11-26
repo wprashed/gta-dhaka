@@ -19,6 +19,7 @@ import {
   CHARACTER_PORTRAITS,
   getPortraitForSpeaker,
 } from '../data/sketchfabGtaCatalog';
+import { resolveAssetUrl } from '../utils/assets';
 import { MinimapHUD } from './MinimapHUD';
 import {
   Box,
@@ -212,9 +213,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             title={language === 'en' ? 'Click to switch character' : 'চরিত্র পরিবর্তন করতে ক্লিক করুন'}
           >
             <img
-              src={currentChar.avatar}
+              src={resolveAssetUrl(currentChar.avatar)}
               alt={currentChar.nameEn}
               className="w-5 h-5 rounded-full object-cover border border-emerald-400 shrink-0"
+              onError={(e) => {
+                const el = e.currentTarget;
+                if (!el.src.includes('arif_portrait.jpg')) {
+                  el.src = resolveAssetUrl('/textures/arif_portrait.jpg');
+                }
+              }}
             />
             <span className="text-[11px] font-bold text-slate-200 group-hover:text-emerald-300">
               {language === 'en' ? currentChar.nameEn.split(' ')[0] : currentChar.nameBn.split(' ')[0]}
@@ -773,6 +780,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                 src={getPortraitForSpeaker(activeDialogue.speakerEn)}
                 alt={activeDialogue.speakerEn}
                 className="w-10 h-10 rounded-lg object-cover border border-amber-400/80 shrink-0 shadow"
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  if (!el.src.includes('arif_portrait.jpg')) {
+                    el.src = resolveAssetUrl('/textures/arif_portrait.jpg');
+                  }
+                }}
               />
               <div className="flex-1 min-w-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block truncate">

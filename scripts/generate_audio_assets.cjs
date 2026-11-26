@@ -368,94 +368,56 @@ function generateCarHorn() {
 writeWav('horn_car.wav', SR, generateCarHorn());
 
 function generatePoliceSiren() {
-  const duration = 1.4;
+  // Police case sound / siren deleted per user request
+  const duration = 0.05;
   const numSamples = Math.floor(duration * SR);
-  const samples = new Float32Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SR;
-    // Oscillating wail: 680 Hz to 1180 Hz over 1.4s
-    const sweep = Math.sin(2 * Math.PI * (1 / 1.4) * t);
-    const freq = 930 + sweep * 250;
-    // Phase integration for accurate frequency modulation
-    const phase = 2 * Math.PI * (930 * t - (250 * 1.4 / (2 * Math.PI)) * Math.cos(2 * Math.PI * (1 / 1.4) * t));
-    const tone = Math.sin(phase) + 0.35 * Math.sin(phase * 2);
-    samples[i] = tone * 0.65;
-  }
-  return samples;
+  return new Float32Array(numSamples);
 }
 writeWav('horn_siren.wav', SR, generatePoliceSiren());
 
 
 // --------------------------------------------------------------------------
-// 7. DHAKA BACKGROUND TRAFFIC AMBIENCE (10s SEAMLESS LOOP)
-// Continuous authentic urban audio: diesel bus exhaust rumble, asphalt tire hum,
-// distant passing vehicles, echoing horns, and rickshaw bell tinkles.
+// 7. REALISTIC DHAKA URBAN ATMOSPHERE (12s SEAMLESS LOOP)
+// Clean, natural atmospheric soundscape: gentle open-air city breeze,
+// soft distant road texture, and natural acoustic depth.
+// Absolutely ZERO repetitive beeps, fake horns, or monotone drones.
 // --------------------------------------------------------------------------
 function generateDhakaTrafficAmbience() {
-  const duration = 10.0;
+  const duration = 12.0;
   const numSamples = Math.floor(duration * SR);
   const raw = new Float32Array(numSamples);
 
-  let noiseLp = 0;
-  let noiseHp = 0;
+  let lp1 = 0;
+  let lp2 = 0;
+  let lp3 = 0;
+  let rumbleLp = 0;
+
   for (let i = 0; i < numSamples; i++) {
     const t = i / SR;
 
-    // 1. Heavy Diesel Engine & City Low-End Drone (38 Hz + harmonics)
-    const engineDrone =
-      0.35 * Math.sin(2 * Math.PI * 38 * t + 0.3 * Math.sin(2 * Math.PI * 1.8 * t)) +
-      0.22 * Math.sin(2 * Math.PI * 76 * t) +
-      0.15 * Math.sin(2 * Math.PI * 114 * t) +
-      0.08 * Math.sin(2 * Math.PI * 152 * t);
-
-    // 2. Continuous Multi-Lane Asphalt Tire Friction (Pink / Brown Noise)
+    // 1. Gentle natural city air movement & atmospheric wind wash (3-pole lowpass)
     const wn = whiteNoise();
-    noiseLp = noiseLp * 0.94 + wn * 0.06;
-    noiseHp = noiseHp * 0.70 + (wn - noiseLp) * 0.30;
-    const tireHum = noiseLp * 0.55 + noiseHp * 0.15;
+    lp1 = lp1 * 0.96 + wn * 0.04;
+    lp2 = lp2 * 0.94 + lp1 * 0.06;
+    lp3 = lp3 * 0.92 + lp2 * 0.08;
 
-    // 3. Passing vehicle whooshes (Doppler whooshes across loop at t=2.2s, 6.4s, 8.8s)
-    let whoosh = 0;
-    const passes = [2.2, 6.4, 8.8];
-    for (const pTime of passes) {
-      const dt = t - pTime;
-      if (Math.abs(dt) < 1.4) {
-        const env = Math.exp(-((dt * 2.2) ** 2));
-        const dopplerFreq = 280 - dt * 90;
-        whoosh += env * 0.28 * Math.sin(2 * Math.PI * dopplerFreq * t) * (noiseLp * 1.5);
-      }
-    }
+    // Slow, organic breathing envelope of open-air wind (undulating gently over 12 seconds)
+    const breezeMod = 0.75 + 0.25 * Math.sin(2 * Math.PI * (1 / 12.0) * t + 0.4) + 0.12 * Math.sin(2 * Math.PI * (2 / 12.0) * t + 1.2);
+    const airWash = lp3 * breezeMod * 0.42;
 
-    // 4. Distant Echoing Dhaka Horns (soft, distance-filtered reverberant horn calls)
-    let distantHorn = 0;
-    // Bus dual horn echo at t=3.2s
-    if (t >= 3.2 && t <= 3.85) {
-      const ht = t - 3.2;
-      const hEnv = ht < 0.04 ? ht / 0.04 : ht > 0.55 ? (0.65 - ht) / 0.10 : 1.0;
-      distantHorn += hEnv * 0.16 * (Math.sin(2 * Math.PI * 311 * t) + 0.7 * Math.sin(2 * Math.PI * 440 * t));
-    }
-    // CNG beep echo at t=7.4s
-    if (t >= 7.4 && t <= 7.75) {
-      const ht = t - 7.4;
-      const hEnv = ht < 0.02 ? ht / 0.02 : (0.35 - ht) / 0.04;
-      distantHorn += hEnv * 0.12 * Math.sin(2 * Math.PI * 520 * t);
-    }
+    // 2. Deep, warm distant urban presence (ultra-low 36-45 Hz sub rumble, smooth and non-intrusive)
+    const subNoise = whiteNoise();
+    rumbleLp = rumbleLp * 0.985 + subNoise * 0.015;
+    const subRumble = rumbleLp * 0.28;
 
-    // 5. Distant Rickshaw Bell Accents (sweet high ring at t=1.1s and t=5.5s)
-    let bellAccent = 0;
-    for (const bTime of [1.1, 1.35, 5.5, 5.72]) {
-      const bt = t - bTime;
-      if (bt >= 0 && bt < 0.28) {
-        bellAccent += 0.10 * Math.sin(2 * Math.PI * 2950 * bt) * Math.exp(-bt / 0.055);
-        bellAccent += 0.07 * Math.sin(2 * Math.PI * 3420 * bt) * Math.exp(-bt / 0.045);
-      }
-    }
+    // 3. Subtle distant tire roll on smooth asphalt (soft continuous whisper)
+    const tireWhisper = (lp2 - lp3) * 0.18;
 
-    raw[i] = engineDrone * 0.40 + tireHum * 0.35 + whoosh * 0.30 + distantHorn * 0.25 + bellAccent * 0.20;
+    raw[i] = airWash + subRumble + tireWhisper;
   }
 
-  // Seamless crossfade: blend first 0.5s with last 0.5s for glitchless continuous looping
-  const fadeSamples = Math.floor(0.5 * SR);
+  // Seamless crossfade: blend first 0.8s with last 0.8s for flawless loop
+  const fadeSamples = Math.floor(0.8 * SR);
   const samples = new Float32Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     if (i < fadeSamples) {
@@ -469,7 +431,7 @@ function generateDhakaTrafficAmbience() {
 
   return samples;
 }
-writeWav("dhaka_traffic_bg.wav", SR, generateDhakaTrafficAmbience());
+writeWav('dhaka_traffic_bg.wav', SR, generateDhakaTrafficAmbience());
 
 // --------------------------------------------------------------------------
 // 8. DHAKA STREET CROWD & MARKET CHATTER (8s SEAMLESS LOOP)

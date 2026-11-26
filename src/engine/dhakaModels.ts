@@ -4754,3 +4754,150 @@ export function createHighwaySpeedSignTexture(
   return tex;
 }
 
+/**
+ * Dynamic physics-informed death and collapse ragdoll deformation for human characters:
+ * - Stops running animation clips cleanly so bones are not overwritten.
+ * - Interpolates naturally from standing posture (progress = 0) through knee-buckle and tumble (progress = 0.5)
+ *   to authentic splayed corpse ragdoll on the asphalt (progress = 1.0).
+ * - Caliber & impact-aware:
+ *   - 'gunshot': sharp backward / lateral recoil, lolling head, asymmetric bent knees, splayed arms
+ *   - 'melee': staggered buckling knees, clutching torso, contorted ground rest
+ *   - 'vehicle': violent tumble, widely splayed limbs
+ */
+export function setDeathRagdollPose(
+  limbs: CharacterLimbs,
+  cause: 'gunshot' | 'melee' | 'vehicle' = 'gunshot',
+  fallProgress = 1.0,
+  impactAngle = 0
+): void {
+  // 1. Stop any active GLTF animation mixer clips to prevent bone fighting
+  if (limbs.mixer) {
+    if (limbs.actions) {
+      Object.values(limbs.actions).forEach((action) => {
+        if (action?.isRunning()) {
+          action.stop();
+        }
+      });
+    }
+    limbs.currentActionName = undefined;
+  }
+
+  // Hide weapon mesh to prevent it floating rigidly in the air
+  if (limbs.weaponMesh) {
+    limbs.weaponMesh.visible = false;
+  }
+
+  const p = Math.max(0, Math.min(1, fallProgress));
+  // Non-linear easing for natural gravitational fall
+  const t = p * p;
+
+  // 2. ReadyPlayerMe / Michelle Human Skeleton Bones
+  if (limbs.rpmRig) {
+    const rig = limbs.rpmRig;
+
+    // Asymmetric leg splay & knee buckle
+    if (rig.leftUpLeg) {
+      _tmpQuat.setFromAxisAngle(_axisX, (0.45 + (cause === 'vehicle' ? 0.35 : 0.15)) * t);
+      const splay = new THREE.Quaternion().setFromAxisAngle(_axisZ, -0.32 * t);
+      rig.leftUpLeg.bone.quaternion.copy(rig.leftUpLeg.rest).multiply(_tmpQuat).multiply(splay);
+    }
+    if (rig.leftLeg) {
+      // Left knee bent naturally on the ground
+      _tmpQuat.setFromAxisAngle(_axisX, (0.95 + (cause === 'gunshot' ? 0.25 : 0.1)) * t);
+      rig.leftLeg.bone.quaternion.copy(rig.leftLeg.rest).multiply(_tmpQuat);
+    }
+    if (rig.leftFoot) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.35 * t);
+      rig.leftFoot.bone.quaternion.copy(rig.leftFoot.rest).multiply(_tmpQuat);
+    }
+
+    if (rig.rightUpLeg) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.25 * t);
+      const splay = new THREE.Quaternion().setFromAxisAngle(_axisZ, 0.42 * t);
+      rig.rightUpLeg.bone.quaternion.copy(rig.rightUpLeg.rest).multiply(_tmpQuat).multiply(splay);
+    }
+    if (rig.rightLeg) {
+      // Right leg slightly more extended or bent sideways
+      _tmpQuat.setFromAxisAngle(_axisX, 0.55 * t);
+      rig.rightLeg.bone.quaternion.copy(rig.rightLeg.rest).multiply(_tmpQuat);
+    }
+    if (rig.rightFoot) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.22 * t);
+      rig.rightFoot.bone.quaternion.copy(rig.rightFoot.rest).multiply(_tmpQuat);
+    }
+
+    // Spine contortion and torso arching
+    if (rig.spine) {
+      _tmpQuat.setFromAxisAngle(_axisY, 0.28 * t);
+      const arch = new THREE.Quaternion().setFromAxisAngle(_axisX, -0.22 * t);
+      rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat).multiply(arch);
+    }
+
+    // Arms splayed out realistically on pavement
+    if (rig.leftArm) {
+      _tmpQuat.setFromAxisAngle(_axisX, (-0.85 + (cause === 'vehicle' ? -0.45 : 0)) * t);
+      const out = new THREE.Quaternion().setFromAxisAngle(_axisZ, 0.65 * t);
+      rig.leftArm.bone.quaternion.copy(rig.leftArm.rest).multiply(_tmpQuat).multiply(out);
+    }
+    if (rig.leftForeArm) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.75 * t);
+      rig.leftForeArm.bone.quaternion.copy(rig.leftForeArm.rest).multiply(_tmpQuat);
+    }
+
+    if (rig.rightArm) {
+      _tmpQuat.setFromAxisAngle(_axisX, (0.75 + (cause === 'gunshot' ? 0.35 : 0)) * t);
+      const out = new THREE.Quaternion().setFromAxisAngle(_axisZ, -0.55 * t);
+      rig.rightArm.bone.quaternion.copy(rig.rightArm.rest).multiply(_tmpQuat).multiply(out);
+    }
+    if (rig.rightForeArm) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.45 * t);
+      rig.rightForeArm.bone.quaternion.copy(rig.rightForeArm.rest).multiply(_tmpQuat);
+    }
+  } else if (limbs.aimBones) {
+    const ab = limbs.aimBones;
+    if (ab.leftArm && ab.leftArmRest) {
+      _tmpQuat.setFromAxisAngle(_axisX, -0.75 * t);
+      ab.leftArm.quaternion.copy(ab.leftArmRest).multiply(_tmpQuat);
+    }
+    if (ab.leftForeArm && ab.leftForeArmRest) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.65 * t);
+      ab.leftForeArm.quaternion.copy(ab.leftForeArmRest).multiply(_tmpQuat);
+    }
+    if (ab.rightArm && ab.rightArmRest) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.85 * t);
+      ab.rightArm.quaternion.copy(ab.rightArmRest).multiply(_tmpQuat);
+    }
+    if (ab.rightForeArm && ab.rightForeArmRest) {
+      _tmpQuat.setFromAxisAngle(_axisX, 0.45 * t);
+      ab.rightForeArm.quaternion.copy(ab.rightForeArmRest).multiply(_tmpQuat);
+    }
+    if (ab.spine && ab.spineRest) {
+      _tmpQuat.setFromAxisAngle(_axisY, 0.3 * t);
+      ab.spine.quaternion.copy(ab.spineRest).multiply(_tmpQuat);
+    }
+  }
+
+  // 3. Fallback procedural limbs
+  if (limbs.leftLeg) {
+    limbs.leftLeg.rotation.x = 0.55 * t;
+    limbs.leftLeg.rotation.z = -0.28 * t;
+  }
+  if (limbs.rightLeg) {
+    limbs.rightLeg.rotation.x = 0.22 * t;
+    limbs.rightLeg.rotation.z = 0.38 * t;
+  }
+  if (limbs.leftArm) {
+    limbs.leftArm.rotation.x = -0.92 * t;
+    limbs.leftArm.rotation.z = 0.55 * t;
+  }
+  if (limbs.rightArm) {
+    limbs.rightArm.rotation.x = 0.78 * t;
+    limbs.rightArm.rotation.z = -0.42 * t;
+  }
+  if (limbs.head) {
+    limbs.head.rotation.x = -0.32 * t;
+    limbs.head.rotation.z = 0.38 * t;
+  }
+}
+
+

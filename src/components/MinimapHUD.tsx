@@ -95,17 +95,67 @@ export const MinimapHUD: React.FC = () => {
       ctx.stroke();
     });
 
-    // Draw MRT Line-6 Dhaka Metro Rail Viaduct Line (Uttara North - Mirpur - Farmgate - Motijheel)
+    // Draw MRT Line-6 (North-South: Uttara Diabari - Mirpur - Farmgate - Kamalapur)
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([4, 3]);
-    const m1 = worldToRadar(-12, -580);
-    const m2 = worldToRadar(-12, 240);
+    ctx.lineWidth = 3.0;
+    ctx.setLineDash([5, 3]);
+    const m1 = worldToRadar(-12.2, -1250);
+    const m2 = worldToRadar(-12.2, 460);
     ctx.beginPath();
     ctx.moveTo(m1.rx, m1.rz);
     ctx.lineTo(m2.rx, m2.rz);
     ctx.stroke();
+
+    // Draw MRT Line-5 Northern Route (East-West: Mirpur West - Mirpur-10 - Gulshan-2 - Purbachal)
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 3.0;
+    ctx.setLineDash([5, 3]);
+    const m5_1 = worldToRadar(-480, -175);
+    const m5_2 = worldToRadar(640, -175);
+    ctx.beginPath();
+    ctx.moveTo(m5_1.rx, m5_1.rz);
+    ctx.lineTo(m5_2.rx, m5_2.rz);
+    ctx.stroke();
     ctx.setLineDash([]);
+
+    // Draw Metro Station Dots & Mirpur-10 Grand Interchange on Radar
+    const radarStations = [
+      { x: -12.2, z: -1150, color: '#10b981' },
+      { x: -12.2, z: -850, color: '#10b981' },
+      { x: -12.2, z: -520, color: '#10b981' },
+      { x: -12.2, z: -15, color: '#10b981' },
+      { x: -12.2, z: 160, color: '#10b981' },
+      { x: -12.2, z: 330, color: '#10b981' },
+      { x: -12.2, z: 450, color: '#10b981' },
+      { x: -380, z: -175, color: '#f43f5e' },
+      { x: 95, z: -175, color: '#f43f5e' },
+      { x: 260, z: -175, color: '#f43f5e' },
+      { x: 460, z: -175, color: '#f43f5e' },
+    ];
+    radarStations.forEach((st) => {
+      const sp = worldToRadar(st.x, st.z);
+      if (Math.hypot(sp.rx, sp.rz) < half - 6) {
+        ctx.fillStyle = st.color;
+        ctx.beginPath();
+        ctx.arc(sp.rx, sp.rz, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    });
+
+    // Mirpur-10 Grand Interchange Hub (Line-6 & Line-5 cross point)
+    const hubP = worldToRadar(-12.2, -175);
+    if (Math.hypot(hubP.rx, hubP.rz) < half - 6) {
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(hubP.rx, hubP.rz, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
 
     // Draw District Labels on Radar
     ctx.font = 'bold 8px sans-serif';

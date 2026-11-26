@@ -116,6 +116,12 @@ export interface NPCEntity {
   respawnTimer?: number;
   isEjectedDriver?: boolean;
   ejectedTumbleTimer?: number;
+  deathTimer?: number;
+  deathType?: 'gunshot' | 'melee' | 'vehicle';
+  deathVx?: number;
+  deathVz?: number;
+  bloodDecalSpawned?: boolean;
+  retaliateCooldown?: number;
 }
 
 export type POIType =

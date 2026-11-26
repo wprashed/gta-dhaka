@@ -282,20 +282,27 @@ export const DHAKA_POI_PHOTOS: Partial<Record<POIType, string>> = {
 export const CHARACTER_PORTRAITS: Record<string, string> = {
   arif: resolveAssetUrl('/textures/arif_portrait.jpg'),
   nadia: resolveAssetUrl('/textures/nadia_portrait.jpg'),
+  kabir: resolveAssetUrl('/textures/kabir_portrait.jpg'),
   kamal: resolveAssetUrl('/textures/kamal_portrait.jpg'),
+  tanvir: resolveAssetUrl('/textures/tanvir_portrait.jpg'),
+  meher: resolveAssetUrl('/textures/meherun_portrait.jpg'),
+  meherun: resolveAssetUrl('/textures/meherun_portrait.jpg'),
   sikder: resolveAssetUrl('/textures/sikder_portrait.jpg'),
   rickshaw_puller: resolveAssetUrl('/dhaka_photos/rickshaw_puller_real.jpg'),
-  police_officer: resolveAssetUrl('/dhaka_photos/police_real.jpg'),
+  police_officer: resolveAssetUrl('/textures/tanvir_portrait.jpg'),
   tea_seller: resolveAssetUrl('/dhaka_photos/tea_stall_real.jpg'),
   street_vendor: resolveAssetUrl('/dhaka_photos/fuchka_real.jpg'),
-  default_npc: resolveAssetUrl('/sketchfab/gta_model_12.jpg'),
+  default_npc: resolveAssetUrl('/textures/arif_portrait.jpg'),
 };
 
 export function getPortraitForSpeaker(speakerName: string): string {
   const lower = speakerName.toLowerCase();
   if (lower.includes('arif') || lower.includes('আরিফ')) return CHARACTER_PORTRAITS.arif;
   if (lower.includes('nadia') || lower.includes('নাদিয়া')) return CHARACTER_PORTRAITS.nadia;
+  if (lower.includes('kabir') || lower.includes('কবির')) return CHARACTER_PORTRAITS.kabir;
   if (lower.includes('kamal') || lower.includes('কামাল')) return CHARACTER_PORTRAITS.kamal;
+  if (lower.includes('tanvir') || lower.includes('তানভীর')) return CHARACTER_PORTRAITS.tanvir;
+  if (lower.includes('meher') || lower.includes('মেহের')) return CHARACTER_PORTRAITS.meher;
   if (lower.includes('sikder') || lower.includes('সিকদার')) return CHARACTER_PORTRAITS.sikder;
   return CHARACTER_PORTRAITS.default_npc;
 }

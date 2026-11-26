@@ -609,9 +609,6 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setWantedLevel: (level) => {
     const clamped = Math.max(0, Math.min(5, level));
-    if (clamped > get().wantedLevel) {
-      dhakaAudio.playHorn('siren');
-    }
     set({
       wantedLevel: clamped,
       wantedCooldown: clamped > 0 ? 22 + clamped * 8 : 0,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { DISTRICTS, PLAYABLE_CHARACTERS } from '../data/dhakaWorldData';
 import { CHARACTER_PORTRAITS } from '../data/sketchfabGtaCatalog';
+import { resolveAssetUrl } from '../utils/assets';
 import {
   Award,
   Box,
@@ -75,9 +76,15 @@ export const MainMenuScreen: React.FC = () => {
         <div className="lg:col-span-6 space-y-6">
           <div className="flex items-center gap-4">
             <img
-              src={currentChar.avatar}
+              src={resolveAssetUrl(currentChar.avatar)}
               alt={currentChar.nameEn}
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-amber-400 shadow-2xl shrink-0"
+              onError={(e) => {
+                const el = e.currentTarget;
+                if (!el.src.includes('arif_portrait.jpg')) {
+                  el.src = resolveAssetUrl('/textures/arif_portrait.jpg');
+                }
+              }}
             />
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black tracking-widest uppercase mb-1.5">
@@ -364,11 +371,17 @@ export const MainMenuScreen: React.FC = () => {
                     >
                       <div className="flex items-start gap-2.5">
                         <img
-                          src={char.avatar}
+                          src={resolveAssetUrl(char.avatar)}
                           alt={char.nameEn}
                           className={`w-12 h-12 rounded-xl object-cover border-2 shrink-0 ${
-                            isSelected ? 'border-emerald-400 shadow-md' : 'border-slate-700'
+                            isSelected ? 'border-emerald-400 shadow-md ring-2 ring-emerald-500/40' : 'border-slate-700'
                           }`}
+                          onError={(e) => {
+                            const el = e.currentTarget;
+                            if (!el.src.includes('arif_portrait.jpg')) {
+                              el.src = resolveAssetUrl('/textures/arif_portrait.jpg');
+                            }
+                          }}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">

@@ -45,6 +45,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { DistrictId, VehicleType } from '../types/game';
+import { resolveAssetUrl } from '../utils/assets';
 
 export const PauseMenuModal: React.FC = () => {
   const {
@@ -412,6 +413,68 @@ export const PauseMenuModal: React.FC = () => {
                       strokeWidth={11}
                     />
                   ))}
+
+                  {/* DHAKA MASS RAPID TRANSIT (MRT) SYSTEM OVERLAY */}
+                  {/* MRT Line-6 (North-South): Uttara - Mirpur-10 - Farmgate - Shahbagh - Motijheel - Kamalapur */}
+                  <line
+                    x1={-12.2}
+                    y1={-380}
+                    x2={-12.2}
+                    y2={380}
+                    stroke="#10b981"
+                    strokeWidth={5}
+                    strokeDasharray="8 4"
+                  />
+                  {/* MRT Line-5 Northern Route (East-West): Mirpur West - Mirpur-10 - Mohakhali - Gulshan - Purbachal */}
+                  <line
+                    x1={-380}
+                    y1={-175}
+                    x2={380}
+                    y2={-175}
+                    stroke="#f43f5e"
+                    strokeWidth={5}
+                    strokeDasharray="8 4"
+                  />
+
+                  {/* MRT Line-6 Stations */}
+                  {[
+                    { name: 'Uttara North', bn: 'উত্তরা উত্তর', z: -350 },
+                    { name: 'Pallabi', bn: 'পল্লবী', z: -270 },
+                    { name: 'Farmgate', bn: 'ফার্মগেট', z: -15 },
+                    { name: 'Shahbagh', bn: 'শাহবাগ', z: 160 },
+                    { name: 'Motijheel', bn: 'মতিঝিল', z: 320 },
+                  ].map((st) => (
+                    <g key={`l6_${st.name}`}>
+                      <circle cx={-12.2} cy={st.z} r={5} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
+                      <text x={-22} y={st.z + 4} textAnchor="end" fill="#10b981" fontSize="9" fontWeight="bold">
+                        {language === 'en' ? st.name : st.bn}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* MRT Line-5 Stations */}
+                  {[
+                    { name: 'Mirpur West', bn: 'মিরপুর পশ্চিম', x: -300 },
+                    { name: 'Mohakhali North', bn: 'মহাখালী উত্তর', x: 95 },
+                    { name: 'Gulshan-2', bn: 'গুলশান-২', x: 240 },
+                    { name: 'Natun Bazar', bn: 'নতুন বাজার', x: 340 },
+                  ].map((st) => (
+                    <g key={`l5_${st.name}`}>
+                      <circle cx={st.x} cy={-175} r={5} fill="#f43f5e" stroke="#ffffff" strokeWidth={1.5} />
+                      <text x={st.x} y={-184} textAnchor="middle" fill="#f43f5e" fontSize="9" fontWeight="bold">
+                        {language === 'en' ? st.name : st.bn}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* Mirpur-10 Grand Interchange Hub (Line-6 & Line-5 Crossing) */}
+                  <g>
+                    <circle cx={-12.2} cy={-175} r={8} fill="#fbbf24" stroke="#0f172a" strokeWidth={2.5} />
+                    <circle cx={-12.2} cy={-175} r={4} fill="#dc2626" />
+                    <text x={-12.2} y={-190} textAnchor="middle" fill="#fbbf24" fontSize="11" fontWeight="extrabold">
+                      {language === 'en' ? 'MIRPUR-10 INTERCHANGE (MRT 5 & 6)' : 'মিরপুর-১০ ইন্টারচেঞ্জ (MRT ৫ ও ৬)'}
+                    </text>
+                  </g>
 
                   {POINTS_OF_INTEREST.map((poi) => (
                     <g
@@ -1166,11 +1229,17 @@ export const PauseMenuModal: React.FC = () => {
                     >
                       <div className="flex items-start gap-3">
                         <img
-                          src={char.avatar}
+                          src={resolveAssetUrl(char.avatar)}
                           alt={char.nameEn}
                           className={`w-14 h-14 rounded-xl object-cover border-2 shrink-0 ${
-                            isSelected ? 'border-emerald-400 shadow-md' : 'border-slate-700'
+                            isSelected ? 'border-emerald-400 shadow-md ring-2 ring-emerald-500/40' : 'border-slate-700'
                           }`}
+                          onError={(e) => {
+                            const el = e.currentTarget;
+                            if (!el.src.includes('arif_portrait.jpg')) {
+                              el.src = resolveAssetUrl('/textures/arif_portrait.jpg');
+                            }
+                          }}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
