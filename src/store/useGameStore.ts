@@ -121,16 +121,54 @@ interface GameState {
   } | null;
   customGlbUrlRequest: string | null;
   repairVehicleRequest: boolean;
+  resprayVehicleRequest: string | null;
+  upgradeVehicleRequest: boolean;
   teleportRequest: { x: number; z: number } | null;
   switchCharacterRequest: PlayableCharacterId | null;
 
-  // Mall interior state
+  // Mall interior & interactive modals & side-jobs
   isInsideMall: boolean;
   mallId: string | null;
   mallFloor: number; // 0 = ground, 1 = first, 2 = second, 3 = food court / rooftop
   enterMall: (mallId: string) => void;
   exitMall: () => void;
   setMallFloor: (floor: number) => void;
+
+  activeShopModal: {
+    shopId: string;
+    titleEn: string;
+    titleBn: string;
+    category: 'fashion' | 'food' | 'cinema' | 'tech' | 'arcade' | 'atm' | 'books' | 'footwear';
+    cost: number;
+  } | null;
+  openShopModal: (shop: NonNullable<GameState['activeShopModal']>) => void;
+  closeShopModal: () => void;
+
+  activeMetroModal: string | null; // station id near player
+  openMetroModal: (stationId: string) => void;
+  closeMetroModal: () => void;
+
+  activeGarageModal: string | null; // garage poi id
+  openGarageModal: (garageId: string) => void;
+  closeGarageModal: () => void;
+  requestResprayVehicle: (color: string) => void;
+  requestUpgradeVehicle: () => void;
+
+  activeFareJob: {
+    id: string;
+    passengerNameEn: string;
+    passengerNameBn: string;
+    dropNameEn: string;
+    dropNameBn: string;
+    dropX: number;
+    dropZ: number;
+    reward: number;
+    timeLeft: number;
+  } | null;
+  startFareJob: (job: NonNullable<GameState['activeFareJob']>) => void;
+  tickFareJob: (dt: number) => void;
+  completeFareJob: () => void;
+  cancelFareJob: () => void;
 
   // Actions
   startNewGame: () => void;
@@ -285,13 +323,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   spawnSketchfabRequest: null,
   customGlbUrlRequest: null,
   repairVehicleRequest: false,
+  resprayVehicleRequest: null,
+  upgradeVehicleRequest: false,
   teleportRequest: null,
   switchCharacterRequest: null,
 
-  // Mall interior
+  // Mall interior & modals
   isInsideMall: false,
   mallId: null,
   mallFloor: 0,
+  activeShopModal: null,
+  activeMetroModal: null,
+  activeGarageModal: null,
+  activeFareJob: null,
 
   startNewGame: () => {
     dhakaAudio.init();
@@ -329,19 +373,45 @@ export const useGameStore = create<GameState>((set, get) => ({
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
+        const savedTools = Array.isArray(data.tools) ? data.tools : null;
+        const mergedTools = savedTools
+          ? TOOL_WEAPONS.map((def) => {
+              const found = savedTools.find((t: ToolWeapon) => t.id === def.id);
+              return found
+                ? {
+                    ...def,
+                    unlocked: Boolean(found.unlocked),
+                    currentClip: found.currentClip ?? def.currentClip,
+                    reserveAmmo: found.reserveAmmo ?? def.reserveAmmo,
+                  }
+                : def;
+            })
+          : TOOL_WEAPONS;
+        const savedOutfits = Array.isArray(data.outfits) ? data.outfits : null;
+        const mergedOutfits = savedOutfits
+          ? PLAYER_OUTFITS.map((def) => {
+              const found = savedOutfits.find((o: PlayerOutfit) => o.id === def.id);
+              return found ? { ...def, unlocked: Boolean(found.unlocked) } : def;
+            })
+          : PLAYER_OUTFITS;
+
         set({
           gamePhase: 'playing',
           taka: data.taka ?? 1850,
           health: data.health ?? 100,
           armor: data.armor ?? 35,
           completedMissionIds: data.completedMissionIds ?? [],
-          activeMissionId: data.activeMissionId ?? 'm1_back_to_dhaka',
+          activeMissionId: data.activeMissionId !== undefined ? data.activeMissionId : 'm1_back_to_dhaka',
           activeMissionStepIndex: data.activeMissionStepIndex ?? 0,
           selectedCharacterId: data.selectedCharacterId ?? 'arif',
           equippedOutfitId: data.equippedOutfitId ?? 'modern_bomber',
           equippedToolId: data.equippedToolId ?? 'fists',
-          outfits: data.outfits ?? PLAYER_OUTFITS,
-          tools: TOOL_WEAPONS,
+          outfits: mergedOutfits,
+          tools: mergedTools,
+          transactions: Array.isArray(data.transactions) ? data.transactions : [],
+          storyHonor: data.storyHonor ?? 0,
+          storyEndingEn: data.storyEndingEn ?? null,
+          storyEndingBn: data.storyEndingBn ?? null,
           teleportRequest: {
             x: data.playerX ?? 10,
             z: data.playerZ ?? 18,
@@ -456,7 +526,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   damagePlayer: (amount) => {
     dhakaAudio.playSfx('hit');
     set((s) => {
-      let remaining = amount;
+      // Kabir "Iron Fist": heavy damage resistance (-22% incoming damage)
+      let remaining = s.selectedCharacterId === 'kabir' ? amount * 0.78 : amount;
       let newArmor = s.armor;
       if (newArmor > 0) {
         const absorbed = Math.min(newArmor, remaining * 0.65);
@@ -637,7 +708,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     let nextWanted = s.wantedLevel;
     let nextCooldown = s.wantedCooldown;
     if (nextWanted > 0) {
-      nextCooldown = Math.max(0, nextCooldown - dt);
+      // Nadia "Digital Ghost": wanted level cools down 35% faster
+      const decayMult = s.selectedCharacterId === 'nadia' ? 1.35 : 1.0;
+      nextCooldown = Math.max(0, nextCooldown - dt * decayMult);
       if (nextCooldown <= 0) {
         nextWanted = Math.max(0, nextWanted - 1);
         nextCooldown = nextWanted > 0 ? 18 : 0;
@@ -976,12 +1049,16 @@ export const useGameStore = create<GameState>((set, get) => ({
   requestCustomGlbUrl: (url) =>
     set({ customGlbUrlRequest: url, gamePhase: 'playing' }),
   requestRepairVehicle: () => set({ repairVehicleRequest: true }),
+  requestResprayVehicle: (color) => set({ resprayVehicleRequest: color }),
+  requestUpgradeVehicle: () => set({ upgradeVehicleRequest: true }),
   clearEngineRequests: () =>
     set({
       spawnVehicleRequest: null,
       spawnSketchfabRequest: null,
       customGlbUrlRequest: null,
       repairVehicleRequest: false,
+      resprayVehicleRequest: null,
+      upgradeVehicleRequest: false,
       teleportRequest: null,
       switchCharacterRequest: null,
     }),
@@ -991,6 +1068,51 @@ export const useGameStore = create<GameState>((set, get) => ({
   enterMall: (mallId) => set({ isInsideMall: true, mallId, mallFloor: 0 }),
   exitMall: () => set({ isInsideMall: false, mallId: null, mallFloor: 0 }),
   setMallFloor: (floor) => set({ mallFloor: floor }),
+
+  openShopModal: (shop) => set({ activeShopModal: shop }),
+  closeShopModal: () => set({ activeShopModal: null }),
+  openMetroModal: (stationId) => set({ activeMetroModal: stationId }),
+  closeMetroModal: () => set({ activeMetroModal: null }),
+  openGarageModal: (garageId) => set({ activeGarageModal: garageId }),
+  closeGarageModal: () => set({ activeGarageModal: null }),
+
+  startFareJob: (job) => set({ activeFareJob: job }),
+  tickFareJob: (dt) => {
+    const job = get().activeFareJob;
+    if (!job) return;
+    const nextTime = job.timeLeft - dt;
+    if (nextTime <= 0) {
+      set({ activeFareJob: null });
+      get().showBanner({
+        titleEn: 'FARE CANCELLED: TIME EXPIRED',
+        titleBn: 'ভাড়ার ট্রিপ বাতিল: সময় শেষ',
+        subtitleEn: 'The passenger stepped out due to Dhaka traffic delay.',
+        subtitleBn: 'যানজটে দেরি হওয়ায় যাত্রী নেমে গেছেন।',
+        tone: 'red',
+      });
+    } else {
+      set({ activeFareJob: { ...job, timeLeft: nextTime } });
+    }
+  },
+  completeFareJob: () => {
+    const job = get().activeFareJob;
+    if (!job) return;
+    get().addTaka(
+      job.reward,
+      `Dhaka Fare Completed: ${job.dropNameEn}`,
+      `ভাড়া সম্পন্ন: ${job.dropNameBn}`
+    );
+    set({ activeFareJob: null });
+    get().showBanner({
+      titleEn: `PASSENGER DROPPED! +৳${job.reward}`,
+      titleBn: `যাত্রী পৌঁছে দেওয়া হয়েছে! +৳${job.reward}`,
+      subtitleEn: `Safe arrival at ${job.dropNameEn}. Ready for the next Dhaka trip!`,
+      subtitleBn: `${job.dropNameBn}-এ নিরাপদে পৌঁছে দিয়েছেন।`,
+      rewardTaka: job.reward,
+      tone: 'gold',
+    });
+  },
+  cancelFareJob: () => set({ activeFareJob: null }),
 
   showBanner: (banner) => {
     set({ bannerAlert: banner });
@@ -1019,6 +1141,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       equippedToolId: s.equippedToolId,
       outfits: s.outfits,
       tools: s.tools,
+      transactions: s.transactions,
+      storyHonor: s.storyHonor,
+      storyEndingEn: s.storyEndingEn,
+      storyEndingBn: s.storyEndingBn,
       savedAt: new Date().toISOString(),
     };
     try {

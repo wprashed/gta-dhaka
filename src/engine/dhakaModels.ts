@@ -1757,6 +1757,66 @@ export function createVehicleMesh(
     return group;
   }
 
+  if (type === 'boat') {
+    const hullMat = new THREE.MeshPhysicalMaterial({
+      color: customColor || '#0284c7',
+      roughness: 0.25,
+      metalness: 0.15,
+      clearcoat: 0.8,
+    });
+    const whiteDeckMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.35 });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: '#0369a1', roughness: 0.5 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: '#7dd3fc', roughness: 0.1, transparent: true, opacity: 0.55 });
+    const woodDeckMat = new THREE.MeshStandardMaterial({ color: '#92400e', roughness: 0.8 });
+
+    // Lower V-hull
+    const lowerHull = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.72, 5.6), hullMat);
+    lowerHull.position.set(0, 0.36, -0.1);
+    lowerHull.castShadow = true;
+    group.add(lowerHull);
+
+    // Pointed bow prow (+Z)
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(1.18, 1.8, 4), hullMat);
+    bow.rotation.x = Math.PI / 2;
+    bow.rotation.y = Math.PI / 4;
+    bow.position.set(0, 0.42, 3.15);
+    group.add(bow);
+
+    // Cabin deck & side gunwales
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.14, 5.2), woodDeckMat);
+    deck.position.set(0, 0.72, -0.1);
+    group.add(deck);
+
+    // Passenger canopy roof & steel posts
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.16, 4.0), canopyMat);
+    roof.position.set(0, 2.05, -0.3);
+    roof.castShadow = true;
+    group.add(roof);
+    [-0.95, 0.95].forEach((px) => {
+      [-2.0, 0, 1.5].forEach((pz) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.32, 6), whiteDeckMat);
+        post.position.set(px, 1.38, pz);
+        group.add(post);
+      });
+    });
+
+    // Front helm windshield & navigation lights
+    const helm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.75, 0.45), whiteDeckMat);
+    helm.position.set(0, 1.08, 1.55);
+    group.add(helm);
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.58, 0.08), glassMat);
+    shield.position.set(0, 1.62, 1.65);
+    shield.rotation.x = -0.25;
+    group.add(shield);
+
+    // Rear outboard engine housing
+    const outboard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.78, 0.5), new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.4 }));
+    outboard.position.set(0, 0.75, -3.05);
+    group.add(outboard);
+
+    return group;
+  }
+
   if (type === 'motorcycle') {
     const bikeMat = new THREE.MeshPhysicalMaterial({
       color: customColor || '#e11d48',
@@ -2702,7 +2762,11 @@ export function createCharacterMesh(
         ? 1.0
         : 0.95 + (seed % 4) * 0.035;
 
-      if (modelKey === 'soldier' || modelKey === 'michelle' || modelKey === 'hvgirl') {
+      if (modelKey === 'hvgirl') {
+        // HVGirl.glb is ~22.58m tall natively; scale uniformly to ~1.72m human height!
+        const s = 0.076 * heightVar;
+        clonedScene.scale.setScalar(s);
+      } else if (modelKey === 'soldier' || modelKey === 'michelle') {
         // Uniform scaling only — non-uniform Y stretch visibly distorts faces
         // and limbs on fully sculpted humans.
         const s = heightVar;
@@ -3027,10 +3091,10 @@ export function createCharacterMesh(
           try {
             if (!hvGltf.animations || hvGltf.animations.length === 0) return;
             const isMichelle = modelKey === 'michelle';
+            const isHvGirl = modelKey === 'hvgirl';
             // HVGirl.glb is authored Z-up, so its Hips rotation only lines up
-            // with the Y-up RPM rig after a -90deg X correction. Michelle.glb
-            // already shares HVGirl's rig/orientation and needs no fix, but its
-            // mocap translations are in a different unit, so scale them down.
+            // with the Y-up RPM rig after a -90deg X correction. Michelle.glb & HVGirl.glb
+            // already share HVGirl's rig/orientation and need no fix.
             const hipsFix = new THREE.Quaternion().setFromAxisAngle(
               new THREE.Vector3(1, 0, 0),
               Math.PI / 2
@@ -3045,7 +3109,7 @@ export function createCharacterMesh(
                 .map((track) => {
                 const t = track.clone();
                 t.name = t.name.replace(/^mixamorig[:_]?/, '');
-                if (!isMichelle && t.name === 'Hips.quaternion') {
+                if (!isMichelle && !isHvGirl && t.name === 'Hips.quaternion') {
                   const v = (t as unknown as { values: number[] }).values;
                   const q = new THREE.Quaternion();
                   const q2 = new THREE.Quaternion();
@@ -3073,7 +3137,7 @@ export function createCharacterMesh(
             // GLTFLoader sanitizes 'mixamorig:' to 'mixamorig_', so Michelle's
             // bones must be renamed to the bare Mixamo names or the clips
             // silently bind to nothing (verified: hips stayed frozen before).
-            if (isMichelle) {
+            if (isMichelle || isHvGirl) {
               clonedScene.traverse((o) => {
                 if (o.name.startsWith('mixamorig')) {
                   o.name = o.name.replace(/^mixamorig[:_]?/, '');

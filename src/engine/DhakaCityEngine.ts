@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import {
   DISTRICTS,
+  METRO_STATIONS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
   STORY_MISSIONS,
@@ -167,6 +168,8 @@ export class DhakaCityEngine {
   private jfpFerrisWheel: THREE.Group | null = null;
   private jfpChandelier: THREE.Group | null = null;
   private wasInsideJfp = false;
+  private lastMissionEnemyStepId: string | null = null;
+  private vehicleSpeedBoostMap = new Map<string, number>();
   private jfpInteractables: Array<{
     id: string;
     x: number;
@@ -6875,6 +6878,9 @@ export class DhakaCityEngine {
         role: mn.role,
         x: wx,
         z: wz,
+        homeX: wx,
+        homeZ: wz,
+        homeY: mn.y,
         rotation: mn.lz < 0 ? 0 : Math.PI,
         shirtColor: mn.shirt,
         pantsColor: mn.pants,
@@ -9232,6 +9238,11 @@ export class DhakaCityEngine {
 
       // Jamuna Future Park Drop-off Plaza (X = 516, Z = -333)
       { type: 'motorcycle', x: 516, z: -333, rot: 0, isTraffic: false, color: '#7c3aed' },
+
+      // Boardable Water Taxis & Boats (Hatirjheel Jetty & Sadarghat Launch Pier)
+      { type: 'boat', x: 200, z: -12, rot: 0, isTraffic: false, color: '#0284c7' },
+      { type: 'boat', x: 24, z: 325, rot: Math.PI / 2, isTraffic: false, color: '#0ea5e9' },
+      { type: 'boat', x: -215, z: 25, rot: 0, isTraffic: false, color: '#14b8a6' },
     ];
 
     presets.forEach((p, idx) => {
@@ -9484,9 +9495,13 @@ export class DhakaCityEngine {
       { x: -158, zMin: -80, zMax: 120 },
       { x: 208, zMin: -180, zMax: 210 },
       { x: -62, zMin: 110, zMax: 260 },
+      { x: 452, zMin: -420, zMax: -240 },  // Bashundhara & Jamuna Mall
+      { x: -158, zMin: -580, zMax: -420 }, // Uttara North
+      { x: -368, zMin: -280, zMax: -110 }, // Mirpur-10
+      { x: 625, zMin: -390, zMax: -210 },  // Purbachal 300ft
     ];
 
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 52; i++) {
       const preset = citizenRoles[i % citizenRoles.length];
       const corr = sidewalkCorridors[i % sidewalkCorridors.length];
       const startZ = corr.zMin + ((i * 37) % (corr.zMax - corr.zMin));
@@ -9499,13 +9514,17 @@ export class DhakaCityEngine {
           : vibrantShirts[i % vibrantShirts.length];
 
       const id = `npc_cit_${i}`;
+      const startX = corr.x + (i % 2 === 0 ? 0.6 : -0.6);
       const npc: NPCEntity = {
         id,
         nameEn: preset.nameEn,
         nameBn: preset.nameBn,
         role: preset.role,
-        x: corr.x + (i % 2 === 0 ? 0.6 : -0.6),
+        x: startX,
         z: startZ,
+        homeX: startX,
+        homeZ: startZ,
+        homeY: 0,
         rotation: targetZ > startZ ? 0 : Math.PI,
         shirtColor: uniqueShirt,
         pantsColor: preset.pants,
@@ -9805,6 +9824,10 @@ export class DhakaCityEngine {
       }
     }
 
+    if (code === 'KeyG' && this.activeVehicleId) {
+      this.startRandomFareJob();
+    }
+
     if (code === 'KeyR') {
       if (this.activeVehicleId) {
         const stations: Array<
@@ -9834,9 +9857,13 @@ export class DhakaCityEngine {
   };
 
   public triggerTouchAction(
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare'
   ) {
     dhakaAudio.init();
+    if (action === 'fare' && this.activeVehicleId) {
+      this.startRandomFareJob();
+      return;
+    }
     if (action === 'interact') {
       const promptType = useGameStore.getState().nearbyPrompt?.type;
       this.handlePrimaryInteraction(promptType === 'vehicle');
@@ -9968,21 +9995,24 @@ export class DhakaCityEngine {
         return;
       }
 
-      this.fireCooldown = tool.fireRate || 0.22;
+      const isTanvir = store.selectedCharacterId === 'tanvir';
+      this.fireCooldown = (tool.fireRate || 0.22) * (isTanvir ? 0.75 : 1.0);
       this.attackAnimTimer = 0.22;
 
       // Align Arif with camera aim direction when firing
       this.playerRotation = this.cameraYaw + Math.PI;
 
-      // Realistic muzzle climb & camera kickback
-      this.cameraPitch = Math.max(
-        0.08,
-        this.cameraPitch - (tool.pellets && tool.pellets > 1 ? 0.042 : 0.022)
-      );
-      this.cameraTrauma = Math.min(
-        0.65,
-        this.cameraTrauma + (tool.pellets && tool.pellets > 1 ? 0.26 : 0.14)
-      );
+      // Realistic muzzle climb & camera kickback (Tanvir Tactical Marksman = zero recoil!)
+      if (!isTanvir) {
+        this.cameraPitch = Math.max(
+          0.08,
+          this.cameraPitch - (tool.pellets && tool.pellets > 1 ? 0.042 : 0.022)
+        );
+        this.cameraTrauma = Math.min(
+          0.65,
+          this.cameraTrauma + (tool.pellets && tool.pellets > 1 ? 0.26 : 0.14)
+        );
+      }
 
       // Synthesized gunshot / shotgun / assault rifle audio
       if (tool.id === 'deshi_pipegun' || tool.id === 'police_shotgun') {
@@ -10081,8 +10111,12 @@ export class DhakaCityEngine {
     const forwardX = Math.sin(this.playerRotation);
     const forwardZ = Math.cos(this.playerRotation);
 
+    const meleeDmg =
+      tool.damage * (store.selectedCharacterId === 'kabir' ? 1.3 : 1.0);
+
     // Check melee hits on nearby vehicles (sparks & dents)
     for (const veh of this.vehicles) {
+      if (Math.abs(veh.y - this.playerPos.y) > 2.8) continue;
       const dx = veh.x - this.playerPos.x;
       const dz = veh.z - this.playerPos.z;
       const distV = Math.hypot(dx, dz);
@@ -10092,7 +10126,7 @@ export class DhakaCityEngine {
 
         const isHeavy = this.meleeComboStep === 2 || tool.category === 'local_arm';
         dhakaAudio.playSfx(isBlade ? 'slash' : isHeavy ? 'heavy_hit' : 'hit');
-        veh.health = Math.max(0, veh.health - tool.damage);
+        veh.health = Math.max(0, veh.health - meleeDmg);
         this.spawnImpactSparks(
           (this.playerPos.x + veh.x) * 0.5,
           1.05,
@@ -10106,6 +10140,9 @@ export class DhakaCityEngine {
 
     for (const npc of this.npcs) {
       if (npc.isDead) continue;
+      const npcLimbs = this.npcLimbsMap.get(npc.id);
+      const npcY = npcLimbs ? npcLimbs.group.position.y : 0;
+      if (Math.abs(npcY - this.playerPos.y) > 2.8) continue;
       const dx = npc.x - this.playerPos.x;
       const dz = npc.z - this.playerPos.z;
       const dist = Math.hypot(dx, dz);
@@ -10130,21 +10167,21 @@ export class DhakaCityEngine {
         npc.z += forwardZ * pushDist;
 
         // Arterial blood spray and asphalt pool
-        this.spawnDirectionalBloodSpray(npc.x, 1.15, npc.z, forwardX, forwardZ, isBlade ? 28 : isHeavy ? 18 : 8);
+        this.spawnDirectionalBloodSpray(npc.x, npcY + 1.15, npc.z, forwardX, forwardZ, isBlade ? 28 : isHeavy ? 18 : 8);
         if (isBlade || (isHeavy && Math.random() < 0.6)) {
           this.spawnBloodDecal(npc.x, npc.z);
         }
 
         this.spawnImpactSparks(
           npc.x,
-          1.15,
+          npcY + 1.15,
           npc.z,
           isBlade ? '#ef4444' : isBaton ? '#38bdf8' : '#fbbf24',
           1.25
         );
 
         if (!npc.isStoryNPC) {
-          npc.health -= tool.damage;
+          npc.health -= meleeDmg;
           if (npc.health <= 0 || isBlade) {
             // Fatal Melee Strike: Ragdoll tumble & authentic death collapse
             npc.isDead = true;
@@ -10154,17 +10191,18 @@ export class DhakaCityEngine {
             npc.deathType = 'melee';
             npc.deathVx = forwardX;
             npc.deathVz = forwardZ;
-            npc.respawnTimer = 40;
+            npc.respawnTimer = npc.isMissionEnemy ? 9999 : 40;
             dhakaAudio.playSfx('death_groan');
 
-            const limbs = this.npcLimbsMap.get(npc.id);
-            if (limbs) {
-              setDeathRagdollPose(limbs, 'melee', 0.05);
+            if (npcLimbs) {
+              setDeathRagdollPose(npcLimbs, 'melee', 0.05);
             }
             this.spawnBloodDecal(npc.x, npc.z, 1.45);
-            this.spawnImpactSparks(npc.x, 0.3, npc.z, '#b91c1c', 2.0);
-            this.spawnCashDrop(npc.x, npc.z, Math.floor(Math.random() * 300 + 100));
-            store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+            this.spawnImpactSparks(npc.x, npcY + 0.3, npc.z, '#b91c1c', 2.0);
+            this.spawnCashDrop(npc.x, npc.z, npc.isMissionEnemy ? 450 : Math.floor(Math.random() * 300 + 100));
+            if (!npc.isMissionEnemy) {
+              store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+            }
             this.alertNearbyPedestrians(npc.x, npc.z, 28);
           } else {
             // Chance of street retaliation fight-back before fleeing
@@ -10248,6 +10286,18 @@ export class DhakaCityEngine {
       if (d < 4.8 && !preferVehicle) {
         this.executePOIInteraction(poi.id);
         return;
+      }
+    }
+
+    // 2.5 Check nearby Dhaka Metro Rail (MRT) Station
+    if (!preferVehicle) {
+      for (const st of METRO_STATIONS) {
+        const d = Math.hypot(st.x - this.playerPos.x, st.z - this.playerPos.z);
+        if (d < 8.5) {
+          dhakaAudio.playSfx('metro_chime');
+          store.openMetroModal(st.id);
+          return;
+        }
       }
     }
 
@@ -10336,121 +10386,13 @@ export class DhakaCityEngine {
       return;
     }
 
-    if (shop.category === 'fashion') {
-      store.setGamePhase('paused', 'character');
-      return;
-    }
-
-    if (shop.category === 'food') {
-      if (store.spendTaka(shop.cost, `${shop.nameEn} (Jamuna Food Court)`, shop.nameBn)) {
-        const hpGain = shop.id === 'jfp_kacchi' ? 100 : shop.id === 'jfp_pizzahut' ? 90 : 80;
-        const armGain = shop.id === 'jfp_kacchi' ? 50 : shop.id === 'jfp_pizzahut' ? 25 : 0;
-        store.healPlayer(hpGain, armGain);
-        this.playerStamina = 100;
-        dhakaAudio.playSfx(shop.id === 'jfp_gloria' ? 'drink' : 'eat');
-        store.showBanner({
-          titleEn: `${shop.nameEn}: DELICIOUS MEAL (+${hpGain} HP${armGain ? ` & +${armGain} ARMOR` : ''})`,
-          titleBn: `${shop.nameEn}: সুস্বাদু খাবার সম্পন্ন (+${hpGain} হেলথ)`,
-          subtitleEn: 'Energy & stamina fully topped up at Jamuna Food Court!',
-          subtitleBn: 'যমুনা ফুড কোর্টে দারুণ খাওয়াদাওয়া হলো!',
-          tone: 'gold',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'cinema') {
-      if (store.spendTaka(shop.cost, 'Blockbuster Cinemas IMAX Ticket & Popcorn', 'ব্লকবাস্টার সিনেমাস টিকিট')) {
-        store.healPlayer(100, 50);
-        store.setWantedLevel(0);
-        this.playerStamina = 100;
-        store.saveGameToStorage();
-        store.showBanner({
-          titleEn: '🎬 BLOCKBUSTER CINEMAS: FULL REST & WANTED CLEARED!',
-          titleBn: '🎬 ব্লকবাস্টার সিনেমাস: মুভি উপভোগ ও ওয়ান্টেড মুক্ত!',
-          subtitleEn: 'Watched Dhaka Attack 2 in 3D IMAX! Game saved, HP 100%, Wanted cleared.',
-          subtitleBn: 'থ্রিডি আইম্যাক্সে দারুণ সিনেমা দেখে আরিফ একদম সতেজ ও গেম সেভ!',
-          tone: 'gold',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'arcade') {
-      if (store.spendTaka(shop.cost, 'Future World VR & Arcade Tokens', 'ফিউচার ওয়ার্ল্ড গেম জোন')) {
-        this.playerStamina = 100;
-        store.healPlayer(25, 0);
-        dhakaAudio.playSfx('pickup');
-        store.showBanner({
-          titleEn: '🎮 FUTURE WORLD GAME ZONE: HIGH SCORE!',
-          titleBn: '🎮 ফিউচার ওয়ার্ল্ড: নতুন হাই স্কোর!',
-          subtitleEn: 'Stamina maxed out after VR racing & arcade rounds!',
-          subtitleBn: 'গেম জোনে খেলে পুরো স্ট্যামিনা ফিরে পেলেন!',
-          tone: 'blue',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'tech') {
-      if (store.spendTaka(shop.cost, `${shop.nameEn} Tactical Gear`, shop.nameEn)) {
-        store.healPlayer(40, 55);
-        dhakaAudio.playSfx('pickup');
-        store.showBanner({
-          titleEn: `${shop.nameEn}: TACTICAL ARMOR & GEAR EQUIPPED (+55 ARMOR)`,
-          titleBn: `${shop.nameEn}: নতুন বডি আর্মার ও গিয়ার যুক্ত (+৫৫ আর্মার)`,
-          subtitleEn: 'Top-grade protective gear purchased inside Jamuna Future Park.',
-          subtitleBn: 'যমুনা ফিউচার পার্ক থেকে মানসম্মত গিয়ার কেনা হয়েছে।',
-          tone: 'blue',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'footwear') {
-      if (store.spendTaka(shop.cost, `${shop.nameEn} Running Shoes`, shop.nameEn)) {
-        this.playerStamina = 100;
-        store.healPlayer(30, 0);
-        dhakaAudio.playSfx('pickup');
-        store.showBanner({
-          titleEn: `${shop.nameEn}: FRESH RUNNING SNEAKERS!`,
-          titleBn: `${shop.nameEn}: নতুন স্প্রিন্ট জুতা কেনা হলো!`,
-          subtitleEn: 'Stamina restored to 100% for faster city sprints.',
-          subtitleBn: 'পুরো ১০০% স্ট্যামিনা নিয়ে দৌড়ানোর জন্য প্রস্তুত!',
-          tone: 'green',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'books') {
-      if (store.spendTaka(shop.cost, 'Batighar Book & Espresso', 'বাতিঘর বই ও কফি')) {
-        store.healPlayer(50, 0);
-        store.setWantedLevel(Math.max(0, store.wantedLevel - 1));
-        this.playerStamina = 100;
-        dhakaAudio.playSfx('drink');
-        store.showBanner({
-          titleEn: '📚 BATIGHAR BOOK CAFE: CALM ESPRESSO BREAK (+50 HP)',
-          titleBn: '📚 বাতিঘর বুক ক্যাফে: কফি ও বইয়ের সাথে বিশ্রাম (+৫০ হেলথ)',
-          subtitleEn: 'Quiet reading upstairs lowered police heat and healed Arif.',
-          subtitleBn: 'শান্ত পরিবেশে বিশ্রামে হেলথ বাড়ল এবং পুলিশের চাপ কমল।',
-          tone: 'green',
-        });
-      }
-      return;
-    }
-
-    if (shop.category === 'atm') {
-      store.addTaka(500, 'DBBL Cashback & Mall Reward', 'ডাচ-বাংলা এটিএম রিওয়ার্ড');
-      dhakaAudio.playSfx('pickup');
-      store.showBanner({
-        titleEn: '🏧 DBBL ATM & DIRECTORY: +৳500 BONUS & MALL GUIDE',
-        titleBn: '🏧 ডাচ-বাংলা এটিএম ও মল গাইড: +৳৫০০ বোনাস',
-        subtitleEn: 'GF: Fashion & Tech | West Escalator -> 1F Lifestyle | East Escalator -> 2F Food Court & Cinema',
-        subtitleBn: 'নিচতলা: ফ্যাশন • পশ্চিম সিঁড়ি -> ২য় তলা • পূর্ব সিঁড়ি -> ৩য় তলা ফুড কোর্ট ও সিনেমা!',
-        tone: 'green',
-      });
-    }
+    store.openShopModal({
+      shopId: shop.id,
+      titleEn: shop.nameEn,
+      titleBn: shop.nameBn,
+      category: shop.category,
+      cost: shop.cost,
+    });
   }
 
   private executePOIInteraction(poiId: string) {
@@ -10703,22 +10645,7 @@ export class DhakaCityEngine {
         tone: 'green',
       });
     } else if (poi.type === 'garage') {
-      if (
-        store.spendTaka(
-          400,
-          'Dholaikhal Garage Tune & CNG Spawn',
-          'ধোলাইখাল গ্যারেজ টিউনিং'
-        )
-      ) {
-        this.spawnPlayerVehicleNear('cng');
-        store.showBanner({
-          titleEn: 'DHOLAIKHAL GARAGE: FRESH TUNED CNG READY',
-          titleBn: 'ধোলাইখাল গ্যারেজ: নতুন টিউন করা সিএনজি প্রস্তুত!',
-          subtitleEn: 'Repaired and parked right outside the workshop.',
-          subtitleBn: 'গ্যারেজের সামনে আপনার গাড়ি প্রস্তুত করা হয়েছে।',
-          tone: 'blue',
-        });
-      }
+      store.openGarageModal(poi.id);
     } else if (poi.type === 'clothing_shop') {
       store.setGamePhase('paused', 'character');
     } else if (poi.type === 'police_box') {
@@ -10764,7 +10691,24 @@ export class DhakaCityEngine {
     let spawnX = this.playerPos.x + Math.sin(this.playerRotation) * 4.2;
     let spawnZ = this.playerPos.z + Math.cos(this.playerRotation) * 4.2;
 
-    if (this.checkWorldObstacle(spawnX, spawnZ, vehRadius)) {
+    if (type === 'boat') {
+      // Dock water taxis on the nearest water jetty if player isn't already beside water
+      const docks = [
+        { x: 200, z: -14 },  // Hatirjheel Jetty
+        { x: 24, z: 326 },   // Sadarghat Buriganga Pier
+        { x: -215, z: 25 },  // Dhanmondi Lake
+      ];
+      let best = docks[0];
+      let bestD = Infinity;
+      for (const dk of docks) {
+        const d = Math.hypot(dk.x - this.playerPos.x, dk.z - this.playerPos.z);
+        if (d < bestD) { bestD = d; best = dk; }
+      }
+      spawnX = best.x;
+      spawnZ = best.z;
+      this.playerPos.set(spawnX, 0.45, spawnZ);
+      this.playerLimbs.group.position.copy(this.playerPos);
+    } else if (this.checkWorldObstacle(spawnX, spawnZ, vehRadius)) {
       const candidates = [
         [3.5, 0], [-3.5, 0], [0, 3.5], [0, -3.5],
         [3, 3], [-3, 3], [3, -3], [-3, -3],
@@ -10780,7 +10724,7 @@ export class DhakaCityEngine {
       }
     }
 
-    const spawnElev = this.getRoadElevation(spawnX, spawnZ, this.playerPos.y);
+    const spawnElev = type === 'boat' ? 0.35 : this.getRoadElevation(spawnX, spawnZ, this.playerPos.y);
     const entity: VehicleEntity = {
       id,
       type,
@@ -10792,7 +10736,7 @@ export class DhakaCityEngine {
       steering: 0,
       health: stats.maxHealth,
       maxHealth: stats.maxHealth,
-      color: type === 'cng' ? '#15803d' : '#f59e0b',
+      color: type === 'cng' ? '#15803d' : type === 'boat' ? '#0284c7' : '#f59e0b',
       isTraffic: false,
       isPolice: type === 'police',
       plateNumber: `ঢাকা মেট্রো-গ ৯৯-${Math.floor(1000 + Math.random() * 8999)}`,
@@ -10804,6 +10748,52 @@ export class DhakaCityEngine {
     mesh.rotation.y = entity.rotation;
     this.scene.add(mesh);
     this.vehicleMeshes.set(id, mesh);
+  }
+
+  public startRandomFareJob() {
+    const store = useGameStore.getState();
+    if (store.activeFareJob) {
+      store.cancelFareJob();
+      store.showBanner({
+        titleEn: 'FARE TRIP CANCELLED',
+        titleBn: 'ভাড়ার ট্রিপ বাতিল করা হয়েছে',
+        subtitleEn: 'Ready for a new passenger anytime with [G].',
+        subtitleBn: 'যেকোনো সময় [G] চেপে নতুন ভাড়া নিতে পারবেন।',
+        tone: 'blue',
+      });
+      return;
+    }
+    const destinations = [
+      { nameEn: 'Jamuna Future Park Plaza', nameBn: 'যমুনা ফিউচার পার্ক গেট', x: 516, z: -333 },
+      { nameEn: 'Sadarghat River Terminal', nameBn: 'সদরঘাট লঞ্চ টার্মিনাল', x: 0, z: 295 },
+      { nameEn: 'Gulshan-2 Circle', nameBn: 'গুলশান-২ সার্কেল', x: 220, z: -175 },
+      { nameEn: 'Motijheel Shapla Chattar', nameBn: 'মতিঝিল শাপলা চত্বর', x: 220, z: 175 },
+      { nameEn: 'Dhanmondi Lake Side', nameBn: 'ধানমন্ডি লেক', x: -170, z: 10 },
+      { nameEn: 'Uttara North Metro Hub', nameBn: 'উত্তরা নর্থ মেট্রো স্টেশন', x: -16, z: -530 },
+    ].filter((d) => Math.hypot(d.x - this.playerPos.x, d.z - this.playerPos.z) > 120);
+    const dest = destinations[Math.floor(Math.random() * destinations.length)] || destinations[0];
+    const dist = Math.hypot(dest.x - this.playerPos.x, dest.z - this.playerPos.z);
+    const reward = Math.max(450, Math.round((dist * 1.4) / 50) * 50);
+    const timeLeft = Math.max(55, Math.round(dist * 0.22));
+    dhakaAudio.playHorn('cng');
+    store.startFareJob({
+      id: `fare_${Date.now()}`,
+      passengerNameEn: 'Dhaka Commuter',
+      passengerNameBn: 'ঢাকার যাত্রী',
+      dropNameEn: dest.nameEn,
+      dropNameBn: dest.nameBn,
+      dropX: dest.x,
+      dropZ: dest.z,
+      reward,
+      timeLeft,
+    });
+    store.showBanner({
+      titleEn: `🚕 NEW PASSENGER FARE: TO ${dest.nameEn.toUpperCase()}`,
+      titleBn: `🚕 নতুন ভাড়া: ${dest.nameBn}`,
+      subtitleEn: `Drive to the green radar marker within ${timeLeft}s for ৳${reward}!`,
+      subtitleBn: `${timeLeft} সেকেন্ডের মধ্যে পৌঁছে দিলে পাবেন ৳${reward}!`,
+      tone: 'green',
+    });
   }
 
   private handleSketchfabSpawn(req: {
@@ -10932,9 +10922,54 @@ export class DhakaCityEngine {
       });
     }
     if (store.repairVehicleRequest) {
-      if (this.activeVehicleId) {
-        const v = this.vehicles.find((veh) => veh.id === this.activeVehicleId);
-        if (v) v.health = v.maxHealth;
+      const targetVeh =
+        (this.activeVehicleId
+          ? this.vehicles.find((v) => v.id === this.activeVehicleId)
+          : null) ||
+        this.vehicles.find(
+          (v) => Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 8
+        );
+      if (targetVeh) targetVeh.health = targetVeh.maxHealth;
+      store.clearEngineRequests();
+    }
+    if (store.resprayVehicleRequest) {
+      const newColor = store.resprayVehicleRequest;
+      const targetVeh =
+        (this.activeVehicleId
+          ? this.vehicles.find((v) => v.id === this.activeVehicleId)
+          : null) ||
+        this.vehicles.find(
+          (v) => Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 8
+        );
+      if (targetVeh) {
+        targetVeh.color = newColor;
+        const vMesh = this.vehicleMeshes.get(targetVeh.id);
+        if (vMesh) {
+          vMesh.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const m = child as THREE.Mesh;
+              const mat = m.material as THREE.MeshPhysicalMaterial;
+              if (mat && mat.clearcoat && mat.clearcoat > 0.4) {
+                mat.color.set(newColor);
+              }
+            }
+          });
+        }
+      }
+      store.clearEngineRequests();
+    }
+    if (store.upgradeVehicleRequest) {
+      const targetVeh =
+        (this.activeVehicleId
+          ? this.vehicles.find((v) => v.id === this.activeVehicleId)
+          : null) ||
+        this.vehicles.find(
+          (v) => Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 8
+        );
+      if (targetVeh) {
+        targetVeh.maxHealth = Math.round(targetVeh.maxHealth * 1.35);
+        targetVeh.health = targetVeh.maxHealth;
+        this.vehicleSpeedBoostMap.set(targetVeh.id, 1.25);
       }
       store.clearEngineRequests();
     }
@@ -11008,7 +11043,8 @@ export class DhakaCityEngine {
         if (this.activeVehicleId) {
           this.exitCurrentVehicle();
         }
-        this.playerLimbs.group.position.set(this.playerPos.x, 0.08, this.playerPos.z);
+        const deadY = this.playerPos.y < -0.1 ? this.playerPos.y : this.playerPos.y + 0.08;
+        this.playerLimbs.group.position.set(this.playerPos.x, deadY, this.playerPos.z);
         this.playerLimbs.group.rotation.x = -Math.PI / 2;
         setDeathRagdollPose(this.playerLimbs, 'gunshot', 1.0);
       } else if (store.isBusted) {
@@ -11168,6 +11204,9 @@ export class DhakaCityEngine {
       // 1. Check NPC Hit FIRST with continuous swept-line collision (prevents tunneling through pedestrians)
       for (const npc of this.npcs) {
         if (npc.isDead) continue;
+        const npcLimbs = this.npcLimbsMap.get(npc.id);
+        const npcY = npcLimbs ? npcLimbs.group.position.y : 0;
+        if (Math.abs(ny - (npcY + 1.0)) > 2.2) continue;
 
         let t = 0;
         if (segLenSq > 0.0001) {
@@ -11188,11 +11227,11 @@ export class DhakaCityEngine {
           dhakaAudio.playSfx('hit');
           dhakaAudio.playSfx('pain_grunt');
           dhakaAudio.playSfx('bone_crack');
-          this.spawnImpactSparks(hitX, 1.15, hitZ, '#ef4444', 1.85);
+          this.spawnImpactSparks(hitX, npcY + 1.15, hitZ, '#ef4444', 1.85);
 
           const bDirX = b.vx / 88;
           const bDirZ = b.vz / 88;
-          this.spawnDirectionalBloodSpray(hitX, 1.25, hitZ, bDirX, bDirZ, 30);
+          this.spawnDirectionalBloodSpray(hitX, npcY + 1.25, hitZ, bDirX, bDirZ, 30);
           this.spawnBloodDecal(npc.x, npc.z, 1.5);
 
           // Ballistic knockback impulse on victim
@@ -11208,21 +11247,22 @@ export class DhakaCityEngine {
             npc.deathType = 'gunshot';
             npc.deathVx = bDirX;
             npc.deathVz = bDirZ;
-            npc.respawnTimer = 45;
+            npc.respawnTimer = npc.isMissionEnemy ? 9999 : 45;
             dhakaAudio.playSfx('death_groan');
 
-            const limbs = this.npcLimbsMap.get(npc.id);
-            if (limbs) {
-              setDeathRagdollPose(limbs, 'gunshot', 0.05);
+            if (npcLimbs) {
+              setDeathRagdollPose(npcLimbs, 'gunshot', 0.05);
             }
-            this.spawnImpactSparks(npc.x, 0.3, npc.z, '#b91c1c', 2.5);
-            this.spawnCashDrop(npc.x, npc.z, Math.floor(Math.random() * 350 + 150));
-            store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+            this.spawnImpactSparks(npc.x, npcY + 0.3, npc.z, '#b91c1c', 2.5);
+            this.spawnCashDrop(npc.x, npc.z, npc.isMissionEnemy ? 450 : Math.floor(Math.random() * 350 + 150));
+            if (!npc.isMissionEnemy) {
+              store.setWantedLevel(Math.max(2, store.wantedLevel + 1));
+            }
             this.alertNearbyPedestrians(npc.x, npc.z, 35);
 
             store.showBanner({
-              titleEn: 'PEDESTRIAN KILLED BY GUNSHOT!',
-              titleBn: 'গুলির আঘাতে পথচারী নিহত!',
+              titleEn: npc.isMissionEnemy ? 'SYNDICATE ENFORCER NEUTRALIZED!' : 'PEDESTRIAN KILLED BY GUNSHOT!',
+              titleBn: npc.isMissionEnemy ? 'সিন্ডিকেট ক্যাডার পরাস্ত!' : 'গুলির আঘাতে পথচারী নিহত!',
               subtitleEn: `${npc.nameEn} fatally shot. DMP Police in pursuit (Wanted ★)!`,
               subtitleBn: `${npc.nameBn} গুলিবিদ্ধ হয়ে মারা গেছে। পুলিশ তল্লাশি শুরু করেছে!`,
               tone: 'red',
@@ -11923,18 +11963,20 @@ export class DhakaCityEngine {
     const wantsSprint =
       (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
       (moveForward !== 0 || moveRight !== 0);
+    const isMeher = useGameStore.getState().selectedCharacterId === 'meher';
     const isSprinting = wantsSprint && this.playerStamina > 5;
 
     if (isSprinting) {
-      this.playerStamina = Math.max(0, this.playerStamina - 16 * dt);
+      this.playerStamina = Math.max(0, this.playerStamina - (isMeher ? 7.5 : 16) * dt);
     } else {
-      this.playerStamina = Math.min(100, this.playerStamina + 14 * dt);
+      this.playerStamina = Math.min(100, this.playerStamina + (isMeher ? 28 : 14) * dt);
     }
 
     const prevPlayerX = this.playerPos.x;
     const prevPlayerZ = this.playerPos.z;
 
-    const baseSpeed = this.isCrouching ? 4.2 : isSprinting ? 13.0 : 7.8;
+    const sprintSpeed = isMeher ? 13.0 * 1.15 : 13.0;
+    const baseSpeed = this.isCrouching ? 4.2 : isSprinting ? sprintSpeed : 7.8;
     let targetAnimState: 'idle' | 'walk' | 'run' = 'idle';
 
     if (moveForward !== 0 || moveRight !== 0) {
@@ -12285,7 +12327,11 @@ export class DhakaCityEngine {
     const veh = this.vehicles.find((v) => v.id === this.activeVehicleId);
     if (!veh) return;
 
+    const store = useGameStore.getState();
     const stats = VEHICLE_STATS[veh.type];
+    const boostMult = this.vehicleSpeedBoostMap.get(veh.id) ?? 1.0;
+    const accelMult = (store.selectedCharacterId === 'arif' ? 1.2 : 1.0) * boostMult;
+    const topSpeed = stats.maxSpeed * boostMult;
     let throttle = 0;
     let steer = 0;
 
@@ -12298,16 +12344,16 @@ export class DhakaCityEngine {
 
     if (throttle > 0) {
       veh.speed = Math.min(
-        stats.maxSpeed,
-        veh.speed + stats.acceleration * dt
+        topSpeed,
+        veh.speed + stats.acceleration * accelMult * dt
       );
     } else if (throttle < 0) {
       if (veh.speed > 0.4) {
         veh.speed = Math.max(0, veh.speed - stats.braking * dt);
       } else {
         veh.speed = Math.max(
-          -stats.maxSpeed * 0.42,
-          veh.speed - stats.acceleration * 0.65 * dt
+          -topSpeed * 0.42,
+          veh.speed - stats.acceleration * 0.65 * accelMult * dt
         );
       }
     } else {
@@ -12342,27 +12388,28 @@ export class DhakaCityEngine {
         steer * stats.turnSpeed * turnMult * speedFactor * dir * dt;
     }
 
-    // Vehicle Water Submersion: If vehicle enters deep water, it sinks and player drowns
-    if (this.isPositionInWater(veh.x, veh.z) && veh.y <= 1.2) {
+    // Vehicle Water Submersion: Boats cruise safely on water; land vehicles sink & drown once!
+    if (veh.type !== 'boat' && this.isPositionInWater(veh.x, veh.z) && veh.y <= 1.2) {
       veh.speed = 0;
       veh.steering = 0;
-      veh.y -= 2.5 * dt;
+      veh.y = -2.2;
       const mesh = this.vehicleMeshes.get(veh.id);
       if (mesh) mesh.position.y = veh.y;
-      this.spawnImpactSparks(veh.x, 0.1, veh.z, '#38bdf8', 4.5);
-      dhakaAudio.playSfx('hit');
-      const store = useGameStore.getState();
-      store.damagePlayer(999);
-      store.showBanner({
-        titleEn: 'WASTED: DROWNED IN WATER',
-        titleBn: 'পানিতে ডুবে মৃত্যু!',
-        subtitleEn: 'Vehicle sank into deep water. Arif drowned!',
-        subtitleBn: 'গাড়িটি পানিতে নিমজ্জিত হয়ে আরিফের সলিল সমাধি ঘটেছে!',
-        tone: 'red',
-      });
+      if (!store.isWasted) {
+        this.spawnImpactSparks(veh.x, 0.1, veh.z, '#38bdf8', 4.5);
+        dhakaAudio.playSfx('hit');
+        store.damagePlayer(999);
+        store.showBanner({
+          titleEn: 'WASTED: DROWNED IN WATER',
+          titleBn: 'পানিতে ডুবে মৃত্যু!',
+          subtitleEn: 'Vehicle sank into deep water. Arif drowned!',
+          subtitleBn: 'গাড়িটি পানিতে নিমজ্জিত হয়ে আরিফের সলিল সমাধি ঘটেছে!',
+          tone: 'red',
+        });
+      }
       this.activeVehicleId = null;
       this.playerLimbs.group.visible = true;
-      this.playerPos.set(veh.x, -0.6, veh.z);
+      this.playerPos.set(veh.x, -0.5, veh.z);
       this.playerLimbs.group.position.copy(this.playerPos);
       return;
     }
@@ -12373,11 +12420,19 @@ export class DhakaCityEngine {
     const nextX = veh.x + vx;
     const nextZ = veh.z + vz;
 
-    const nextElev = this.getRoadElevation(nextX, nextZ, veh.y);
+    const nextElev = veh.type === 'boat' ? 0.32 : this.getRoadElevation(nextX, nextZ, veh.y);
     const radius = Math.max(stats.width, stats.length) * 0.45;
-    if (!this.checkWorldObstacle(nextX, nextZ, radius, veh.id, nextElev)) {
+    const boatHitsShore = veh.type === 'boat' && !this.isPositionInWater(nextX, nextZ);
+    if (!boatHitsShore && !this.checkWorldObstacle(nextX, nextZ, radius, veh.id, nextElev)) {
       veh.x = clampWorldCoord(nextX);
       veh.z = clampWorldCoord(nextZ);
+    } else if (boatHitsShore) {
+      // Gently slide boats along shorelines/piers
+      const canSlideX = this.isPositionInWater(nextX, veh.z);
+      const canSlideZ = this.isPositionInWater(veh.x, nextZ);
+      if (canSlideX) veh.x = clampWorldCoord(nextX);
+      else if (canSlideZ) veh.z = clampWorldCoord(nextZ);
+      else veh.speed *= 0.2;
     } else {
       // 1. Check if collision is with another vehicle in Dhaka traffic
       let hitVeh: VehicleEntity | null = null;
@@ -12487,7 +12542,7 @@ export class DhakaCityEngine {
       }
     }
 
-    this.playerPos.set(veh.x, 0, veh.z);
+    this.playerPos.set(veh.x, veh.y, veh.z);
     this.playerRotation = veh.rotation;
 
     // Position dynamic vehicle headlight cone ahead of car (only at night/rain)
@@ -12831,8 +12886,9 @@ export class DhakaCityEngine {
             veh.rotation = normalizeAngle(veh.rotation + diff * Math.min(1, dt * 1.5));
           }
 
-          // Police ramming Arif's vehicle
-          if (this.activeVehicleId) {
+          // Police ramming Arif's vehicle (only when on the same vertical level — not below flyovers/malls!)
+          const sameVerticalLevel = Math.abs(veh.y - this.playerPos.y) <= 3.5;
+          if (this.activeVehicleId && sameVerticalLevel) {
             const playerVeh = this.vehicles.find(
               (v) => v.id === this.activeVehicleId
             );
@@ -12860,15 +12916,15 @@ export class DhakaCityEngine {
                 playerVeh.z += Math.cos(pushAngle) * 0.8;
               }
             }
-          } else if (distToPlayer < 3.6) {
+          } else if (sameVerticalLevel && distToPlayer < 3.6) {
             store.damagePlayer(14 * dt);
           }
 
-          // Police Arrest / Busted check when player is stopped & cornered
+          // Police Arrest / Busted check when player is stopped & cornered on the same floor/road level
           const isPlayerStopped = this.activeVehicleId
             ? Math.abs(this.vehicles.find((v) => v.id === this.activeVehicleId)?.speed || 0) < 2.0
             : true;
-          if (distToPlayer < 4.8 && isPlayerStopped && !store.isBusted && !store.isWasted) {
+          if (sameVerticalLevel && distToPlayer < 4.8 && isPlayerStopped && !store.isBusted && !store.isWasted) {
             this.policeArrestTimer += dt;
             if (this.policeArrestTimer > 2.2) {
               this.policeArrestTimer = 0;
@@ -13098,18 +13154,23 @@ export class DhakaCityEngine {
 
         npc.respawnTimer = (npc.respawnTimer ?? 45) - dt;
         if (npc.respawnTimer <= 0) {
-          // Revive as a new pedestrian
+          if (npc.isMissionEnemy) {
+            limbs.group.visible = false;
+            continue;
+          }
+          // Revive at original neighborhood / mall floor post
           npc.isDead = false;
-          npc.aiState = 'walk';
+          npc.aiState = npc.id.startsWith('mall_npc_') ? 'idle' : 'walk';
           npc.health = 100;
           npc.deathTimer = 0;
           npc.bloodDecalSpawned = false;
           limbs.group.rotation.x = 0;
           limbs.group.rotation.z = 0;
           if (limbs.weaponMesh) limbs.weaponMesh.visible = true;
-          npc.x = (Math.random() - 0.5) * 80;
-          npc.z = (Math.random() - 0.5) * 120;
-          limbs.group.position.set(npc.x, 0, npc.z);
+          npc.x = npc.homeX ?? (Math.random() - 0.5) * 80;
+          npc.z = npc.homeZ ?? (Math.random() - 0.5) * 120;
+          const ry = npc.homeY ?? 0;
+          limbs.group.position.set(npc.x, ry, npc.z);
         }
         continue;
       }
@@ -13128,27 +13189,44 @@ export class DhakaCityEngine {
         continue;
       }
 
-      // Handle Pedestrian Retaliation counter-attack
+      // Handle Pedestrian Retaliation / Mission Enemy Combat
       if (npc.retaliateCooldown !== undefined && npc.retaliateCooldown > 0) {
-        npc.retaliateCooldown -= dt;
+        const sameElev = Math.abs(limbs.group.position.y - this.playerPos.y) <= 2.6;
         const toPlayerX = this.playerPos.x - npc.x;
         const toPlayerZ = this.playerPos.z - npc.z;
         const pDist = Math.hypot(toPlayerX, toPlayerZ);
-        npc.rotation = Math.atan2(toPlayerX, toPlayerZ);
-        limbs.group.rotation.y = npc.rotation;
+        if (sameElev && pDist < 28) {
+          npc.retaliateCooldown -= dt;
+          npc.rotation = Math.atan2(toPlayerX, toPlayerZ);
+          limbs.group.rotation.y = npc.rotation;
 
-        if (npc.retaliateCooldown <= 0.35 && npc.retaliateCooldown + dt > 0.35) {
-          dhakaAudio.playSfx('punch_swing');
-          if (pDist < 2.3) {
-            dhakaAudio.playSfx('hit');
-            dhakaAudio.playSfx('pain_grunt');
-            store.damagePlayer(10);
-            this.spawnImpactSparks(this.playerPos.x, 1.15, this.playerPos.z, '#ef4444', 1.2);
-            this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.25);
+          if (npc.isMissionEnemy && pDist > 2.0 && pDist < 24) {
+            const nx = npc.x + Math.sin(npc.rotation) * 3.1 * dt;
+            const nz = npc.z + Math.cos(npc.rotation) * 3.1 * dt;
+            if (!this.checkBuildingCollision(nx, nz, 0.4, limbs.group.position.y)) {
+              npc.x = nx;
+              npc.z = nz;
+              limbs.group.position.set(npc.x, limbs.group.position.y, npc.z);
+            }
           }
-        }
-        if (npc.retaliateCooldown <= 0) {
-          npc.aiState = 'flee';
+
+          if (npc.retaliateCooldown <= 0.35 && npc.retaliateCooldown + dt > 0.35 && sameElev) {
+            dhakaAudio.playSfx('punch_swing');
+            if (pDist < 2.4) {
+              dhakaAudio.playSfx('hit');
+              dhakaAudio.playSfx('pain_grunt');
+              store.damagePlayer(npc.isMissionEnemy ? 14 : 10);
+              this.spawnImpactSparks(this.playerPos.x, this.playerPos.y + 1.15, this.playerPos.z, '#ef4444', 1.2);
+              this.cameraTrauma = Math.min(1.0, this.cameraTrauma + 0.25);
+            }
+          }
+          if (npc.retaliateCooldown <= 0) {
+            if (npc.isMissionEnemy) {
+              npc.retaliateCooldown = 1.6;
+            } else {
+              npc.aiState = 'flee';
+            }
+          }
         }
       }
 
@@ -13388,12 +13466,68 @@ export class DhakaCityEngine {
       (m) => m.id === store.activeMissionId
     );
 
+    // Active Dhaka Fare Side-Job Timer & Drop-off Completion
+    if (store.activeFareJob) {
+      store.tickFareJob(dt);
+      const job = useGameStore.getState().activeFareJob;
+      if (job) {
+        const dJob = Math.hypot(this.playerPos.x - job.dropX, this.playerPos.z - job.dropZ);
+        if (dJob < 13) {
+          store.completeFareJob();
+          dhakaAudio.playSfx('mission_complete');
+        }
+      }
+    }
+
     if (activeMission) {
       const step = activeMission.steps[store.activeMissionStepIndex];
       if (step) {
         this.missionMarkerGroup.visible = true;
         this.missionMarkerGroup.position.set(step.targetX, 0, step.targetZ);
         this.missionRingMesh.rotation.z += dt * 1.8;
+
+        // Spawn hostile Syndicate Enforcers on combat mission steps!
+        if (
+          this.lastMissionEnemyStepId !== step.id &&
+          (step.id === 'm9_s2' || step.id === 'm4_s2' || step.id === 'm10_s2')
+        ) {
+          this.lastMissionEnemyStepId = step.id;
+          for (let e = 0; e < 3; e++) {
+            const ang = (e / 3) * Math.PI * 2;
+            const ex = step.targetX + Math.cos(ang) * 5.5;
+            const ez = step.targetZ + Math.sin(ang) * 5.5;
+            const eid = `mission_enemy_${step.id}_${e}`;
+            if (!this.npcs.some((n) => n.id === eid)) {
+              const eNpc: NPCEntity = {
+                id: eid,
+                nameEn: 'Syndicate Enforcer',
+                nameBn: 'সিন্ডিকেট সশস্ত্র ক্যাডার',
+                role: 'police_officer',
+                x: ex,
+                z: ez,
+                homeX: ex,
+                homeZ: ez,
+                homeY: step.id === 'm9_s2' ? 0.25 : 0,
+                rotation: ang + Math.PI,
+                shirtColor: '#7f1d1d',
+                pantsColor: '#0f172a',
+                dialogueEn: ['Drop your weapon! Nobody interferes with Chairman Sikder!'],
+                dialogueBn: ['অস্ত্র নামাও! সিকদারের কাজে কেউ বাধা দিতে পারবে না!'],
+                aiState: 'idle',
+                walkTargetX: ex,
+                walkTargetZ: ez,
+                health: 95,
+                retaliateCooldown: 1.4,
+                isMissionEnemy: true,
+              };
+              this.npcs.push(eNpc);
+              const eLimbs = createCharacterMesh('#7f1d1d', '#0f172a', 'citizen', false, eid, false);
+              eLimbs.group.position.set(ex, step.id === 'm9_s2' ? 0.25 : 0, ez);
+              this.scene.add(eLimbs.group);
+              this.npcLimbsMap.set(eid, eLimbs);
+            }
+          }
+        }
 
         const distToTarget = Math.hypot(
           this.playerPos.x - step.targetX,
@@ -13483,6 +13617,21 @@ export class DhakaCityEngine {
             id: poi.id,
             labelEn: `[E] ${poi.actionLabelEn}`,
             labelBn: `[E] ${poi.actionLabelBn}`,
+          };
+          break;
+        }
+      }
+    }
+
+    if (!prompt) {
+      for (const st of METRO_STATIONS) {
+        const d = Math.hypot(st.x - this.playerPos.x, st.z - this.playerPos.z);
+        if (d < 8.5) {
+          prompt = {
+            type: 'poi',
+            id: st.id,
+            labelEn: `[E] Board Dhaka Metro Rail (${st.nameEn}) — ৳${st.fare}`,
+            labelBn: `[E] ঢাকা মেট্রোরেলে উঠুন (${st.nameBn}) — ৳${st.fare}`,
           };
           break;
         }

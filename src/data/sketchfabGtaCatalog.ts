@@ -264,6 +264,7 @@ export const DHAKA_VEHICLE_PHOTOS: Record<VehicleType, string> = {
   car: resolveAssetUrl('/dhaka_photos/car_real.jpg'),
   pickup: resolveAssetUrl('/sketchfab/gta_model_11.jpg'),
   police: resolveAssetUrl('/dhaka_photos/police_real.jpg'),
+  boat: resolveAssetUrl('/dhaka_photos/sadarghat_real.jpg'),
 };
 
 // Actual real-world photographs for Dhaka Points of Interest

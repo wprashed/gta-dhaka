@@ -26,6 +26,9 @@ export const MinimapHUD: React.FC = () => {
     stamina,
     language,
     setGamePhase,
+    isInsideMall,
+    mallFloor,
+    activeFareJob,
   } = useGameStore();
 
   useEffect(() => {
@@ -36,9 +39,128 @@ export const MinimapHUD: React.FC = () => {
 
     const size = canvas.width;
     const half = size / 2;
-    const scale = 0.62; // World meters to radar pixels
 
     ctx.clearRect(0, 0, size, size);
+
+    if (isInsideMall) {
+      // JAMUNA FUTURE PARK — INDOOR FLOOR PLAN RADAR
+      const scale = 1.45;
+      ctx.fillStyle = '#1e1b4b';
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.save();
+      ctx.translate(half, half);
+
+      const toM = (wx: number, wz: number) => ({
+        rx: (wx - playerX) * scale,
+        rz: (wz - playerZ) * scale,
+      });
+
+      // Mall floor slab (520±56, -385±36)
+      const mallTL = toM(464, -421);
+      ctx.fillStyle = '#312e81';
+      ctx.fillRect(mallTL.rx, mallTL.rz, 112 * scale, 72 * scale);
+      ctx.strokeStyle = '#a855f7';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(mallTL.rx, mallTL.rz, 112 * scale, 72 * scale);
+
+      // Open Atrium Void (506..534, -396..-374)
+      const atrTL = toM(506, -396);
+      ctx.fillStyle = mallFloor === 0 ? '#1e293b' : '#0f172a';
+      ctx.fillRect(atrTL.rx, atrTL.rz, 28 * scale, 22 * scale);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(atrTL.rx, atrTL.rz, 28 * scale, 22 * scale);
+
+      // Central Atrium Fountain
+      const fnt = toM(520, -385);
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(fnt.rx, fnt.rz, 4.4 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // West & East Escalators
+      const escW = toM(495, -394);
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(escW.rx, escW.rz, 5 * scale, 18 * scale);
+      const escE = toM(540, -394);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(escE.rx, escE.rz, 5 * scale, 18 * scale);
+
+      // Glass Capsule Elevator (520, -398)
+      const elv = toM(520, -397);
+      ctx.fillStyle = '#e879f9';
+      ctx.fillRect(elv.rx - 3, elv.rz - 3, 6, 6);
+
+      // Shop units per floor
+      const shops =
+        mallFloor === 0
+          ? [
+              { x: 478, z: -413, l: 'Aarong' },
+              { x: 499, z: -413, l: 'Samsung' },
+              { x: 541, z: -413, l: 'Yellow' },
+              { x: 562, z: -413, l: 'Apex' },
+              { x: 478, z: -357, l: 'Ecstasy' },
+              { x: 499, z: -357, l: 'Bata' },
+              { x: 541, z: -357, l: 'iStore' },
+              { x: 562, z: -357, l: 'ATM' },
+            ]
+          : mallFloor === 1
+          ? [
+              { x: 478, z: -413, l: 'StarTech' },
+              { x: 499, z: -413, l: 'Xiaomi' },
+              { x: 541, z: -413, l: 'TimeZone' },
+              { x: 562, z: -413, l: 'Batighar' },
+              { x: 478, z: -357, l: 'Walton' },
+              { x: 499, z: -357, l: 'Diamond' },
+              { x: 541, z: -357, l: 'Shajgoj' },
+              { x: 562, z: -357, l: 'Infinity' },
+            ]
+          : [
+              { x: 488, z: -413, l: 'CINEMA' },
+              { x: 552, z: -413, l: 'ARCADE' },
+              { x: 478, z: -357, l: 'KFC' },
+              { x: 499, z: -357, l: 'PizzaHut' },
+              { x: 541, z: -357, l: 'Coffee' },
+              { x: 562, z: -357, l: 'Kacchi' },
+            ];
+
+      ctx.font = 'bold 7px sans-serif';
+      ctx.textAlign = 'center';
+      shops.forEach((s) => {
+        const sp = toM(s.x, s.z);
+        ctx.fillStyle = '#4c1d95';
+        ctx.fillRect(sp.rx - 10, sp.rz - 6, 20, 12);
+        ctx.fillStyle = '#fde68a';
+        ctx.fillText(s.l, sp.rx, sp.rz + 2.5);
+      });
+
+      // South Exit Door Marker
+      const ex = toM(520, -349);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(ex.rx - 8, ex.rz - 2, 16, 4);
+
+      // Player Arrow
+      ctx.save();
+      ctx.rotate(-playerRotation + Math.PI);
+      ctx.fillStyle = '#22d3ee';
+      ctx.strokeStyle = '#083344';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -8);
+      ctx.lineTo(5.5, 6);
+      ctx.lineTo(0, 3);
+      ctx.lineTo(-5.5, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.restore();
+      return;
+    }
+
+    const scale = 0.62; // World meters to radar pixels
 
     // Radar dark background
     ctx.fillStyle = '#0f172a';
@@ -52,23 +174,18 @@ export const MinimapHUD: React.FC = () => {
       rz: (wz - playerZ) * scale,
     });
 
-    // Draw Water Bodies (Buriganga, Hatirjheel, Dhanmondi Lake, Gulshan Lake, Uttara Lake)
+    // Draw Water Bodies (exact match to DhakaCityEngine.isPositionInWater)
     ctx.fillStyle = '#0e7490';
-    // Buriganga River (Full width spanning 1800m)
-    const buri = worldToRadar(-900, 310);
-    ctx.fillRect(buri.rx, buri.rz, 1800 * scale, 150 * scale);
-    // Hatirjheel
+    const buri = worldToRadar(-950, 303.5);
+    ctx.fillRect(buri.rx, buri.rz, 1900 * scale, 143.5 * scale);
     const hatir = worldToRadar(165, -80);
-    ctx.fillRect(hatir.rx, hatir.rz, 110 * scale, 155 * scale);
-    // Dhanmondi Lake
+    ctx.fillRect(hatir.rx, hatir.rz, 110 * scale, 150 * scale);
     const dhan = worldToRadar(-265, -35);
-    ctx.fillRect(dhan.rx, dhan.rz, 85 * scale, 125 * scale);
-    // Gulshan / Baridhara Lake
-    const gulshan = worldToRadar(320, -380);
-    ctx.fillRect(gulshan.rx, gulshan.rz, 70 * scale, 160 * scale);
-    // Uttara Sector Lake
-    const uttaraLake = worldToRadar(-340, -560);
-    ctx.fillRect(uttaraLake.rx, uttaraLake.rz, 65 * scale, 130 * scale);
+    ctx.fillRect(dhan.rx, dhan.rz, 82 * scale, 120 * scale);
+    const gulshan = worldToRadar(280, -290);
+    ctx.fillRect(gulshan.rx, gulshan.rz, 100 * scale, 160 * scale);
+    const uttaraLake = worldToRadar(-220, -600);
+    ctx.fillRect(uttaraLake.rx, uttaraLake.rz, 80 * scale, 120 * scale);
 
     // Draw Dhaka Green Parks (Ramna Park, Suhrawardy Udyan, Chandrima Udyan)
     ctx.fillStyle = '#065f46';
@@ -81,14 +198,19 @@ export const MinimapHUD: React.FC = () => {
       ctx.fillRect(p.rx, p.rz, pk.w * scale, pk.d * scale);
     });
 
-    // Draw Expanded Dhaka Metropolitan Road Grid
+    // Jamuna Future Park footprint highlight
+    const jfpR = worldToRadar(464, -421);
+    ctx.fillStyle = '#6b21a8';
+    ctx.fillRect(jfpR.rx, jfpR.rz, 112 * scale, 72 * scale);
+
+    // Draw Exact Dhaka Metropolitan Road Grid (matching DhakaCityEngine.NS_ROADS & EW_ROADS)
     ctx.strokeStyle = '#475569';
     ctx.lineWidth = 6;
 
-    const nsRoads = [-620, -420, -170, 0, 220, 420, 620];
+    const nsRoads = [-950, -780, -580, -480, -380, -170, 0, 220, 440, 640, 840, 950];
     nsRoads.forEach((rx) => {
-      const p1 = worldToRadar(rx, -750);
-      const p2 = worldToRadar(rx, 750);
+      const p1 = worldToRadar(rx, -1400);
+      const p2 = worldToRadar(rx, 800);
       ctx.beginPath();
       ctx.moveTo(p1.rx, p1.rz);
       ctx.lineTo(p2.rx, p2.rz);
@@ -178,10 +300,10 @@ export const MinimapHUD: React.FC = () => {
     ctx.stroke();
 
     ctx.lineWidth = 6;
-    const ewRoads = [-540, -420, -250, -175, 0, 175, 285, 440];
+    const ewRoads = [-1400, -1100, -850, -620, -460, -315, -175, 0, 175, 240, 285, 460];
     ewRoads.forEach((rz) => {
-      const p1 = worldToRadar(-750, rz);
-      const p2 = worldToRadar(750, rz);
+      const p1 = worldToRadar(-950, rz);
+      const p2 = worldToRadar(950, rz);
       ctx.beginPath();
       ctx.moveTo(p1.rx, p1.rz);
       ctx.lineTo(p2.rx, p2.rz);
@@ -207,7 +329,9 @@ export const MinimapHUD: React.FC = () => {
     const mission = allMissions.find((m) => m.id === activeMissionId);
     const step = mission ? mission.steps[activeMissionStepIndex] : null;
 
-    const target = step
+    const target = activeFareJob
+      ? { x: activeFareJob.dropX, z: activeFareJob.dropZ, color: '#22c55e' }
+      : step
       ? { x: step.targetX, z: step.targetZ, color: '#facc15' }
       : customWaypoint
       ? { x: customWaypoint.x, z: customWaypoint.z, color: '#ec4899' }
@@ -285,6 +409,9 @@ export const MinimapHUD: React.FC = () => {
     activeMissionId,
     activeMissionStepIndex,
     customWaypoint,
+    isInsideMall,
+    mallFloor,
+    activeFareJob,
   ]);
 
   const districtObj =

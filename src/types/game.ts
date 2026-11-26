@@ -36,7 +36,8 @@ export type VehicleType =
   | 'motorcycle'
   | 'car'
   | 'pickup'
-  | 'police';
+  | 'police'
+  | 'boat';
 
 export interface VehicleStats {
   type: VehicleType;
@@ -122,6 +123,10 @@ export interface NPCEntity {
   deathVz?: number;
   bloodDecalSpawned?: boolean;
   retaliateCooldown?: number;
+  homeX?: number;
+  homeZ?: number;
+  homeY?: number;
+  isMissionEnemy?: boolean;
 }
 
 export type POIType =

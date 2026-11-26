@@ -10,6 +10,7 @@ import {
 } from '../types/game';
 import {
   DISTRICTS,
+  METRO_STATIONS,
   PLAYABLE_CHARACTERS,
   SIDE_MISSIONS,
   STORY_MISSIONS,
@@ -45,7 +46,7 @@ import {
 
 interface GameHUDProps {
   onTriggerAction: (
-    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera'
+    action: 'interact' | 'horn' | 'attack' | 'jump' | 'camera' | 'fare'
   ) => void;
 }
 
@@ -91,6 +92,28 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     storyEndingBn,
     isInsideMall,
     mallFloor,
+    activeShopModal,
+    closeShopModal,
+    activeMetroModal,
+    closeMetroModal,
+    activeGarageModal,
+    closeGarageModal,
+    activeFareJob,
+    cancelFareJob,
+    requestTeleport,
+    requestRepairVehicle,
+    requestResprayVehicle,
+    requestUpgradeVehicle,
+    spendTaka,
+    addTaka,
+    healPlayer,
+    setWantedLevel,
+    saveGameToStorage,
+    showBanner,
+    outfits,
+    equipOutfit,
+    equippedOutfitId,
+    addAmmo,
   } = useGameStore();
 
   const [showWeaponDrawer, setShowWeaponDrawer] = useState(false);
@@ -337,6 +360,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         : '৩য় তলা (ফুড কোর্ট ও সিনেমা)'
                     }`}
               </span>
+            </div>
+          )}
+
+          {activeFareJob && (
+            <div className="bg-emerald-950/90 backdrop-blur-md border border-emerald-400/60 rounded-full px-3 py-1 shadow-lg flex items-center gap-2">
+              <span className="text-xs">🚕</span>
+              <span className="text-[11px] font-bold text-emerald-200">
+                {language === 'en' ? activeFareJob.dropNameEn : activeFareJob.dropNameBn} • ⏱ {Math.ceil(activeFareJob.timeLeft)}s • ৳{activeFareJob.reward}
+              </span>
+              <button
+                onClick={cancelFareJob}
+                className="text-red-300 hover:text-white text-[10px] font-black px-1"
+                title="Cancel Fare"
+              >
+                ✕
+              </button>
             </div>
           )}
 
@@ -843,6 +882,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             {inVehicleId ? (
               <>
                 <button
+                  onClick={() => onTriggerAction('fare')}
+                  className="px-2 h-7 rounded-full bg-emerald-600/80 hover:bg-emerald-500 border border-emerald-400/50 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all active:scale-90"
+                  title="Start/Cancel Dhaka Fare Job [G]"
+                >
+                  <span>🚕 Fare</span>
+                </button>
+                <button
                   onClick={() => onTriggerAction('horn')}
                   className="w-7 h-7 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 flex items-center justify-center text-[11px] transition-all active:scale-90"
                   title="Honk vehicle horn [H]"
@@ -911,7 +957,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                       : vehicleStats.nameBn}
                   </p>
                   <p className="text-[8px] text-slate-400 font-mono">
-                    [F] Exit • [H] Horn
+                    [F] Exit • [H] Horn • [G] Fare
                   </p>
                 </div>
                 <div className="text-right">
@@ -974,6 +1020,432 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
           ) : null}
         </div>
       </div>
+
+      {/* IN-GAME MODAL 1: JAMUNA FUTURE PARK STOREFRONT BROWSER */}
+      {activeShopModal && (
+        <div className="pointer-events-auto fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-purple-500/60 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300">
+                  🏬 {language === 'en' ? 'Jamuna Future Park Storefront' : 'যমুনা ফিউচার পার্ক শোরুম'}
+                </span>
+                <h3 className="text-lg font-black text-white">
+                  {language === 'en' ? activeShopModal.titleEn : activeShopModal.titleBn}
+                </h3>
+              </div>
+              <button
+                onClick={closeShopModal}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {activeShopModal.category === 'fashion' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                {outfits.map((o) => {
+                  const isEq = equippedOutfitId === o.id;
+                  return (
+                    <div
+                      key={o.id}
+                      className={`p-3 rounded-xl border ${
+                        isEq ? 'border-emerald-400 bg-emerald-950/30' : 'border-slate-800 bg-slate-950/80'
+                      } flex flex-col justify-between gap-2`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-5 h-5 rounded-full border border-white/40 shrink-0"
+                          style={{ backgroundColor: o.shirtColor }}
+                        />
+                        <p className="text-xs font-bold text-white truncate">
+                          {language === 'en' ? o.nameEn : o.nameBn}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => equipOutfit(o.id)}
+                        className={`w-full py-1.5 rounded-lg text-xs font-black ${
+                          isEq
+                            ? 'bg-emerald-600 text-white'
+                            : o.unlocked
+                            ? 'bg-slate-800 hover:bg-slate-700 text-amber-300'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
+                      >
+                        {isEq
+                          ? 'Equipped ✓'
+                          : o.unlocked
+                          ? 'Wear Outfit'
+                          : `Buy & Wear — ৳${o.price}`}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeShopModal.category === 'food' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {[
+                  { nameEn: 'Crispy Chicken Bucket', nameBn: 'ক্রিস্পি চিকেন বাকেট', hp: 80, arm: 0, price: 180 },
+                  { nameEn: 'Supreme Pan Pizza', nameBn: 'সুপ্রিম প্যান পিৎজা', hp: 90, arm: 25, price: 220 },
+                  { nameEn: 'Iced Caramel Chiller', nameBn: 'আইসড ক্যারামেল কফি', hp: 50, arm: 0, price: 120 },
+                  { nameEn: 'Royal Shahi Kacchi', nameBn: 'রয়েল শাহী কাচ্চি ও বোরহানি', hp: 100, arm: 50, price: 250 },
+                ].map((item) => (
+                  <button
+                    key={item.nameEn}
+                    onClick={() => {
+                      if (spendTaka(item.price, item.nameEn, item.nameBn)) {
+                        healPlayer(item.hp, item.arm);
+                        showBanner({
+                          titleEn: `${item.nameEn.toUpperCase()} ENJOYED! (+${item.hp} HP)`,
+                          titleBn: `${item.nameBn} সম্পন্ন! (+${item.hp} হেলথ)`,
+                          subtitleEn: 'Served hot at Jamuna Future Park 2F Food Court.',
+                          subtitleBn: 'যমুনা ফিউচার পার্ক ফুড কোর্টে তাজা পরিবেশিত।',
+                          tone: 'gold',
+                        });
+                        closeShopModal();
+                      }
+                    }}
+                    className="p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-left flex flex-col gap-1"
+                  >
+                    <span className="text-xs font-black text-white">
+                      {language === 'en' ? item.nameEn : item.nameBn}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-bold">
+                      +{item.hp} HP {item.arm > 0 ? `• +${item.arm} Armor` : ''} • ৳{item.price}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(activeShopModal.category === 'tech' ||
+              activeShopModal.category === 'footwear' ||
+              activeShopModal.category === 'books' ||
+              activeShopModal.category === 'cinema' ||
+              activeShopModal.category === 'arcade' ||
+              activeShopModal.category === 'atm') && (
+              <div className="space-y-2.5">
+                {activeShopModal.category === 'tech' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      onClick={() => {
+                        if (spendTaka(450, 'Mall Tactical Armor Vest', 'বডি আর্মার ভেস্ট')) {
+                          healPlayer(40, 65);
+                          showBanner({
+                            titleEn: 'TACTICAL ARMOR VEST EQUIPPED (+65 ARMOR)',
+                            titleBn: 'নতুন ট্যাকটিক্যাল আর্মার যুক্ত (+৬৫ আর্মার)',
+                            subtitleEn: 'Purchased at Jamuna Future Park Tech Wing.',
+                            subtitleBn: 'যমুনা টেক উইং থেকে সংগৃহীত।',
+                            tone: 'blue',
+                          });
+                          closeShopModal();
+                        }
+                      }}
+                      className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                    >
+                      <p className="text-xs font-black text-white">🛡️ Tactical Armor Vest</p>
+                      <p className="text-[10px] text-cyan-400 font-bold">+65 Armor & +40 HP • ৳450</p>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (spendTaka(300, 'Full Firearm Ammo Refill', 'অস্ত্রের গুলি রিফিল')) {
+                          (['pistol_9mm', 'bd08_rifle', 'police_shotgun', 'smg_uzi', 'deshi_pipegun'] as ToolWeaponId[]).forEach((id) =>
+                            addAmmo(id, 30)
+                          );
+                          showBanner({
+                            titleEn: 'AMMUNITION PACK REFILLED (+30 ROUNDS)',
+                            titleBn: 'সকল আগ্নেয়াস্ত্রের গুলি রিফিল সম্পন্ন!',
+                            subtitleEn: 'Tactical ammo restocked for all unlocked firearms.',
+                            subtitleBn: 'আপনার সব অস্ত্রের ম্যাগাজিন পূর্ণ হয়েছে।',
+                            tone: 'gold',
+                          });
+                          closeShopModal();
+                        }
+                      }}
+                      className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                    >
+                      <p className="text-xs font-black text-white">🔫 Tactical Ammo Pack</p>
+                      <p className="text-[10px] text-amber-400 font-bold">+30 Rounds All Guns • ৳300</p>
+                    </button>
+                  </div>
+                )}
+
+                {activeShopModal.category === 'cinema' && (
+                  <button
+                    onClick={() => {
+                      if (spendTaka(200, 'Blockbuster Cinemas IMAX Ticket', 'ব্লকবাস্টার সিনেমাস টিকিট')) {
+                        healPlayer(100, 50);
+                        setWantedLevel(0);
+                        saveGameToStorage();
+                        showBanner({
+                          titleEn: '🎬 BLOCKBUSTER CINEMAS: FULL REST & WANTED CLEARED!',
+                          titleBn: '🎬 ব্লকবাস্টার সিনেমাস: মুভি দেখে সম্পূর্ণ সুস্থ ও গেম সেভ!',
+                          subtitleEn: 'Watched Dhaka Attack 2 in 3D IMAX! HP 100%, Wanted Cleared.',
+                          subtitleBn: 'থ্রিডি আইম্যাক্স শো উপভোগ করেছেন।',
+                          tone: 'gold',
+                        });
+                        closeShopModal();
+                      }
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/50 text-left"
+                  >
+                    <p className="text-sm font-black text-white">🎬 Watch Dhaka Attack 2 (3D IMAX + Popcorn)</p>
+                    <p className="text-xs text-amber-300 mt-0.5">Full Heal +50 Armor, Clear Wanted ★ & Save Game — ৳200</p>
+                  </button>
+                )}
+
+                {activeShopModal.category === 'arcade' && (
+                  <button
+                    onClick={() => {
+                      if (spendTaka(50, 'Future World VR & Arcade Tokens', 'গেম জোন টোকেন')) {
+                        healPlayer(35, 0);
+                        showBanner({
+                          titleEn: '🎮 FUTURE WORLD GAME ZONE: HIGH SCORE!',
+                          titleBn: '🎮 ফিউচার ওয়ার্ল্ড: হাই স্কোর!',
+                          subtitleEn: 'Enjoyed VR racing & arcade machines (+35 HP)!',
+                          subtitleBn: 'আর্কেড ও ভিআর গেম খেলে সতেজ হয়েছেন!',
+                          tone: 'blue',
+                        });
+                        closeShopModal();
+                      }
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-500/50 text-left"
+                  >
+                    <p className="text-sm font-black text-white">🎮 Play VR Racing & Bowling Tokens</p>
+                    <p className="text-xs text-purple-200 mt-0.5">Restore Energy & +35 HP — ৳50</p>
+                  </button>
+                )}
+
+                {(activeShopModal.category === 'footwear' || activeShopModal.category === 'books') && (
+                  <button
+                    onClick={() => {
+                      if (spendTaka(activeShopModal.cost || 150, activeShopModal.titleEn, activeShopModal.titleBn)) {
+                        healPlayer(50, 0);
+                        setWantedLevel(Math.max(0, wantedLevel - 1));
+                        showBanner({
+                          titleEn: `${activeShopModal.titleEn}: REFRESHED (+50 HP & -1 WANTED)`,
+                          titleBn: `${activeShopModal.titleEn}: সতেজ বিশ্রাম সম্পন্ন!`,
+                          subtitleEn: 'Ready to explore Jamuna Future Park!',
+                          subtitleBn: 'যমুনা ফিউচার পার্ক ঘুরে দেখুন!',
+                          tone: 'green',
+                        });
+                        closeShopModal();
+                      }
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/50 text-left"
+                  >
+                    <p className="text-sm font-black text-white">
+                      {activeShopModal.category === 'books' ? '📚 Espresso & Bangla Novel (+50 HP, -1★)' : '👟 Fresh Running Sneakers (+50 HP)'}
+                    </p>
+                    <p className="text-xs text-emerald-300 mt-0.5">৳{activeShopModal.cost || 150}</p>
+                  </button>
+                )}
+
+                {activeShopModal.category === 'atm' && (
+                  <button
+                    onClick={() => {
+                      addTaka(500, 'DBBL Mall Cashback Bonus', 'ডাচ-বাংলা এটিএম বোনাস');
+                      showBanner({
+                        titleEn: '🏧 DBBL FAST TRACK: +৳500 CASHBACK ADDED!',
+                        titleBn: '🏧 ডাচ-বাংলা এটিএম: +৳৫০০ ক্যাশব্যাক যোগ হয়েছে!',
+                        subtitleEn: 'GF: Fashion | West Escalator -> 1F | East Escalator -> 2F Food Court & Cinema',
+                        subtitleBn: 'নিচতলা: ফ্যাশন • ২য় তলা: গ্যাজেট • ৩য় তলা: ফুড কোর্ট ও সিনেমা!',
+                        tone: 'green',
+                      });
+                      closeShopModal();
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/50 text-left"
+                  >
+                    <p className="text-sm font-black text-white">🏧 Claim DBBL Fast-Track Cashback (+৳500)</p>
+                    <p className="text-xs text-emerald-300 mt-0.5">Free Mall Member Reward</p>
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs text-slate-400">
+              <span>Balance: <strong className="text-amber-400">৳{taka.toLocaleString()}</strong></span>
+              <button onClick={closeShopModal} className="px-3 py-1 rounded-lg bg-slate-800 text-white font-bold">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-GAME MODAL 2: DHAKA METRO RAIL (MRT) FAST TRAVEL */}
+      {activeMetroModal && (
+        <div className="pointer-events-auto fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                  🚆 Dhaka Mass Rapid Transit (MRT Line 5 & 6)
+                </span>
+                <h3 className="text-base font-black text-white">
+                  {language === 'en' ? 'Select Destination Station' : 'গন্তব্য মেট্রোরেল স্টেশন বাছুন'}
+                </h3>
+              </div>
+              <button onClick={closeMetroModal} className="p-1.5 rounded-lg bg-slate-800 text-slate-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {METRO_STATIONS.map((st) => {
+                const isHere = st.id === activeMetroModal;
+                return (
+                  <button
+                    key={st.id}
+                    disabled={isHere}
+                    onClick={() => {
+                      if (spendTaka(st.fare, `Dhaka Metro Ticket -> ${st.nameEn}`, `মেট্রোরেল টিকিট -> ${st.nameBn}`)) {
+                        requestTeleport(st.x, st.z);
+                        closeMetroModal();
+                        showBanner({
+                          titleEn: `🚆 ARRIVED: ${st.nameEn.toUpperCase()}`,
+                          titleBn: `🚆 পৌঁছে গেছেন: ${st.nameBn}`,
+                          subtitleEn: `Dhaka Metro Rail (${st.line}) express journey complete.`,
+                          subtitleBn: 'ঢাকা মেট্রোরেলে দ্রুত যাতায়াত সম্পন্ন!',
+                          tone: 'green',
+                        });
+                      }
+                    }}
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                      isHere
+                        ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 cursor-default'
+                        : 'bg-slate-950/85 hover:bg-slate-800 border-slate-800 text-white'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-black">
+                        [{st.line}] {language === 'en' ? st.nameEn : st.nameBn}
+                      </p>
+                      <p className="text-[10px] text-slate-400">{isHere ? 'Current Station' : `Tap to board train`}</p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-amber-400">
+                      {isHere ? 'HERE' : `৳${st.fare}`}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-GAME MODAL 3: DHAKA AUTO GARAGE RESPRAY & UPGRADES */}
+      {activeGarageModal && (
+        <div className="pointer-events-auto fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-cyan-500/60 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
+                  🔧 {language === 'en' ? 'Dhaka Auto Workshop & Customs' : 'ঢাকা অটো ওয়ার্কশপ ও মডিফিকেশন'}
+                </span>
+                <h3 className="text-base font-black text-white">
+                  {language === 'en' ? 'Repair, Tune & Respray Nearest Vehicle' : 'গাড়ি মেরামত, স্পিড টিউনিং ও রঙ পরিবর্তন'}
+                </h3>
+              </div>
+              <button onClick={closeGarageModal} className="p-1.5 rounded-lg bg-slate-800 text-slate-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => {
+                  if (spendTaka(200, 'Garage Full Vehicle Repair', 'গাড়ি ফুল মেরামত')) {
+                    requestRepairVehicle();
+                    showBanner({
+                      titleEn: '🔧 VEHICLE 100% REPAIRED!',
+                      titleBn: '🔧 গাড়ি সম্পূর্ণ মেরামত সম্পন্ন!',
+                      subtitleEn: 'Engine & chassis restored to factory condition.',
+                      subtitleBn: 'ইঞ্জিন ও বডি নতুনের মতো হয়েছে।',
+                      tone: 'green',
+                    });
+                    closeGarageModal();
+                  }
+                }}
+                className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+              >
+                <p className="text-xs font-black text-white">🔧 Full Body Repair</p>
+                <p className="text-[10px] text-emerald-400 font-bold">100% Vehicle HP • ৳200</p>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (spendTaka(500, 'Garage Turbo & Armor Tune', 'টার্বো ও বডি আর্মার টিউনিং')) {
+                    requestUpgradeVehicle();
+                    showBanner({
+                      titleEn: '⚡ TURBO +25% SPEED & +35% ARMOR APPLIED!',
+                      titleBn: '⚡ গাড়িতে টার্বো গতি ও হেভি আর্মার যুক্ত!',
+                      subtitleEn: 'Your vehicle now outperforms Dhaka traffic.',
+                      subtitleBn: 'আপনার গাড়ি এখন সুপারচার্জড!',
+                      tone: 'gold',
+                    });
+                    closeGarageModal();
+                  }
+                }}
+                className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+              >
+                <p className="text-xs font-black text-white">⚡ Turbo & Armor Tune</p>
+                <p className="text-[10px] text-amber-400 font-bold">+25% Speed & +35% HP • ৳500</p>
+              </button>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-300 mb-2">
+                🎨 {language === 'en' ? 'Custom Dhaka Paint Respray (৳150)' : 'পছন্দের রঙ করুন (৳১৫০)'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { name: 'Pearl', hex: '#f8fafc' },
+                  { name: 'Crimson', hex: '#dc2626' },
+                  { name: 'Cobalt', hex: '#0284c7' },
+                  { name: 'CNG Green', hex: '#15803d' },
+                  { name: 'Gold', hex: '#eab308' },
+                  { name: 'Obsidian', hex: '#0f172a' },
+                ].map((c) => (
+                  <button
+                    key={c.hex}
+                    onClick={() => {
+                      if (spendTaka(150, `Respray Paint: ${c.name}`, `গাড়ির রঙ: ${c.name}`)) {
+                        requestResprayVehicle(c.hex);
+                        showBanner({
+                          titleEn: `🎨 PAINT JOB COMPLETE (${c.name.toUpperCase()})`,
+                          titleBn: `🎨 নতুন রঙ সম্পন্ন!`,
+                          subtitleEn: 'Fresh metallic lacquer applied in workshop.',
+                          subtitleBn: 'গাড়িতে ঝকঝকে নতুন রঙ করা হয়েছে।',
+                          tone: 'blue',
+                        });
+                        closeGarageModal();
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 flex items-center gap-1.5 text-[11px] font-bold text-white"
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full border border-white/40" style={{ backgroundColor: c.hex }} />
+                    <span>{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (spendTaka(300, 'Workshop Tuned CNG Delivery', 'গ্যারেজ সিএনজি ডেলিভারি')) {
+                  requestSpawnVehicle('cng');
+                  closeGarageModal();
+                }
+              }}
+              className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black"
+            >
+              🛺 Deliver Fresh CNG Outside Garage (৳300)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

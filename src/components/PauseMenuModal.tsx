@@ -292,15 +292,15 @@ export const PauseMenuModal: React.FC = () => {
 
               <div className="flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center relative">
                 <svg
-                  viewBox="-400 -400 800 800"
+                  viewBox="-980 -950 1960 1600"
                   className="w-full h-full max-h-[480px] transition-transform duration-200"
                   style={{ transform: `scale(${mapZoom})` }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const nx =
-                      ((e.clientX - rect.left) / rect.width) * 800 - 400;
+                      ((e.clientX - rect.left) / rect.width) * 1960 - 980;
                     const nz =
-                      ((e.clientY - rect.top) / rect.height) * 800 - 400;
+                      ((e.clientY - rect.top) / rect.height) * 1600 - 950;
                     setCustomWaypoint({
                       x: Math.round(nx),
                       z: Math.round(nz),
@@ -332,17 +332,17 @@ export const PauseMenuModal: React.FC = () => {
                           width={w}
                           height={h}
                           fill={d.color}
-                          fillOpacity={isSelected ? 0.32 : 0.14}
+                          fillOpacity={isSelected ? 0.34 : 0.16}
                           stroke={d.color}
-                          strokeWidth={isSelected ? 4 : 1.5}
-                          strokeOpacity={0.65}
+                          strokeWidth={isSelected ? 7 : 2.5}
+                          strokeOpacity={0.7}
                         />
                         <text
                           x={d.center.x}
                           y={d.center.z}
                           textAnchor="middle"
                           fill="#ffffff"
-                          fontSize="16"
+                          fontSize="30"
                           fontWeight="bold"
                           className="pointer-events-none drop-shadow"
                         >
@@ -354,127 +354,74 @@ export const PauseMenuModal: React.FC = () => {
                     );
                   })}
 
-                  <rect
-                    x={-390}
-                    y={300}
-                    width={780}
-                    height={95}
-                    fill="#0891b2"
-                    fillOpacity={0.75}
-                  />
-                  <text
-                    x={0}
-                    y={355}
-                    textAnchor="middle"
-                    fill="#bae6fd"
-                    fontSize="18"
-                    fontWeight="bold"
-                  >
+                  {/* Water Bodies (1:1 match to DhakaCityEngine.isPositionInWater) */}
+                  <rect x={-950} y={303.5} width={1900} height={143.5} fill="#0891b2" fillOpacity={0.78} />
+                  <text x={0} y={388} textAnchor="middle" fill="#bae6fd" fontSize="34" fontWeight="bold">
                     BURIGANGA RIVER • বুড়িগঙ্গা নদী
                   </text>
-                  <rect
-                    x={170}
-                    y={-75}
-                    width={100}
-                    height={145}
-                    rx={14}
-                    fill="#0891b2"
-                    fillOpacity={0.6}
-                  />
-                  <rect
-                    x={-260}
-                    y={-35}
-                    width={80}
-                    height={120}
-                    rx={14}
-                    fill="#0891b2"
-                    fillOpacity={0.6}
-                  />
+                  <rect x={165} y={-80} width={110} height={150} rx={18} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={-265} y={-35} width={82} height={120} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={280} y={-290} width={100} height={160} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={-220} y={-600} width={80} height={120} rx={16} fill="#0891b2" fillOpacity={0.68} />
 
-                  {[-170, 0, 220].map((rx) => (
+                  {/* Jamuna Future Park Complex */}
+                  <rect x={464} y={-421} width={112} height={72} rx={8} fill="#7e22ce" fillOpacity={0.85} stroke="#fbbf24" strokeWidth={4} />
+                  <text x={520} y={-432} textAnchor="middle" fill="#fde68a" fontSize="24" fontWeight="bold">
+                    🏬 Jamuna Future Park
+                  </text>
+
+                  {[-950, -780, -580, -480, -380, -170, 0, 220, 440, 640, 840, 950].map((rx) => (
                     <line
                       key={`ns_${rx}`}
                       x1={rx}
-                      y1={-370}
+                      y1={-940}
                       x2={rx}
-                      y2={295}
+                      y2={640}
                       stroke="#475569"
-                      strokeWidth={11}
+                      strokeWidth={16}
                     />
                   ))}
-                  {[-315, -175, 0, 175, 285].map((rz) => (
+                  {[-850, -620, -460, -315, -175, 0, 175, 240, 285, 460].map((rz) => (
                     <line
                       key={`ew_${rz}`}
-                      x1={-370}
+                      x1={-950}
                       y1={rz}
-                      x2={370}
+                      x2={950}
                       y2={rz}
                       stroke="#475569"
-                      strokeWidth={11}
+                      strokeWidth={16}
                     />
                   ))}
 
                   {/* DHAKA MASS RAPID TRANSIT (MRT) SYSTEM OVERLAY */}
-                  {/* MRT Line-6 (North-South): Uttara - Mirpur-10 - Farmgate - Shahbagh - Motijheel - Kamalapur */}
-                  <line
-                    x1={-12.2}
-                    y1={-380}
-                    x2={-12.2}
-                    y2={380}
-                    stroke="#10b981"
-                    strokeWidth={5}
-                    strokeDasharray="8 4"
-                  />
-                  {/* MRT Line-5 Northern Route (East-West): Mirpur West - Mirpur-10 - Mohakhali - Gulshan - Purbachal */}
-                  <line
-                    x1={-380}
-                    y1={-175}
-                    x2={380}
-                    y2={-175}
-                    stroke="#f43f5e"
-                    strokeWidth={5}
-                    strokeDasharray="8 4"
-                  />
+                  <line x1={-12.2} y1={-900} x2={-12.2} y2={450} stroke="#10b981" strokeWidth={8} strokeDasharray="16 8" />
+                  <line x1={-480} y1={-175} x2={640} y2={-175} stroke="#f43f5e" strokeWidth={8} strokeDasharray="16 8" />
 
-                  {/* MRT Line-6 Stations */}
                   {[
-                    { name: 'Uttara North', bn: 'উত্তরা উত্তর', z: -350 },
-                    { name: 'Pallabi', bn: 'পল্লবী', z: -270 },
+                    { name: 'Uttara North', bn: 'উত্তরা উত্তর', z: -530 },
+                    { name: 'Mirpur-10', bn: 'মিরপুর-১০', z: -175 },
                     { name: 'Farmgate', bn: 'ফার্মগেট', z: -15 },
                     { name: 'Shahbagh', bn: 'শাহবাগ', z: 160 },
-                    { name: 'Motijheel', bn: 'মতিঝিল', z: 320 },
+                    { name: 'Motijheel', bn: 'মতিঝিল', z: 270 },
                   ].map((st) => (
                     <g key={`l6_${st.name}`}>
-                      <circle cx={-12.2} cy={st.z} r={5} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
-                      <text x={-22} y={st.z + 4} textAnchor="end" fill="#10b981" fontSize="9" fontWeight="bold">
+                      <circle cx={-12.2} cy={st.z} r={12} fill="#10b981" stroke="#ffffff" strokeWidth={3} />
+                      <text x={-32} y={st.z + 8} textAnchor="end" fill="#6ee7b7" fontSize="22" fontWeight="bold">
                         {language === 'en' ? st.name : st.bn}
                       </text>
                     </g>
                   ))}
 
-                  {/* MRT Line-5 Stations */}
                   {[
-                    { name: 'Mirpur West', bn: 'মিরপুর পশ্চিম', x: -300 },
-                    { name: 'Mohakhali North', bn: 'মহাখালী উত্তর', x: 95 },
-                    { name: 'Gulshan-2', bn: 'গুলশান-২', x: 240 },
-                    { name: 'Natun Bazar', bn: 'নতুন বাজার', x: 340 },
+                    { name: 'Gulshan-2 / Jamuna Link', bn: 'গুলশান-২', x: 430 },
                   ].map((st) => (
                     <g key={`l5_${st.name}`}>
-                      <circle cx={st.x} cy={-175} r={5} fill="#f43f5e" stroke="#ffffff" strokeWidth={1.5} />
-                      <text x={st.x} y={-184} textAnchor="middle" fill="#f43f5e" fontSize="9" fontWeight="bold">
+                      <circle cx={st.x} cy={-175} r={12} fill="#f43f5e" stroke="#ffffff" strokeWidth={3} />
+                      <text x={st.x} y={-202} textAnchor="middle" fill="#fda4af" fontSize="22" fontWeight="bold">
                         {language === 'en' ? st.name : st.bn}
                       </text>
                     </g>
                   ))}
-
-                  {/* Mirpur-10 Grand Interchange Hub (Line-6 & Line-5 Crossing) */}
-                  <g>
-                    <circle cx={-12.2} cy={-175} r={8} fill="#fbbf24" stroke="#0f172a" strokeWidth={2.5} />
-                    <circle cx={-12.2} cy={-175} r={4} fill="#dc2626" />
-                    <text x={-12.2} y={-190} textAnchor="middle" fill="#fbbf24" fontSize="11" fontWeight="extrabold">
-                      {language === 'en' ? 'MIRPUR-10 INTERCHANGE (MRT 5 & 6)' : 'মিরপুর-১০ ইন্টারচেঞ্জ (MRT ৫ ও ৬)'}
-                    </text>
-                  </g>
 
                   {POINTS_OF_INTEREST.map((poi) => (
                     <g
@@ -492,10 +439,10 @@ export const PauseMenuModal: React.FC = () => {
                       <circle
                         cx={poi.x}
                         cy={poi.z}
-                        r={9}
+                        r={16}
                         fill="#f59e0b"
                         stroke="#0f172a"
-                        strokeWidth={2.5}
+                        strokeWidth={4}
                       />
                     </g>
                   ))}
@@ -508,16 +455,16 @@ export const PauseMenuModal: React.FC = () => {
                         x2={customWaypoint.x}
                         y2={customWaypoint.z}
                         stroke="#ec4899"
-                        strokeWidth={4}
-                        strokeDasharray="10 6"
+                        strokeWidth={7}
+                        strokeDasharray="18 10"
                       />
                       <circle
                         cx={customWaypoint.x}
                         cy={customWaypoint.z}
-                        r={12}
+                        r={22}
                         fill="#ec4899"
                         stroke="#ffffff"
-                        strokeWidth={3}
+                        strokeWidth={5}
                       />
                     </g>
                   )}
@@ -526,12 +473,12 @@ export const PauseMenuModal: React.FC = () => {
                     <circle
                       cx={0}
                       cy={0}
-                      r={13}
+                      r={24}
                       fill="#22d3ee"
                       stroke="#083344"
-                      strokeWidth={3.5}
+                      strokeWidth={6}
                     />
-                    <circle cx={0} cy={0} r={5} fill="#ffffff" />
+                    <circle cx={0} cy={0} r={9} fill="#ffffff" />
                   </g>
                 </svg>
               </div>

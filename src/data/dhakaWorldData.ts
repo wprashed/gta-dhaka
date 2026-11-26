@@ -300,7 +300,43 @@ export const VEHICLE_STATS: Record<VehicleType, VehicleStats> = {
     hornType: 'siren',
     price: 15000,
   },
+  boat: {
+    type: 'boat',
+    nameEn: 'Hatirjheel Water Taxi / Launch Boat',
+    nameBn: 'হাতিরঝিল ওয়াটার ট্যাক্সি / বুড়িগঙ্গা নৌকা',
+    maxSpeed: 28,
+    acceleration: 18,
+    braking: 22,
+    turnSpeed: 2.2,
+    driftFactor: 0.94,
+    maxHealth: 260,
+    width: 2.4,
+    length: 6.2,
+    height: 1.9,
+    hornPitch: 210,
+    hornType: 'airhorn',
+    price: 5500,
+  },
 };
+
+export interface MetroStationStop {
+  id: string;
+  line: 'L6' | 'L5';
+  nameEn: string;
+  nameBn: string;
+  x: number;
+  z: number;
+  fare: number;
+}
+
+export const METRO_STATIONS: MetroStationStop[] = [
+  { id: 'mrt_uttara', line: 'L6', nameEn: 'Uttara North Terminal', nameBn: 'উত্তরা নর্থ টার্মিনাল', x: -16, z: -530, fare: 60 },
+  { id: 'mrt_mirpur10', line: 'L6', nameEn: 'Mirpur-10 Circle Hub', nameBn: 'মিরপুর-১০ গোলচত্বর', x: -16, z: -175, fare: 40 },
+  { id: 'mrt_farmgate', line: 'L6', nameEn: 'Farmgate Central', nameBn: 'ফার্মগেট স্টেশন', x: -16, z: -15, fare: 30 },
+  { id: 'mrt_shahbagh', line: 'L6', nameEn: 'Shahbagh / TSC', nameBn: 'শাহবাগ / টিএসসি', x: -16, z: 160, fare: 30 },
+  { id: 'mrt_motijheel', line: 'L6', nameEn: 'Motijheel / Kamalapur', nameBn: 'মতিঝিল / কমলাপুর', x: -16, z: 270, fare: 40 },
+  { id: 'mrt_gulshan', line: 'L5', nameEn: 'Gulshan-2 / Jamuna Link', nameBn: 'গুলশান-২ / যমুনা লিংক', x: 430, z: -204, fare: 50 },
+];
 
 export const POINTS_OF_INTEREST: PointOfInterest[] = [
   {
