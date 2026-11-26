@@ -83,6 +83,7 @@ export interface VehicleEntity {
   waterSubmergeTimer?: number;
   lowFuelWarned?: boolean;
   wreckTimer?: number;
+  isUpgraded?: boolean;
 }
 
 export type NPCRole =

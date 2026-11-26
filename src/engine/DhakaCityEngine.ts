@@ -182,8 +182,9 @@ export class DhakaCityEngine {
   private cngStationSpots: Array<{ x: number; z: number; isMarine?: boolean }> = [];
   private streetAtmSpots: Array<{ x: number; z: number; nameEn: string; nameBn: string }> = [];
   private streetAtmCooldown = 0;
-  private speedCameraSpots: Array<{ x: number; z: number }> = [];
+  private speedCameraSpots: Array<{ x: number; y: number; z: number }> = [];
   private speedCameraCooldown = 0;
+  private hornFlashTimer = 0;
   private patrolViolationCooldown = 0;
   private playerTrafficHitCooldown = 0;
   private fuelSputterCooldown = 0;
@@ -360,6 +361,33 @@ export class DhakaCityEngine {
     mesh: THREE.Mesh;
     life: number;
   }> = [];
+  private sharedSparkGeo = new THREE.DodecahedronGeometry(0.24, 0);
+  private sharedSteamGeo = new THREE.DodecahedronGeometry(0.24, 0);
+  private sharedBloodDropGeo = new THREE.SphereGeometry(0.045, 5, 5);
+  private sharedBloodDropMat = new THREE.MeshBasicMaterial({ color: '#7f1d1d' });
+  private sharedShardGeo = new THREE.TetrahedronGeometry(0.09, 0);
+  private sharedSkidGeo = new THREE.BoxGeometry(0.32, 0.015, 1.35);
+  private sharedBloodPoolGeo = (() => {
+    const g = new THREE.CircleGeometry(1, 12);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  })();
+  private readonly isWindows =
+    typeof navigator !== 'undefined' &&
+    /Win/i.test(navigator.platform || navigator.userAgent);
+  private perfFrameEma = 16.6;
+  private perfFrameCount = 0;
+  private perfDegraded = false;
+  private lastRafTime = 0;
+  private envLightTimer = 0;
+  private lastTelemetryKey = '';
+  private jfpLights: THREE.PointLight[] = [];
+  private distantPointLights: Array<{
+    light: THREE.PointLight;
+    x: number;
+    z: number;
+    maxDist: number;
+  }> = [];
   private muzzleLight: THREE.PointLight | null = null;
   private muzzleLightTimer = 0;
 
@@ -392,17 +420,21 @@ export class DhakaCityEngine {
       60,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.4,
-      2800
+      this.isWindows ? 1400 : 2000
     );
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !this.isWindows,
       powerPreference: 'high-performance',
       stencil: false,
     });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.isWindows ? 1.0 : 1.25)
+    );
     this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
@@ -433,8 +465,8 @@ export class DhakaCityEngine {
     this.sunLight = new THREE.DirectionalLight('#fef08a', 1.55);
     this.sunLight.position.set(120, 180, 90);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = 1024;
-    this.sunLight.shadow.mapSize.height = 1024;
+    this.sunLight.shadow.mapSize.width = this.isWindows ? 512 : 1024;
+    this.sunLight.shadow.mapSize.height = this.isWindows ? 512 : 1024;
     this.sunLight.shadow.bias = -0.0003;
     this.sunLight.shadow.camera.near = 10;
     this.sunLight.shadow.camera.far = 380;
@@ -1261,6 +1293,7 @@ export class DhakaCityEngine {
     const fountainLight = new THREE.PointLight('#38bdf8', 2.8, 25);
     fountainLight.position.set(0, 1.2, 0);
     saarcFountain.add(fountainLight);
+    this.distantPointLights.push({ light: fountainLight, x: 0, z: -28, maxDist: 65 });
 
     this.scene.add(saarcFountain);
     this.createFountainSpraySystem(0, 0.5, -28, 16, 3.7, 4.8);
@@ -1368,42 +1401,45 @@ export class DhakaCityEngine {
     this.cashDrops.push({ mesh, x, z, amount });
   }
 
-  private spawnSkidMark(x: number, z: number, rotation: number) {
-    if (this.skidDecals.length > 50) {
+  private spawnSkidMark(x: number, z: number, rotation: number, y = 0) {
+    if (this.skidDecals.length > 35) {
       const old = this.skidDecals.shift();
-      if (old) this.scene.remove(old.mesh);
+      if (old) {
+        this.scene.remove(old.mesh);
+        (old.mesh.material as THREE.Material).dispose();
+      }
     }
-    const skidGeo = this.boxCache(0.32, 0.015, 1.35);
     const skidMat = new THREE.MeshBasicMaterial({
       color: '#0f172a',
       transparent: true,
       opacity: 0.55,
     });
-    const mesh = new THREE.Mesh(skidGeo, skidMat);
-    mesh.position.set(x, 0.02, z);
+    const mesh = new THREE.Mesh(this.sharedSkidGeo, skidMat);
+    mesh.position.set(x, y + 0.025, z);
     mesh.rotation.y = rotation;
     this.scene.add(mesh);
     this.skidDecals.push({ mesh, life: 8.5 });
   }
 
-  private spawnBloodDecal(x: number, z: number, targetRadius = 1.35) {
-    if (this.bloodDecals.length > 50) {
+  private spawnBloodDecal(x: number, z: number, targetRadius = 1.35, y = 0) {
+    if (this.bloodDecals.length > 32) {
       const old = this.bloodDecals.shift();
-      if (old) this.scene.remove(old.mesh);
+      if (old) {
+        this.scene.remove(old.mesh);
+        (old.mesh.material as THREE.Material).dispose();
+      }
     }
     const finalR = targetRadius + Math.random() * 0.45;
-    const geo = new THREE.CircleGeometry(finalR, 16);
-    geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
       color: '#3b0505',
       transparent: true,
       opacity: 0.88,
       depthWrite: false,
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, 0.086, z);
+    const mesh = new THREE.Mesh(this.sharedBloodPoolGeo, mat);
+    mesh.position.set(x, y + 0.086, z);
     // Start small and expand organically into a dark blood pool
-    mesh.scale.set(0.18, 0.18, 0.18);
+    mesh.scale.set(0.18 * finalR, 0.18 * finalR, 0.18 * finalR);
     this.scene.add(mesh);
     this.bloodDecals.push({
       mesh,
@@ -1423,15 +1459,13 @@ export class DhakaCityEngine {
     count = 24
   ) {
     dhakaAudio.playSfx('arterial_spray');
-    const dropletGeo = new THREE.SphereGeometry(0.045, 6, 6);
-    const dropletMat = new THREE.MeshBasicMaterial({ color: '#7f1d1d' });
 
     for (let i = 0; i < count; i++) {
-      if (this.bloodParticles.length > 140) {
+      if (this.bloodParticles.length > 70) {
         const old = this.bloodParticles.shift();
         if (old) this.scene.remove(old.mesh);
       }
-      const mesh = new THREE.Mesh(dropletGeo, dropletMat);
+      const mesh = new THREE.Mesh(this.sharedBloodDropGeo, this.sharedBloodDropMat);
       mesh.position.set(
         x + (Math.random() - 0.5) * 0.25,
         y + (Math.random() - 0.5) * 0.25,
@@ -1464,16 +1498,21 @@ export class DhakaCityEngine {
   }
 
   private spawnGlassShatter(x: number, y: number, z: number, count = 22) {
-    const shardGeo = new THREE.TetrahedronGeometry(0.09, 0);
-    const shardMat = new THREE.MeshStandardMaterial({
-      color: '#e0f2fe',
-      roughness: 0.15,
-      metalness: 0.85,
-      transparent: true,
-      opacity: 0.88,
-    });
-    for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(shardGeo, shardMat);
+    const actualCount = Math.min(count, 12);
+    for (let i = 0; i < actualCount; i++) {
+      if (this.glassShards.length > 26) {
+        const old = this.glassShards.shift();
+        if (old) {
+          this.scene.remove(old.mesh);
+          (old.mesh.material as THREE.Material).dispose();
+        }
+      }
+      const shardMat = new THREE.MeshBasicMaterial({
+        color: '#e0f2fe',
+        transparent: true,
+        opacity: 0.88,
+      });
+      const mesh = new THREE.Mesh(this.sharedShardGeo, shardMat);
       mesh.position.set(
         x + (Math.random() - 0.5) * 0.8,
         y + (Math.random() - 0.5) * 0.5,
@@ -1491,14 +1530,20 @@ export class DhakaCityEngine {
   }
 
   private spawnRadiatorDamage(x: number, y: number, z: number) {
-    const steamGeo = new THREE.DodecahedronGeometry(0.24, 0);
-    const steamMat = new THREE.MeshBasicMaterial({
-      color: '#cbd5e1',
-      transparent: true,
-      opacity: 0.65,
-    });
-    for (let i = 0; i < 4; i++) {
-      const mesh = new THREE.Mesh(steamGeo, steamMat);
+    for (let i = 0; i < 2; i++) {
+      if (this.radiatorSteam.length > 28) {
+        const old = this.radiatorSteam.shift();
+        if (old) {
+          this.scene.remove(old.mesh);
+          (old.mesh.material as THREE.Material).dispose();
+        }
+      }
+      const steamMat = new THREE.MeshBasicMaterial({
+        color: '#cbd5e1',
+        transparent: true,
+        opacity: 0.65,
+      });
+      const mesh = new THREE.Mesh(this.sharedSteamGeo, steamMat);
       mesh.position.set(
         x + (Math.random() - 0.5) * 0.6,
         y + (Math.random() - 0.5) * 0.3,
@@ -2339,6 +2384,7 @@ export class DhakaCityEngine {
     const shaplaLight = new THREE.PointLight('#38bdf8', 3.0, 35);
     shaplaLight.position.set(0, 2.5, 0);
     shaplaGroup.add(shaplaLight);
+    this.distantPointLights.push({ light: shaplaLight, x: 220, z: 175, maxDist: 65 });
 
     this.scene.add(shaplaGroup);
     this.createFountainSpraySystem(220, 0.45, 175, 20, 5.8, 5.2);
@@ -6914,20 +6960,19 @@ export class DhakaCityEngine {
     // ─── WARM MALL INTERIOR LIGHTING ────────────────────────────────────────
     const mallAmbient = new THREE.PointLight('#fffbeb', 1.8, 95);
     mallAmbient.position.set(0, 15.5, 0);
+    mallAmbient.visible = false;
     g.add(mallAmbient);
+    this.jfpLights.push(mallAmbient);
     [
-      [-32, Y0 + 4.3, -15],
-      [32, Y0 + 4.3, -15],
-      [-32, Y0 + 4.3, 15],
-      [32, Y0 + 4.3, 15],
-      [-32, Y1 + 4.3, -15],
-      [32, Y1 + 4.3, -15],
-      [-32, Y2 + 4.8, 0],
-      [32, Y2 + 4.8, 0],
+      [0, Y0 + 4.3, 0],
+      [0, Y1 + 4.3, 0],
+      [0, Y2 + 4.8, 0],
     ].forEach(([lx, ly, lz]) => {
-      const pl = new THREE.PointLight('#fef3c7', 1.15, 36);
+      const pl = new THREE.PointLight('#fef3c7', 1.25, 48);
       pl.position.set(lx, ly, lz);
+      pl.visible = false;
       g.add(pl);
+      this.jfpLights.push(pl);
     });
 
     this.scene.add(g);
@@ -9258,7 +9303,7 @@ export class DhakaCityEngine {
     // 8. DMP Speed Camera Radar Poles across Major Corridors
     const camLensMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
     SPEED_CAMERAS.forEach(({ x: cx, y: cy, z: cz }) => {
-      this.speedCameraSpots.push({ x: cx, z: cz });
+      this.speedCameraSpots.push({ x: cx, y: cy, z: cz });
       const camPole = new THREE.Group();
       camPole.position.set(cx + 8.5, cy, cz);
       const p = new THREE.Mesh(this.cylCache(0.09, 0.12, 5.2, 8), sigPoleMat);
@@ -9870,21 +9915,21 @@ export class DhakaCityEngine {
   }
 
   private setupRainParticles() {
-    const count = 1400;
+    const count = 700;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 140;
-      positions[i * 3 + 1] = Math.random() * 55;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 140;
+      positions[i * 3] = (Math.random() - 0.5) * 120;
+      positions[i * 3 + 1] = Math.random() * 52;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 120;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     const mat = new THREE.PointsMaterial({
       color: '#bae6fd',
-      size: 0.35,
+      size: 0.42,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.62,
     });
 
     this.rainSystem = new THREE.Points(geo, mat);
@@ -10075,6 +10120,7 @@ export class DhakaCityEngine {
         if (veh) {
           const stats = VEHICLE_STATS[veh.type];
           dhakaAudio.playHorn(stats.hornType);
+          this.hornFlashTimer = 0.28;
           this.alertPedestriansAhead(veh.x, veh.z, veh.rotation);
         }
       } else {
@@ -10241,14 +10287,22 @@ export class DhakaCityEngine {
     colorHex = '#fbbf24',
     scale = 1.0
   ) {
+    if (this.hitSparks.length > 26) {
+      const old = this.hitSparks.shift();
+      if (old) {
+        this.scene.remove(old.mesh);
+        (old.mesh.material as THREE.Material).dispose();
+      }
+    }
     const spark = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.24 * scale, 0),
+      this.sharedSparkGeo,
       new THREE.MeshBasicMaterial({
         color: colorHex,
         transparent: true,
         opacity: 0.95,
       })
     );
+    spark.scale.setScalar(scale);
     spark.position.set(x, y, z);
     this.scene.add(spark);
     this.hitSparks.push({ mesh: spark, life: 0.22 });
@@ -10527,7 +10581,7 @@ export class DhakaCityEngine {
         // Arterial blood spray and asphalt pool
         this.spawnDirectionalBloodSpray(npc.x, npcY + 1.15, npc.z, forwardX, forwardZ, isBlade ? 28 : isHeavy ? 18 : 8);
         if (isBlade || (isHeavy && Math.random() < 0.6)) {
-          this.spawnBloodDecal(npc.x, npc.z);
+          this.spawnBloodDecal(npc.x, npc.z, 1.35, npcY);
         }
 
         this.spawnImpactSparks(
@@ -10555,7 +10609,7 @@ export class DhakaCityEngine {
             if (npcLimbs) {
               setDeathRagdollPose(npcLimbs, 'melee', 0.05);
             }
-            this.spawnBloodDecal(npc.x, npc.z, 1.45);
+            this.spawnBloodDecal(npc.x, npc.z, 1.45, npcY);
             this.spawnImpactSparks(npc.x, npcY + 0.3, npc.z, '#b91c1c', 2.0);
             this.spawnCashDrop(npc.x, npc.z, npc.isMissionEnemy ? 450 : Math.floor(Math.random() * 300 + 100));
             if (!npc.isMissionEnemy) {
@@ -11377,19 +11431,35 @@ export class DhakaCityEngine {
 
   private animate = () => {
     this.animFrameId = requestAnimationFrame(this.animate);
+    const nowMs = performance.now();
+    const rawFrameMs = this.lastRafTime > 0 ? Math.min(100, nowMs - this.lastRafTime) : 16.6;
+    this.lastRafTime = nowMs;
+    this.perfFrameEma = this.perfFrameEma * 0.94 + rawFrameMs * 0.06;
+    this.perfFrameCount++;
     const dt = Math.min(0.05, this.clock.getDelta());
 
     const store = useGameStore.getState();
 
+    // Auto-adaptive Windows / Integrated-GPU performance governor
+    if (!this.perfDegraded && this.perfFrameCount > 90 && this.perfFrameEma > 28) {
+      this.perfDegraded = true;
+      this.renderer.setPixelRatio(0.85);
+      this.sunLight.castShadow = false;
+      this.renderer.shadowMap.enabled = false;
+      this.camera.far = 1100;
+      this.camera.updateProjectionMatrix();
+    }
+
     // Dynamic Graphics Quality Switching (Bug Fix #6)
     if (store.graphicsQuality !== this.lastGraphicsQuality) {
       this.lastGraphicsQuality = store.graphicsQuality;
-      const isHigh = store.graphicsQuality === 'high';
+      const isHigh = store.graphicsQuality === 'high' && !this.perfDegraded;
       this.renderer.setPixelRatio(
-        isHigh ? Math.min(window.devicePixelRatio, 1.25) : 1
+        isHigh ? Math.min(window.devicePixelRatio, this.isWindows ? 1.0 : 1.25) : 0.85
       );
       this.renderer.shadowMap.enabled = isHigh;
-      this.camera.far = isHigh ? 2800 : 1800;
+      this.sunLight.castShadow = isHigh;
+      this.camera.far = isHigh ? (this.isWindows ? 1400 : 2000) : 1100;
       this.camera.updateProjectionMatrix();
     }
 
@@ -11498,9 +11568,21 @@ export class DhakaCityEngine {
           (v) => Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z) < 8
         );
       if (targetVeh) {
-        targetVeh.maxHealth = Math.round(targetVeh.maxHealth * 1.35);
-        targetVeh.health = targetVeh.maxHealth;
-        this.vehicleSpeedBoostMap.set(targetVeh.id, 1.25);
+        if (targetVeh.isUpgraded) {
+          store.addTaka(500, 'Upgrade Refund (Already Tuned)', 'ইতিমধ্যে টিউন করা হয়েছে (৳৫০০ ফেরত)');
+          store.showBanner({
+            titleEn: 'VEHICLE ALREADY TURBO-TUNED',
+            titleBn: 'গাড়িটি ইতিমধ্যে টার্বো-টিউন করা হয়েছে',
+            subtitleEn: '৳500 refunded — maximum workshop stage installed.',
+            subtitleBn: 'সর্বোচ্চ টার্বো টিউনিং আগেই লাগানো আছে (৳৫০০ ফেরত)।',
+            tone: 'blue',
+          });
+        } else {
+          targetVeh.isUpgraded = true;
+          targetVeh.maxHealth = Math.round(targetVeh.maxHealth * 1.35);
+          targetVeh.health = targetVeh.maxHealth;
+          this.vehicleSpeedBoostMap.set(targetVeh.id, 1.25);
+        }
       }
       store.clearEngineRequests();
     }
@@ -11566,7 +11648,7 @@ export class DhakaCityEngine {
 
     if (store.gamePhase === 'playing') {
       this.worldClockTimer += dt;
-      if (this.worldClockTimer >= 0.22) {
+      if (this.worldClockTimer >= 0.5) {
         store.tickWorldClock(this.worldClockTimer, this.policeNearby);
         this.worldClockTimer = 0;
       }
@@ -11634,8 +11716,8 @@ export class DhakaCityEngine {
       this.playerLimbs.group.rotation.y = this.playerRotation;
     }
 
-    // Wind sway for nearby Dhaka tree foliage canopies (stronger gusting in monsoon rain)
-    if (this.treeCanopies.length > 0) {
+    // Wind sway for nearby Dhaka tree foliage canopies (throttled for smooth frame pacing)
+    if (!this.perfDegraded && this.treeCanopies.length > 0 && this.perfFrameCount % 2 === 0) {
       const isMonsoon = store.weather === 'monsoon_rain';
       const windTime = this.clock.getElapsedTime() * (isMonsoon ? 2.1 : 1.0);
       const windAmp = isMonsoon ? 2.3 : 1.0;
@@ -11643,7 +11725,7 @@ export class DhakaCityEngine {
       const pz = this.playerPos.z;
       for (let i = 0; i < this.treeCanopies.length; i++) {
         const canopy = this.treeCanopies[i];
-        if (Math.abs(canopy.position.x - px) > 85 || Math.abs(canopy.position.z - pz) > 85) {
+        if (Math.abs(canopy.position.x - px) > 55 || Math.abs(canopy.position.z - pz) > 55) {
           continue;
         }
         const phase = i * 0.42;
@@ -11652,13 +11734,22 @@ export class DhakaCityEngine {
       }
     }
 
-    // Jamuna Future Park Interior Culling, Ferris Wheel/Chandelier Animation & Mall Entry State
+    // Jamuna Future Park Interior Culling, Lights Culling & Ferris Wheel Animation
     const jfpDist = Math.hypot(
       this.playerPos.x - this.jfpCenter.x,
       this.playerPos.z - this.jfpCenter.z
     );
     if (this.jfpInteriorGroup) {
-      this.jfpInteriorGroup.visible = jfpDist < 190;
+      this.jfpInteriorGroup.visible = jfpDist < 175;
+    }
+    const jfpLightsActive = jfpDist < 95;
+    for (let i = 0; i < this.jfpLights.length; i++) {
+      this.jfpLights[i].visible = jfpLightsActive;
+    }
+    for (let i = 0; i < this.distantPointLights.length; i++) {
+      const dl = this.distantPointLights[i];
+      dl.light.visible =
+        Math.hypot(this.playerPos.x - dl.x, this.playerPos.z - dl.z) < dl.maxDist;
     }
     if (jfpDist < 260 && this.jfpFerrisWheel) {
       this.jfpFerrisWheel.rotation.z += dt * 0.16;
@@ -11694,6 +11785,9 @@ export class DhakaCityEngine {
     }
 
     this.updateCamera(dt, store.cameraMode);
+    if (this.renderer.shadowMap.enabled && this.perfFrameCount % 3 === 0) {
+      this.renderer.shadowMap.needsUpdate = true;
+    }
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -11717,6 +11811,7 @@ export class DhakaCityEngine {
       );
       if (sp.life <= 0) {
         this.scene.remove(sp.mesh);
+        (sp.mesh.material as THREE.Material).dispose();
         this.hitSparks.splice(i, 1);
       }
     }
@@ -11773,7 +11868,7 @@ export class DhakaCityEngine {
           const bDirX = b.vx / 88;
           const bDirZ = b.vz / 88;
           this.spawnDirectionalBloodSpray(hitX, npcY + 1.25, hitZ, bDirX, bDirZ, 30);
-          this.spawnBloodDecal(npc.x, npc.z, 1.5);
+          this.spawnBloodDecal(npc.x, npc.z, 1.5, npcY);
 
           // Ballistic knockback impulse on victim
           npc.x += bDirX * 1.2;
@@ -11851,8 +11946,8 @@ export class DhakaCityEngine {
                 // Driver fatally shot!
                 vehMesh?.remove(driverObj);
                 dhakaAudio.playSfx('pain_grunt');
-                this.spawnBloodDecal(veh.x, veh.z);
-                this.spawnImpactSparks(veh.x, 0.8, veh.z, '#ef4444', 2.0);
+                this.spawnBloodDecal(veh.x, veh.z, 1.35, veh.y);
+                this.spawnImpactSparks(veh.x, veh.y + 0.8, veh.z, '#ef4444', 2.0);
 
                 const deadDriverId = `dead_driver_${Date.now()}_${Math.floor(
                   Math.random() * 1000
@@ -11952,9 +12047,10 @@ export class DhakaCityEngine {
       c.mesh.rotation.y += c.ry * dt;
       c.mesh.rotation.z += c.rz * dt;
 
-      if (c.mesh.position.y <= 0.02) {
+      const casingFloor = this.getRoadElevation(c.mesh.position.x, c.mesh.position.z, c.mesh.position.y);
+      if (c.mesh.position.y <= casingFloor + 0.02) {
         if (!c.bounced) {
-          c.mesh.position.y = 0.02;
+          c.mesh.position.y = casingFloor + 0.02;
           c.vy = -c.vy * 0.38;
           c.vx *= 0.55;
           c.vz *= 0.55;
@@ -11963,7 +12059,7 @@ export class DhakaCityEngine {
           c.bounced = true;
           dhakaAudio.playSfx('casing_drop');
         } else {
-          c.mesh.position.y = 0.015;
+          c.mesh.position.y = casingFloor + 0.015;
           c.vy = 0;
           c.vx = 0;
           c.vz = 0;
@@ -11993,6 +12089,7 @@ export class DhakaCityEngine {
 
       if (sm.life <= 0) {
         this.scene.remove(sm.mesh);
+        (sm.mesh.material as THREE.Material).dispose();
         this.muzzleSmokePuffs.splice(i, 1);
       }
     }
@@ -12054,6 +12151,7 @@ export class DhakaCityEngine {
       );
       if (sd.life <= 0) {
         this.scene.remove(sd.mesh);
+        (sd.mesh.material as THREE.Material).dispose();
         this.skidDecals.splice(i, 1);
       }
     }
@@ -12063,10 +12161,10 @@ export class DhakaCityEngine {
     for (let i = this.bloodDecals.length - 1; i >= 0; i--) {
       const bd = this.bloodDecals[i];
       bd.life -= dt;
-      // Smoothly expand blood pool from 0.18 to full scale over 1.4s
+      // Smoothly expand blood pool from 0.18 to full targetRadius over 1.4s
       if (bd.growthProgress < 1.0) {
         bd.growthProgress = Math.min(1.0, bd.growthProgress + dt * 0.85);
-        const s = 0.18 + 0.82 * Math.sin((bd.growthProgress * Math.PI) / 2);
+        const s = (0.18 + 0.82 * Math.sin((bd.growthProgress * Math.PI) / 2)) * bd.targetRadius;
         bd.mesh.scale.set(s, s, s);
       }
       if (bd.life < 10) {
@@ -12077,6 +12175,7 @@ export class DhakaCityEngine {
       }
       if (bd.life <= 0) {
         this.scene.remove(bd.mesh);
+        (bd.mesh.material as THREE.Material).dispose();
         this.bloodDecals.splice(i, 1);
       }
     }
@@ -12116,8 +12215,9 @@ export class DhakaCityEngine {
       gs.mesh.rotation.x += dt * 8;
       gs.mesh.rotation.y += dt * 6;
 
-      if (gs.mesh.position.y <= 0.08) {
-        gs.mesh.position.y = 0.085;
+      const glassFloor = this.getRoadElevation(gs.mesh.position.x, gs.mesh.position.z, gs.mesh.position.y);
+      if (gs.mesh.position.y <= glassFloor + 0.08) {
+        gs.mesh.position.y = glassFloor + 0.085;
         gs.vy = -gs.vy * 0.3;
         gs.vx *= 0.55;
         gs.vz *= 0.55;
@@ -12132,6 +12232,7 @@ export class DhakaCityEngine {
 
       if (gs.life <= 0) {
         this.scene.remove(gs.mesh);
+        (gs.mesh.material as THREE.Material).dispose();
         this.glassShards.splice(i, 1);
       }
     }
@@ -12152,6 +12253,7 @@ export class DhakaCityEngine {
       );
       if (rs.life <= 0) {
         this.scene.remove(rs.mesh);
+        (rs.mesh.material as THREE.Material).dispose();
         this.radiatorSteam.splice(i, 1);
       }
     }
@@ -12357,80 +12459,84 @@ export class DhakaCityEngine {
     this.sunLight.color.set(
       isNight ? '#93b4e8' : isGolden ? '#fb923c' : isRain ? '#94a3b8' : '#fff7d6'
     );
-    // Physical Rayleigh/Mie atmospheric scattering sky calculation
-    if (this.sky) {
-      const skyUniforms = this.sky.material.uniforms;
-      if (isGolden) {
-        skyUniforms['turbidity'].value = 8.5; // Tropical evening atmospheric haze
-        skyUniforms['rayleigh'].value = 3.4; // Rich warm golden/amber sunset Rayleigh scattering
-        skyUniforms['mieCoefficient'].value = 0.006;
-        skyUniforms['mieDirectionalG'].value = 0.82;
-      } else if (isNight) {
-        skyUniforms['turbidity'].value = 10.0;
-        skyUniforms['rayleigh'].value = 0.35;
-        skyUniforms['mieCoefficient'].value = 0.002;
-        skyUniforms['mieDirectionalG'].value = 0.7;
-      } else {
-        skyUniforms['turbidity'].value = 4.2;
-        skyUniforms['rayleigh'].value = 1.35;
-        skyUniforms['mieCoefficient'].value = 0.003;
-        skyUniforms['mieDirectionalG'].value = 0.8;
+    // Throttle heavy Sky/Material/Streetlamp uniform loops (~10 Hz instead of 60-144 Hz)
+    this.envLightTimer += dt;
+    if (this.envLightTimer >= 0.1) {
+      const envDt = this.envLightTimer;
+      this.envLightTimer = 0;
+
+      if (this.sky) {
+        const skyUniforms = this.sky.material.uniforms;
+        if (isGolden) {
+          skyUniforms['turbidity'].value = 8.5;
+          skyUniforms['rayleigh'].value = 3.4;
+          skyUniforms['mieCoefficient'].value = 0.006;
+          skyUniforms['mieDirectionalG'].value = 0.82;
+        } else if (isNight) {
+          skyUniforms['turbidity'].value = 10.0;
+          skyUniforms['rayleigh'].value = 0.35;
+          skyUniforms['mieCoefficient'].value = 0.002;
+          skyUniforms['mieDirectionalG'].value = 0.7;
+        } else {
+          skyUniforms['turbidity'].value = 4.2;
+          skyUniforms['rayleigh'].value = 1.35;
+          skyUniforms['mieCoefficient'].value = 0.003;
+          skyUniforms['mieDirectionalG'].value = 0.8;
+        }
+
+        const sunPhi = THREE.MathUtils.degToRad(isNight ? 102 : 90 - (sunHeight / 210) * 85);
+        const sunTheta = azimuth;
+        this.sunPosition.setFromSphericalCoords(1, sunPhi, sunTheta);
+        skyUniforms['sunPosition'].value.copy(this.sunPosition);
+        this.sky.position.copy(this.playerPos);
       }
 
-      const sunPhi = THREE.MathUtils.degToRad(isNight ? 102 : 90 - (sunHeight / 210) * 85);
-      const sunTheta = azimuth;
-      this.sunPosition.setFromSphericalCoords(1, sunPhi, sunTheta);
-      skyUniforms['sunPosition'].value.copy(this.sunPosition);
-      this.sky.position.copy(this.playerPos);
-    }
+      if (this.starField) {
+        this.starField.position.copy(this.playerPos);
+        const starTarget = isNight ? 0.92 : 0;
+        const sMat = this.starField.material as THREE.PointsMaterial;
+        sMat.opacity = THREE.MathUtils.lerp(sMat.opacity, starTarget, envDt * 2.5);
+        sMat.visible = sMat.opacity > 0.01;
+      }
 
-    if (this.starField) {
-      this.starField.position.copy(this.playerPos);
-      const starTarget = isNight ? 0.92 : 0;
-      const sMat = this.starField.material as THREE.PointsMaterial;
-      sMat.opacity = THREE.MathUtils.lerp(sMat.opacity, starTarget, dt * 2.5);
-      sMat.visible = sMat.opacity > 0.01;
-    }
+      const nightWindowGlow = isNight ? 1.55 : isGolden ? 0.65 : 0.0;
+      for (let i = 0; i < this.buildingEmissiveMats.length; i++) {
+        this.buildingEmissiveMats[i].emissiveIntensity = THREE.MathUtils.lerp(
+          this.buildingEmissiveMats[i].emissiveIntensity,
+          nightWindowGlow,
+          envDt * 2.8
+        );
+      }
+      const lampLit = isNight || isRain || isGolden;
+      const stdLampIntensity = isNight ? 1.45 : isRain ? 1.05 : isGolden ? 0.75 : 0.06;
+      for (let i = 0; i < this.streetLampStdMats.length; i++) {
+        this.streetLampStdMats[i].emissiveIntensity = THREE.MathUtils.lerp(
+          this.streetLampStdMats[i].emissiveIntensity,
+          stdLampIntensity,
+          envDt * 3.0
+        );
+      }
+      for (let i = 0; i < this.streetLampBasicMats.length; i++) {
+        this.streetLampBasicMats[i].color.set(lampLit ? '#fef08a' : '#475569');
+      }
+      const hatirTargetIntensity = isNight ? 2.8 : isRain || isGolden ? 1.6 : 0;
+      for (let i = 0; i < this.hatirjheelLights.length; i++) {
+        this.hatirjheelLights[i].intensity = hatirTargetIntensity;
+      }
 
-    // Dynamic night window illumination & streetlamp switching
-    const nightWindowGlow = isNight ? 1.55 : isGolden ? 0.65 : 0.0;
-    for (let i = 0; i < this.buildingEmissiveMats.length; i++) {
-      this.buildingEmissiveMats[i].emissiveIntensity = THREE.MathUtils.lerp(
-        this.buildingEmissiveMats[i].emissiveIntensity,
-        nightWindowGlow,
-        dt * 2.8
-      );
-    }
-    const lampLit = isNight || isRain || isGolden;
-    const stdLampIntensity = isNight ? 1.45 : isRain ? 1.05 : isGolden ? 0.75 : 0.06;
-    for (let i = 0; i < this.streetLampStdMats.length; i++) {
-      this.streetLampStdMats[i].emissiveIntensity = THREE.MathUtils.lerp(
-        this.streetLampStdMats[i].emissiveIntensity,
-        stdLampIntensity,
-        dt * 3.0
-      );
-    }
-    for (let i = 0; i < this.streetLampBasicMats.length; i++) {
-      this.streetLampBasicMats[i].color.set(lampLit ? '#fef08a' : '#475569');
-    }
-    const hatirTargetIntensity = isNight ? 2.8 : isRain || isGolden ? 1.6 : 0;
-    for (let i = 0; i < this.hatirjheelLights.length; i++) {
-      this.hatirjheelLights[i].intensity = hatirTargetIntensity;
-    }
-
-    // Sync visible 3D intersection traffic signal heads with AI 16s sigCycle
-    if (this.signalMaterials) {
-      const sigCycle = (performance.now() * 0.001) % 16;
-      const nsGreen = sigCycle < 7.0;
-      const nsYellow = sigCycle >= 7.0 && sigCycle < 8.0;
-      const ewGreen = sigCycle >= 8.0 && sigCycle < 15.0;
-      const ewYellow = sigCycle >= 15.0;
-      this.signalMaterials.nsGreen.color.set(nsGreen ? '#22c55e' : '#14532d');
-      this.signalMaterials.nsYellow.color.set(nsYellow ? '#facc15' : '#422006');
-      this.signalMaterials.nsRed.color.set(!nsGreen && !nsYellow ? '#ef4444' : '#450a0a');
-      this.signalMaterials.ewGreen.color.set(ewGreen ? '#22c55e' : '#14532d');
-      this.signalMaterials.ewYellow.color.set(ewYellow ? '#facc15' : '#422006');
-      this.signalMaterials.ewRed.color.set(!ewGreen && !ewYellow ? '#ef4444' : '#450a0a');
+      if (this.signalMaterials) {
+        const sigCycle = (performance.now() * 0.001) % 16;
+        const nsGreen = sigCycle < 7.0;
+        const nsYellow = sigCycle >= 7.0 && sigCycle < 8.0;
+        const ewGreen = sigCycle >= 8.0 && sigCycle < 15.0;
+        const ewYellow = sigCycle >= 15.0;
+        this.signalMaterials.nsGreen.color.set(nsGreen ? '#22c55e' : '#14532d');
+        this.signalMaterials.nsYellow.color.set(nsYellow ? '#facc15' : '#422006');
+        this.signalMaterials.nsRed.color.set(!nsGreen && !nsYellow ? '#ef4444' : '#450a0a');
+        this.signalMaterials.ewGreen.color.set(ewGreen ? '#22c55e' : '#14532d');
+        this.signalMaterials.ewYellow.color.set(ewYellow ? '#facc15' : '#422006');
+        this.signalMaterials.ewRed.color.set(!ewGreen && !ewYellow ? '#ef4444' : '#450a0a');
+      }
     }
 
     // Lift the shadow floor at night so wet asphalt keeps some detail instead
@@ -12657,6 +12763,13 @@ export class DhakaCityEngine {
           this.footstepTimer = 0;
           this.footstepRight = !this.footstepRight;
           dhakaAudio.playFootstep(isSprinting ? 'run' : 'walk', this.footstepRight);
+          if (
+            isSprinting &&
+            useGameStore.getState().weather === 'monsoon_rain' &&
+            this.playerPos.y < 0.35
+          ) {
+            this.spawnImpactSparks(this.playerPos.x, 0.05, this.playerPos.z, '#bae6fd', 0.45);
+          }
         }
       }
     } else {
@@ -13070,7 +13183,8 @@ export class DhakaCityEngine {
     const stats = VEHICLE_STATS[veh.type];
     const boostMult = this.vehicleSpeedBoostMap.get(veh.id) ?? 1.0;
     const isTireDamaged = veh.type !== 'boat' && veh.type !== 'rickshaw' && veh.health < veh.maxHealth * 0.25;
-    const damageSpeedMult = isTireDamaged ? 0.68 : 1.0;
+    const isSmoking = veh.type !== 'rickshaw' && veh.health < veh.maxHealth * 0.35;
+    const damageSpeedMult = isTireDamaged ? 0.68 : isSmoking ? 0.85 : 1.0;
     const accelMult = (store.selectedCharacterId === 'arif' ? 1.2 : 1.0) * boostMult;
     const topSpeed = stats.maxSpeed * boostMult * damageSpeedMult;
     let throttle = 0;
@@ -13089,11 +13203,21 @@ export class DhakaCityEngine {
       veh.fuel = Math.max(0, curFuel - drainRate * dt);
       if (veh.fuel <= 16 && !veh.lowFuelWarned) {
         veh.lowFuelWarned = true;
+        const pumpList = veh.type === 'boat' ? MARINE_DOCKS : CNG_STATIONS;
+        let nearestName = veh.type === 'boat' ? 'Marine Pier Dock' : 'CNG Station';
+        let bestDist = Infinity;
+        for (const p of pumpList) {
+          const pd = Math.hypot(p.x - veh.x, p.z - veh.z);
+          if (pd < bestDist) {
+            bestDist = pd;
+            nearestName = p.nameEn;
+          }
+        }
         store.showBanner({
           titleEn: '⛽ LOW CNG / FUEL RESERVE (< 15%)',
           titleBn: '⛽ জ্বালানি প্রায় শেষ (< ১৫%)!',
-          subtitleEn: 'Visit a nearby CNG Filling Station or Pier Fuel Dock to refuel.',
-          subtitleBn: 'কাছাকাছি সিএনজি পাম্প বা ঘাট থেকে জ্বালানি নিন।',
+          subtitleEn: `Nearest pump: ${nearestName} (~${Math.round(bestDist)}m away).`,
+          subtitleBn: `নিকটতম পাম্প: ${nearestName} (~${Math.round(bestDist)} মিটার দূরে)।`,
           tone: 'gold',
         });
       }
@@ -13132,8 +13256,12 @@ export class DhakaCityEngine {
       if (veh.speed > 0.4) {
         veh.speed = Math.max(0, veh.speed - stats.braking * brakeGrip * dt);
       } else {
+        const maxReverse =
+          veh.type === 'motorcycle' || veh.type === 'rickshaw'
+            ? -3.2
+            : -topSpeed * 0.42;
         veh.speed = Math.max(
-          -topSpeed * 0.42,
+          maxReverse,
           veh.speed - stats.acceleration * 0.65 * accelMult * dt
         );
       }
@@ -13157,7 +13285,7 @@ export class DhakaCityEngine {
           '#e2e8f0',
           0.7
         );
-        this.spawnSkidMark(rearX, rearZ, veh.rotation);
+        this.spawnSkidMark(rearX, rearZ, veh.rotation, veh.y);
       }
     }
 
@@ -13374,7 +13502,8 @@ export class DhakaCityEngine {
     this.playerPos.set(veh.x, veh.y, veh.z);
     this.playerRotation = veh.rotation;
 
-    // Position dynamic vehicle headlight cone ahead of car (auto at night/rain or manual [L])
+    // Position dynamic vehicle headlight cone ahead of car (auto at night/rain, manual [L], or horn flash)
+    if (this.hornFlashTimer > 0) this.hornFlashTimer = Math.max(0, this.hornFlashTimer - dt);
     const storeState = useGameStore.getState();
     const isNightOrRain =
       storeState.weather === 'night' ||
@@ -13382,8 +13511,9 @@ export class DhakaCityEngine {
       storeState.timeOfDay < 5.8 ||
       storeState.timeOfDay > 19.2;
     const headlightsOn =
-      this.headlightsManual !== null ? this.headlightsManual : isNightOrRain;
-    this.headlightSpot.intensity = headlightsOn ? 3.5 : 0;
+      this.headlightsManual !== null ? this.headlightsManual : isNightOrRain || this.hornFlashTimer > 0;
+    this.headlightSpot.intensity =
+      (headlightsOn ? 3.5 : 0) + (this.hornFlashTimer > 0 ? 1.5 : 0);
     this.headlightSpot.position.set(
       veh.x + Math.sin(veh.rotation) * 1.5,
       1.2,
@@ -13421,7 +13551,9 @@ export class DhakaCityEngine {
     const kmhNow = Math.abs(veh.speed) * 2.6;
     if (this.speedCameraCooldown <= 0 && kmhNow > 105 && veh.type !== 'police' && veh.type !== 'boat') {
       const nearCam = this.speedCameraSpots.some(
-        (cam) => Math.hypot(veh.x - cam.x, veh.z - cam.z) < 22
+        (cam) =>
+          Math.hypot(veh.x - cam.x, veh.z - cam.z) < 22 &&
+          Math.abs(elev - cam.y) < 4.5
       );
       if (nearCam) {
         this.speedCameraCooldown = 25;
@@ -13574,8 +13706,9 @@ export class DhakaCityEngine {
     // Apply realistic driving skeleton pose (gripping handlebars, leaning, pedals)
     setDrivingPose(this.playerLimbs, veh.type, veh.speed, steer, this.bikeWheeliePitch, dt);
 
+    const hasEngineRunning = veh.type === 'rickshaw' || (veh.fuel ?? 100) > 0;
     dhakaAudio.updateEngine(
-      true,
+      hasEngineRunning,
       veh.type,
       veh.speed / Math.max(1, stats.maxSpeed)
     );
@@ -13753,9 +13886,10 @@ export class DhakaCityEngine {
         continue;
       }
 
-      // Distance culling: hide and streamline distant traffic (> 230m)
-      mesh.visible = distToPlayer < 230;
-      if (distToPlayer >= 230) {
+      // Distance culling: hide and streamline distant traffic (> 180m)
+      const trafficCullDist = this.perfDegraded ? 145 : 185;
+      mesh.visible = distToPlayer < trafficCullDist;
+      if (distToPlayer >= trafficCullDist) {
         if (veh.isTraffic && veh.speed > 0) {
           const forwardX = Math.sin(veh.rotation);
           const forwardZ = Math.cos(veh.rotation);
@@ -14197,9 +14331,10 @@ export class DhakaCityEngine {
 
       const distToPlayer = Math.hypot(npc.x - px, npc.z - pz);
 
-      // Distance culling: hide and streamline distant pedestrians (> 150m)
-      limbs.group.visible = distToPlayer < 150;
-      if (distToPlayer >= 150) {
+      // Distance culling: hide and streamline distant pedestrians
+      const npcCullDist = this.perfDegraded ? 95 : 130;
+      limbs.group.visible = distToPlayer < npcCullDist;
+      if (distToPlayer >= npcCullDist) {
         if (!npc.isDead && npc.aiState === 'walk') {
           const dx = npc.walkTargetX - npc.x;
           const dz = npc.walkTargetZ - npc.z;
@@ -14367,7 +14502,7 @@ export class DhakaCityEngine {
 
               // Arterial blood spray & expanding blood pool
               this.spawnDirectionalBloodSpray(npc.x, npcY + 0.8, npc.z, npc.deathVx, npc.deathVz, 36);
-              this.spawnBloodDecal(npc.x, npc.z, 1.6);
+              this.spawnBloodDecal(npc.x, npc.z, 1.6, npcY);
               this.spawnImpactSparks(npc.x, npcY + 0.25, npc.z, '#7f1d1d', 3.0);
               this.spawnImpactSparks(npc.x, npcY + 0.45, npc.z, '#b91c1c', 2.2);
               this.spawnGlassShatter(
@@ -14436,8 +14571,8 @@ export class DhakaCityEngine {
             setDeathRagdollPose(limbs, 'vehicle', 0.1);
             dhakaAudio.playSfx('bone_crack');
             dhakaAudio.playSfx('death_groan');
-            this.spawnDirectionalBloodSpray(npc.x, 0.6, npc.z, fX, fZ, 24);
-            this.spawnBloodDecal(npc.x, npc.z, 1.35);
+            this.spawnDirectionalBloodSpray(npc.x, npcElevNow + 0.6, npc.z, fX, fZ, 24);
+            this.spawnBloodDecal(npc.x, npc.z, 1.35, npcElevNow);
             this.spawnImpactSparks(npc.x, 0.25, npc.z, '#b91c1c', 2.0);
             this.spawnCashDrop(npc.x, npc.z, 200);
             dhakaAudio.playSfx('hit');
@@ -14694,7 +14829,7 @@ export class DhakaCityEngine {
     if (this.playerTrafficHitCooldown > 0) this.playerTrafficHitCooldown = Math.max(0, this.playerTrafficHitCooldown - dt);
 
     this.telemetryTimer += dt;
-    if (this.telemetryTimer < 0.09) return;
+    if (this.telemetryTimer < 0.15) return;
     this.telemetryTimer = 0;
 
     let district: DistrictId = 'farmgate';
@@ -14735,21 +14870,29 @@ export class DhakaCityEngine {
       }
     }
 
-    store.updateTelemetry({
-      x: this.playerPos.x,
-      z: this.playerPos.z,
-      rotation: this.playerRotation,
-      district,
-      inVehicleId: this.activeVehicleId,
-      vehicleType: activeVeh ? activeVeh.type : null,
-      speedKmh: activeVeh ? Math.round(Math.abs(activeVeh.speed) * 2.6) : 0,
-      vehicleHealth: activeVeh ? Math.round(activeVeh.health) : 100,
-      vehicleMaxHealth: activeVeh ? activeVeh.maxHealth : 100,
-      vehicleFuel: activeVeh ? Math.round(activeVeh.fuel ?? 100) : 100,
-      vehicleGear,
-      stamina: Math.round(this.playerStamina),
-      isSwimming: this.isSwimming,
-    });
+    const speedKmh = activeVeh ? Math.round(Math.abs(activeVeh.speed) * 2.6) : 0;
+    const vehHp = activeVeh ? Math.round(activeVeh.health) : 100;
+    const vehFuel = activeVeh ? Math.round(activeVeh.fuel ?? 100) : 100;
+    const stam = Math.round(this.playerStamina);
+    const telemetryKey = `${Math.round(this.playerPos.x * 2)}|${Math.round(this.playerPos.z * 2)}|${Math.round(this.playerRotation * 10)}|${district}|${this.activeVehicleId ?? ''}|${speedKmh}|${vehHp}|${vehFuel}|${vehicleGear}|${stam}|${this.isSwimming ? 1 : 0}`;
+    if (telemetryKey !== this.lastTelemetryKey) {
+      this.lastTelemetryKey = telemetryKey;
+      store.updateTelemetry({
+        x: this.playerPos.x,
+        z: this.playerPos.z,
+        rotation: this.playerRotation,
+        district,
+        inVehicleId: this.activeVehicleId,
+        vehicleType: activeVeh ? activeVeh.type : null,
+        speedKmh,
+        vehicleHealth: vehHp,
+        vehicleMaxHealth: activeVeh ? activeVeh.maxHealth : 100,
+        vehicleFuel: vehFuel,
+        vehicleGear,
+        stamina: stam,
+        isSwimming: this.isSwimming,
+      });
+    }
 
     if (this.activeVehicleId) {
       const nearStation = this.cngStationSpots.find(
