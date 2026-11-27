@@ -2054,39 +2054,64 @@ export class DhakaCityEngine {
     const zStart = 285;
     const zEnd = 460;
     const bridgeLen = zEnd - zStart;
+    const stainlessMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.85,
+      roughness: 0.2,
+    });
+    const bridgeDeckElev = (z: number) => {
+      const t = Math.max(0, Math.min(1, (z - zStart) / bridgeLen));
+      return 0.08 + 2.75 * Math.sin(t * Math.PI);
+    };
 
-    // Segmented arched road deck over Buriganga (arch peak Y = 2.8m at Z = 372.5)
-    const numBridgeSegs = 14;
+    // Smoothly sloped chorded arch road deck over Buriganga (arch peak Y = 2.83m at Z = 372.5)
+    const numBridgeSegs = 20;
     const segLen = bridgeLen / numBridgeSegs;
     for (let i = 0; i < numBridgeSegs; i++) {
       const segZ1 = zStart + i * segLen;
       const segZ2 = zStart + (i + 1) * segLen;
       const midZ = (segZ1 + segZ2) / 2;
-      const t = (midZ - zStart) / bridgeLen;
-      const segElev = 0.08 + 2.75 * Math.sin(t * Math.PI);
+      const e1 = bridgeDeckElev(segZ1);
+      const e2 = bridgeDeckElev(segZ2);
+      const segElev = (e1 + e2) * 0.5;
+      const chordLen = Math.hypot(segLen, e2 - e1) + 0.14;
+      const pitch = -Math.atan2(e2 - e1, segLen);
 
-      // Concrete Structural Girder + Dark Dhaka Asphalt Surface + Center Yellow Divider + Sidewalks
-      const slab = this.sharedBox(bridgeW, 0.65, segLen + 0.1, bridgeConcreteMat, bridgeX, segElev - 0.42, midZ);
+      const segGroup = new THREE.Group();
+      segGroup.position.set(bridgeX, segElev, midZ);
+      segGroup.rotation.x = pitch;
+
+      // Haunched Pre-Stressed Concrete Box Girder + Dark Asphalt + Center Divider + Raised Walkways
+      const slab = this.sharedBox(bridgeW, 0.72, chordLen, bridgeConcreteMat, 0, -0.44, 0);
+      const boxBelly = this.sharedBox(bridgeW - 4.4, 0.65, chordLen, pierMat, 0, -1.05, 0);
       slab.receiveShadow = true;
-      const roadTop = this.sharedBox(bridgeW - 2.6, 0.14, segLen + 0.1, bridgeAsphaltMat, bridgeX, segElev - 0.06, midZ);
+      const roadTop = this.sharedBox(bridgeW - 2.6, 0.14, chordLen, bridgeAsphaltMat, 0, -0.05, 0);
       roadTop.receiveShadow = true;
-      const centerLineW = this.sharedBox(0.16, 0.02, segLen + 0.1, yellowStripeMat, bridgeX - 0.16, segElev + 0.02, midZ);
-      const centerLineE = this.sharedBox(0.16, 0.02, segLen + 0.1, yellowStripeMat, bridgeX + 0.16, segElev + 0.02, midZ);
-      const laneDashL = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, bridgeX - 4.6, segElev + 0.02, midZ);
-      const laneDashR = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, bridgeX + 4.6, segElev + 0.02, midZ);
-      const walkL = this.sharedBox(1.1, 0.22, segLen + 0.1, bridgeConcreteMat, bridgeX - bridgeW / 2 + 0.95, segElev + 0.02, midZ);
-      const walkR = this.sharedBox(1.1, 0.22, segLen + 0.1, bridgeConcreteMat, bridgeX + bridgeW / 2 - 0.95, segElev + 0.02, midZ);
-      this.scene.add(slab, roadTop, centerLineW, centerLineE, laneDashL, laneDashR, walkL, walkR);
+      const centerLineW = this.sharedBox(0.16, 0.02, chordLen, yellowStripeMat, -0.16, 0.03, 0);
+      const centerLineE = this.sharedBox(0.16, 0.02, chordLen, yellowStripeMat, 0.16, 0.03, 0);
+      const laneDashL = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, -4.6, 0.03, 0);
+      const laneDashR = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, 4.6, 0.03, 0);
+      const walkL = this.sharedBox(1.2, 0.24, chordLen, bridgeConcreteMat, -bridgeW / 2 + 0.95, 0.05, 0);
+      const walkR = this.sharedBox(1.2, 0.24, chordLen, bridgeConcreteMat, bridgeW / 2 - 0.95, 0.05, 0);
+      segGroup.add(slab, boxBelly, roadTop, centerLineW, centerLineE, laneDashL, laneDashR, walkL, walkR);
 
-      // Side Crash Barriers with Hazard Markings
+      // Concrete Jersey Crash Parapets + Open Stainless Double-Tube Bridge Guardrails
       [-bridgeW / 2 + 0.3, bridgeW / 2 - 0.3].forEach((bx) => {
-        const barrier = this.sharedBox(0.45, 1.15, segLen + 0.1, barrierMat, bridgeX + bx, segElev + 0.45, midZ);
-        this.scene.add(barrier);
-
-        const hazardStripe = this.sharedBox(0.48, 0.22, segLen + 0.1, yellowStripeMat, bridgeX + bx, segElev + 0.2, midZ);
-        this.scene.add(hazardStripe);
+        const jerseyBase = this.sharedBox(0.46, 0.68, chordLen, bridgeConcreteMat, bx, 0.34, 0);
+        const hazardStripe = this.sharedBox(0.48, 0.16, chordLen, yellowStripeMat, bx, 0.18, 0);
+        const topRail = this.sharedBox(0.1, 0.08, chordLen, stainlessMat, bx, 1.12, 0);
+        const midRail = this.sharedBox(0.08, 0.06, chordLen, stainlessMat, bx, 0.88, 0);
+        segGroup.add(jerseyBase, hazardStripe, topRail, midRail);
       });
+
+      this.scene.add(segGroup);
     }
+
+    // Bridgehead Concrete Wing-Wall Abutments anchoring North (285) and South (460) banks
+    [zStart, zEnd].forEach((az) => {
+      const abut = this.sharedBox(bridgeW + 2.4, 2.2, 4.5, pierMat, bridgeX, 0.2, az);
+      this.scene.add(abut);
+    });
 
     // Guardrail colliders for First Buriganga Bridge (China-Bangladesh Friendship Bridge at X = 0)
     this.buildingColliders.push({
@@ -2108,56 +2133,65 @@ export class DhakaCityEngine {
       tag: 'buriganga_bridge_guardrail',
     });
 
-    // Heavy Concrete Piers in the Buriganga River Channel (Top tucked strictly beneath bridge slab at pierElev - 0.55)
-    for (let pz = 320; pz <= 430; pz += 36) {
-      const t = (pz - zStart) / bridgeLen;
-      const pierElev = 0.08 + 2.75 * Math.sin(t * Math.PI);
+    // Heavy Concrete Piers + Waterline Cutwater Dolphins in the Buriganga River Channel
+    for (let pz = 315; pz <= 435; pz += 38) {
+      const pierElev = bridgeDeckElev(pz);
       const pierH = pierElev + 2.4;
 
       [-bridgeW / 3, bridgeW / 3].forEach((px) => {
-        const pier = new THREE.Mesh(this.cylCache(1.4, 1.7, pierH, 14), pierMat);
-        pier.position.set(bridgeX + px, pierElev - 0.55 - pierH / 2, pz);
+        const pier = new THREE.Mesh(this.cylCache(1.35, 1.65, pierH, 14), pierMat);
+        pier.position.set(bridgeX + px, pierElev - 1.15 - pierH / 2, pz);
         pier.castShadow = true;
-        this.scene.add(pier);
+        // Octagonal Ship-Impact Cutwater Fender Dolphin at Waterline
+        const cutwater = new THREE.Mesh(this.cylCache(2.05, 2.35, 1.4, 8), bridgeConcreteMat);
+        cutwater.position.set(bridgeX + px, 0.25, pz);
+        this.scene.add(pier, cutwater);
 
         this.circleColliders.push({
           x: bridgeX + px,
           z: pz,
-          radius: 1.8,
+          radius: 2.25,
           tag: 'bridge_pier',
         });
       });
 
-      // Concrete Pier Crossbeam Girder
-      const crossBeam = this.sharedBox(bridgeW + 1.2, 1.35, 3.2, bridgeConcreteMat, bridgeX, pierElev - 0.85, pz);
+      const crossBeam = this.sharedBox(bridgeW + 1.4, 1.35, 3.4, bridgeConcreteMat, bridgeX, pierElev - 1.35, pz);
       this.scene.add(crossBeam);
 
-      // Highway High-Mast Streetlights on Bridge
+      // Sleek Arched Twin-Arm Highway High-Mast Streetlights on Bridge
       [-bridgeW / 2 + 0.3, bridgeW / 2 - 0.3].forEach((lx) => {
-        const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 6.4, 8), pierMat);
+        const pole = new THREE.Mesh(this.cylCache(0.11, 0.16, 6.4, 10), stainlessMat);
         pole.position.set(bridgeX + lx, pierElev + 3.2, pz);
-        this.scene.add(pole);
-
-        const lum = new THREE.Mesh(this.boxCache(0.6, 0.12, 0.3), lampLightMat);
-        lum.position.set(bridgeX + lx + (lx > 0 ? -0.4 : 0.4), pierElev + 6.3, pz);
-        this.scene.add(lum);
+        const armDir = lx > 0 ? -1 : 1;
+        const arm = new THREE.Mesh(this.boxCache(1.6, 0.1, 0.12), stainlessMat);
+        arm.position.set(bridgeX + lx + armDir * 0.75, pierElev + 6.35, pz);
+        arm.rotation.z = armDir * 0.16;
+        const lum = new THREE.Mesh(this.boxCache(0.75, 0.14, 0.36), lampLightMat);
+        lum.position.set(bridgeX + lx + armDir * 1.4, pierElev + 6.42, pz);
+        this.scene.add(pole, arm, lum);
       });
     }
 
-    // Welcome Arch Portals at North (Sadarghat) and South (Keraniganj) bridgeheads
+    // Monumental Bangladesh Emerald-and-Gold Welcome Bridgehead Pylon Portals at North (287) & South (458)
     [zStart + 2, zEnd - 2].forEach((az, aIdx) => {
       const archGroup = new THREE.Group();
       archGroup.position.set(bridgeX, 0, az);
 
-      [-bridgeW / 2 - 0.6, bridgeW / 2 + 0.6].forEach((px) => {
-        const pylon = new THREE.Mesh(this.boxCache(0.8, 8.5, 0.8), portalFrameMat);
-        pylon.position.set(px, 4.25, 0);
-        archGroup.add(pylon);
+      [-bridgeW / 2 - 0.75, bridgeW / 2 + 0.75].forEach((px) => {
+        const pylonBase = new THREE.Mesh(this.boxCache(1.6, 2.2, 1.8), pierMat);
+        pylonBase.position.set(px, 1.1, 0);
+        const pylonShaft = new THREE.Mesh(this.boxCache(1.15, 8.6, 1.25), portalFrameMat);
+        pylonShaft.position.set(px, 6.4, 0);
+        const pylonCrown = new THREE.Mesh(this.cylCache(0.25, 0.85, 1.4, 8), yellowStripeMat);
+        pylonCrown.position.set(px, 11.4, 0);
+        archGroup.add(pylonBase, pylonShaft, pylonCrown);
       });
 
-      const lintel = new THREE.Mesh(this.boxCache(bridgeW + 2.0, 1.4, 0.9), portalFrameMat);
-      lintel.position.set(0, 8.2, 0);
-      archGroup.add(lintel);
+      const lintel = new THREE.Mesh(this.boxCache(bridgeW + 2.8, 1.35, 1.05), portalFrameMat);
+      lintel.position.set(0, 9.4, 0);
+      const lintelTrim = new THREE.Mesh(this.boxCache(bridgeW + 3.0, 0.22, 1.15), yellowStripeMat);
+      lintelTrim.position.set(0, 10.1, 0);
+      archGroup.add(lintel, lintelTrim);
 
       const signTex = createFlyoverGantryTexture(
         '১ম বুড়িগঙ্গা সেতু (চীন-বাংলাদেশ মৈত্রী সেতু)',
@@ -2166,19 +2200,18 @@ export class DhakaCityEngine {
         aIdx === 0 ? 'KERANIGANJ & MAWA EXPRESSWAY LINK' : 'SADARGHAT, CHAWKBAZAR & GULISTAN LINK'
       );
       const signBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(bridgeW * 0.85, 2.2, 0.12),
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
+        new THREE.BoxGeometry(bridgeW * 0.88, 2.4, 0.16),
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.35 })
       );
-      signBoard.position.set(0, 6.8, 0);
+      signBoard.position.set(0, 7.6, 0);
       archGroup.add(signBoard);
 
       this.scene.add(archGroup);
     });
 
     // 2. Concrete Bridge Decks & Smooth Approach Ramps for ALL North-South arteries crossing Buriganga
-    // Covers all metropolitan corridors: Mirpur, Gabtoli, Savar, Dhanmondi, Gulshan, Badda, Purbachal & Outer Rings
     const otherBridgeXs = [-950, -780, -580, -480, -380, -170, 220, 440, 640, 840, 950];
-    const rampLen2 = 20; // 20m smooth slope transition from ground (Y = 0.08) to bridge deck (Y = 1.0)
+    const rampLen2 = 20;
     const rampAngle = Math.atan2(0.92, rampLen2);
 
     otherBridgeXs.forEach((ox) => {
@@ -2192,32 +2225,41 @@ export class DhakaCityEngine {
       northRamp.receiveShadow = true;
       this.scene.add(northRamp);
 
-      // North Ramp Guardrails
       [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const rail = new THREE.Mesh(this.boxCache(0.4, 1.1, rampLen2 + 0.2), barrierMat);
-        rail.position.set(ox + gx, 1.39, 275);
+        const rail = new THREE.Mesh(this.boxCache(0.42, 0.72, rampLen2 + 0.2), bridgeConcreteMat);
+        rail.position.set(ox + gx, 1.15, 275);
         rail.rotation.x = -rampAngle;
-        this.scene.add(rail);
+        const topTube = new THREE.Mesh(this.boxCache(0.1, 0.08, rampLen2 + 0.2), stainlessMat);
+        topTube.position.set(ox + gx, 1.65, 275);
+        topTube.rotation.x = -rampAngle;
+        this.scene.add(rail, topTube);
       });
 
-      // 2.2 Solid Concrete Structural Bridge Deck + Dark Asphalt Roadway + Lane Stripes (Z: 285 to 460 at Y = 1.0)
-      const oDeck = this.sharedBox(oW, 0.68, bridgeLen, bridgeConcreteMat, ox, 0.54, (zStart + zEnd) / 2);
+      // 2.2 Solid Concrete Structural Bridge Deck + Raised Sidewalks + Asphalt Roadway
+      const oDeck = this.sharedBox(oW, 0.74, bridgeLen, bridgeConcreteMat, ox, 0.51, (zStart + zEnd) / 2);
       oDeck.receiveShadow = true;
-      const oAsphalt = this.sharedBox(oW - 2.2, 0.14, bridgeLen, bridgeAsphaltMat, ox, 0.94, (zStart + zEnd) / 2);
+      const oAsphalt = this.sharedBox(oW - 2.4, 0.14, bridgeLen, bridgeAsphaltMat, ox, 0.94, (zStart + zEnd) / 2);
       oAsphalt.receiveShadow = true;
+      const oWalkL = this.sharedBox(1.0, 0.2, bridgeLen, bridgeConcreteMat, ox - oW / 2 + 0.85, 1.01, (zStart + zEnd) / 2);
+      const oWalkR = this.sharedBox(1.0, 0.2, bridgeLen, bridgeConcreteMat, ox + oW / 2 - 0.85, 1.01, (zStart + zEnd) / 2);
       const oCenterN = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox - 0.15, 1.02, (zStart + zEnd) / 2);
       const oCenterS = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox + 0.15, 1.02, (zStart + zEnd) / 2);
-      this.scene.add(oDeck, oAsphalt, oCenterN, oCenterS);
+      this.scene.add(oDeck, oAsphalt, oWalkL, oWalkR, oCenterN, oCenterS);
 
-      // Side Guardrails along main span
+      // Wing-Wall Bridgehead Abutments at North/South river bank joints
+      [zStart, zEnd].forEach((az) => {
+        this.scene.add(this.sharedBox(oW + 1.8, 1.8, 3.6, pierMat, ox, 0.1, az));
+      });
+
+      // Side Jersey Parapets + Open Stainless Railings & Yellow Hazard Studs
       [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const rail = this.sharedBox(0.4, 1.1, bridgeLen, barrierMat, ox + gx, 1.45, (zStart + zEnd) / 2);
-        this.scene.add(rail);
+        const parapet = this.sharedBox(0.42, 0.72, bridgeLen, bridgeConcreteMat, ox + gx, 1.24, (zStart + zEnd) / 2);
+        const topTube = this.sharedBox(0.1, 0.08, bridgeLen, stainlessMat, ox + gx, 1.72, (zStart + zEnd) / 2);
+        this.scene.add(parapet, topTube);
 
-        // Yellow reflective hazard markings along the bridge barriers
         for (let rz = zStart + 10; rz <= zEnd - 10; rz += 20) {
-          const stud = new THREE.Mesh(this.boxCache(0.42, 0.2, 0.8), yellowStripeMat);
-          stud.position.set(ox + gx, 1.25, rz);
+          const stud = new THREE.Mesh(this.boxCache(0.44, 0.18, 0.85), yellowStripeMat);
+          stud.position.set(ox + gx, 1.15, rz);
           this.scene.add(stud);
         }
       });
@@ -2229,15 +2271,16 @@ export class DhakaCityEngine {
       southRamp.receiveShadow = true;
       this.scene.add(southRamp);
 
-      // South Ramp Guardrails
       [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const rail = new THREE.Mesh(this.boxCache(0.4, 1.1, rampLen2 + 0.2), barrierMat);
-        rail.position.set(ox + gx, 1.39, 470);
+        const rail = new THREE.Mesh(this.boxCache(0.42, 0.72, rampLen2 + 0.2), bridgeConcreteMat);
+        rail.position.set(ox + gx, 1.15, 470);
         rail.rotation.x = rampAngle;
-        this.scene.add(rail);
+        const topTube = new THREE.Mesh(this.boxCache(0.1, 0.08, rampLen2 + 0.2), stainlessMat);
+        topTube.position.set(ox + gx, 1.65, 470);
+        topTube.rotation.x = rampAngle;
+        this.scene.add(rail, topTube);
       });
 
-      // Guardrail colliders along entire bridge corridor (prevents falling off side onto promenade or into river)
       this.buildingColliders.push({
         minX: ox - oW / 2 - 0.2,
         maxX: ox - oW / 2 + 0.55,
@@ -2257,18 +2300,27 @@ export class DhakaCityEngine {
         tag: 'buriganga_bridge_guardrail',
       });
 
-      // 2.4 Concrete Water Piers in the Buriganga River Channel (strictly below deck underside y = 0.55)
+      // 2.4 Twin-Column Concrete Pier Bents + Hammerhead Crossbeam + Cutwater Dolphins + River Bridge Streetlights
       for (let pz = 320; pz <= 430; pz += 36) {
-        const pier = new THREE.Mesh(this.cylCache(1.3, 1.5, 2.8, 12), pierMat);
-        pier.position.set(ox, -0.85, pz);
-        pier.castShadow = true;
-        this.scene.add(pier);
+        [-oW * 0.3, oW * 0.3].forEach((px) => {
+          const pier = new THREE.Mesh(this.cylCache(0.95, 1.15, 2.8, 12), pierMat);
+          pier.position.set(ox + px, -0.85, pz);
+          pier.castShadow = true;
+          const cutwater = new THREE.Mesh(this.cylCache(1.45, 1.65, 1.0, 8), bridgeConcreteMat);
+          cutwater.position.set(ox + px, 0.05, pz);
+          this.scene.add(pier, cutwater);
+          this.circleColliders.push({ x: ox + px, z: pz, radius: 1.55, tag: 'bridge_pier' });
+        });
+        this.scene.add(this.sharedBox(oW + 0.8, 0.65, 2.2, bridgeConcreteMat, ox, -0.05, pz));
 
-        this.circleColliders.push({
-          x: ox,
-          z: pz,
-          radius: 1.6,
-          tag: 'bridge_pier',
+        // Highway Side Streetlamps along bridge piers
+        [-oW / 2 + 0.3, oW / 2 - 0.3].forEach((lx) => {
+          const armDir = lx > 0 ? -1 : 1;
+          const pole = new THREE.Mesh(this.cylCache(0.1, 0.13, 5.4, 8), stainlessMat);
+          pole.position.set(ox + lx, 3.7, pz);
+          const lum = new THREE.Mesh(this.boxCache(0.65, 0.12, 0.28), lampLightMat);
+          lum.position.set(ox + lx + armDir * 0.45, 6.4, pz);
+          this.scene.add(pole, lum);
         });
       }
     });
@@ -2284,39 +2336,133 @@ export class DhakaCityEngine {
       12,
       true
     );
+    const steelArchMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      metalness: 0.72,
+      roughness: 0.22,
+    });
+    const concreteDeckMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      roughness: 0.68,
+    });
+    const darkPierMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      roughness: 0.78,
+    });
+    const chromeRailMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.9,
+      roughness: 0.16,
+    });
+    const hangerCableMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      metalness: 0.92,
+      roughness: 0.14,
+    });
+    const glassRailMat = new THREE.MeshStandardMaterial({
+      color: '#bae6fd',
+      transparent: true,
+      opacity: 0.42,
+      roughness: 0.1,
+    });
+
+    // Concrete Box Girder Underside + Asphalt Road Deck + Center Divider + Sidewalks (Z: -47.5..+47.5 around local 0)
+    const boxGirder = this.sharedBox(20.6, 0.75, 95, concreteDeckMat, 0, 0.12, 0);
     const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(20, 0.5, 95),
-      new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.7 })
+      new THREE.BoxGeometry(17.4, 0.16, 95),
+      new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.75 })
     );
-    deck.position.set(0, 0.25, 0);
-    archGroup.add(deck);
+    deck.position.set(0, 0.48, 0);
+    deck.receiveShadow = true;
+    const walkW = this.sharedBox(1.4, 0.24, 95, concreteDeckMat, -9.4, 0.56, 0);
+    const walkE = this.sharedBox(1.4, 0.24, 95, concreteDeckMat, 9.4, 0.56, 0);
+    const centerLineL = this.sharedBox(0.14, 0.02, 94, new THREE.MeshBasicMaterial({ color: '#facc15' }), -0.14, 0.57, 0);
+    const centerLineR = this.sharedBox(0.14, 0.02, 94, new THREE.MeshBasicMaterial({ color: '#facc15' }), 0.14, 0.57, 0);
+    archGroup.add(boxGirder, deck, walkW, walkE, centerLineL, centerLineR);
 
-    // 3D Parabolic Tied-Arch Hatirjheel Bridge with Neon LED Arch Ribs & Hanger Cables
-    const neonColors = ['#ec4899', '#06b6d4', '#a855f7', '#f43f5e'];
-    [-9.5, 9.5].forEach((sideX, idx) => {
-      for (let i = -40; i <= 40; i += 4) {
-        const h = Math.max(1.8, 15.5 - (i * i) / 105);
-        const col = neonColors[Math.abs(Math.floor(i / 4) + idx) % neonColors.length];
-        // Vertical suspension cable
-        const cable = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.08, 0.08, h, 8),
-          new THREE.MeshBasicMaterial({ color: col })
-        );
-        cable.position.set(sideX, h / 2, i);
-        archGroup.add(cable);
+    for (let dz = -42; dz <= 42; dz += 7) {
+      archGroup.add(this.sharedBox(0.12, 0.02, 3.2, new THREE.MeshBasicMaterial({ color: '#f8fafc' }), -4.3, 0.57, dz));
+      archGroup.add(this.sharedBox(0.12, 0.02, 3.2, new THREE.MeshBasicMaterial({ color: '#f8fafc' }), 4.3, 0.57, dz));
+    }
 
-        // Top arch rib segment
-        const rib = new THREE.Mesh(
-          new THREE.SphereGeometry(0.42, 10, 10),
-          new THREE.MeshBasicMaterial({ color: col })
-        );
-        rib.position.set(sideX, h, i);
-        archGroup.add(rib);
+    // Bridgehead Concrete Wing-Wall Abutments & Lake Guardrail Balustrades
+    [-46, 46].forEach((az) => {
+      archGroup.add(this.sharedBox(22.8, 2.0, 4.2, darkPierMat, 0, 0.1, az));
+    });
+    [-10.0, 10.0].forEach((rx) => {
+      archGroup.add(this.sharedBox(0.14, 0.82, 95, glassRailMat, rx, 1.05, 0));
+      archGroup.add(this.sharedBox(0.18, 0.09, 95, chromeRailMat, rx, 1.48, 0));
+      archGroup.add(this.sharedBox(0.28, 0.35, 95, concreteDeckMat, rx, 0.72, 0));
+    });
+
+    // Twin Cantilevered Continuous White Steel Parabolic Tied Arches + Overhead Cross-Bracing + Exact Tension Hangers
+    const archHeightAtZ = (lz: number) => 0.55 + 16.8 * Math.max(0, 1 - (lz / 44) * (lz / 44));
+    const archSteps = 22;
+    const neonColors = ['#ec4899', '#06b6d4', '#a855f7', '#38bdf8'];
+    [-9.8, 9.8].forEach((sideX, sIdx) => {
+      const tiltDir = sideX > 0 ? -1 : 1;
+      for (let i = 0; i < archSteps; i++) {
+        const z1 = -44 + (i / archSteps) * 88;
+        const z2 = -44 + ((i + 1) / archSteps) * 88;
+        const y1 = archHeightAtZ(z1);
+        const y2 = archHeightAtZ(z2);
+        const x1 = sideX + tiltDir * ((y1 - 0.55) * 0.09);
+        const x2 = sideX + tiltDir * ((y2 - 0.55) * 0.09);
+
+        const p1 = new THREE.Vector3(x1, y1, z1);
+        const p2 = new THREE.Vector3(x2, y2, z2);
+        const chordVec = p2.clone().sub(p1);
+        const segL = chordVec.length() + 0.12;
+        const ribSeg = new THREE.Mesh(this.boxCache(0.75, segL, 0.85), steelArchMat);
+        ribSeg.position.copy(p1).add(p2).multiplyScalar(0.5);
+        ribSeg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), chordVec.normalize());
+        ribSeg.castShadow = true;
+        archGroup.add(ribSeg);
+
+        // Glowing architectural LED collar node + Tension Hanger Cable down to deck anchor socket
+        if (i > 0 && i % 2 === 0) {
+          const col = neonColors[(i / 2 + sIdx) % neonColors.length];
+          const collar = new THREE.Mesh(
+            this.boxCache(0.92, 0.24, 0.92),
+            new THREE.MeshBasicMaterial({ color: col })
+          );
+          collar.position.copy(p1);
+          archGroup.add(collar);
+
+          const deckAnchor = new THREE.Vector3(sideX, 0.65, z1);
+          const hangerVec = p1.clone().sub(deckAnchor);
+          const hLen = hangerVec.length();
+          if (hLen > 0.8) {
+            const cable = new THREE.Mesh(this.cylCache(0.055, 0.055, hLen, 8), hangerCableMat);
+            cable.position.copy(deckAnchor).add(p1).multiplyScalar(0.5);
+            cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hangerVec.normalize());
+            archGroup.add(cable);
+
+            const socket = new THREE.Mesh(this.cylCache(0.14, 0.18, 0.38, 8), darkPierMat);
+            socket.position.set(sideX, 0.8, z1);
+            archGroup.add(socket);
+          }
+        }
       }
     });
 
+    // Sculptural Steel Cross-Bracing Struts & X-Wind Portal between West and East Arches
+    [-20, -10, 0, 10, 20].forEach((cz) => {
+      const yCross = archHeightAtZ(cz);
+      const xSpan = (9.8 - (yCross - 0.55) * 0.09) * 2;
+      const strut = new THREE.Mesh(this.cylCache(0.24, 0.24, xSpan, 10).rotateZ(Math.PI / 2), steelArchMat);
+      strut.position.set(0, yCross, cz);
+      archGroup.add(strut);
+      const glowBand = new THREE.Mesh(
+        this.boxCache(xSpan * 0.55, 0.14, 0.34),
+        new THREE.MeshBasicMaterial({ color: cz === 0 ? '#ec4899' : '#06b6d4' })
+      );
+      glowBand.position.set(0, yCross - 0.18, cz);
+      archGroup.add(glowBand);
+    });
+
     const bridgeLight = new THREE.PointLight('#ec4899', 2.4, 75);
-    bridgeLight.position.set(0, 12, 0);
+    bridgeLight.position.set(0, 14, 0);
     archGroup.add(bridgeLight);
     this.hatirjheelLights.push(bridgeLight);
 
@@ -2907,6 +3053,13 @@ export class DhakaCityEngine {
         this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
       });
 
+      // External Architectural Station Envelope U-Frame Cladding Ribs (every 12m along station)
+      for (let exZ = -24; exZ <= 24; exZ += 12) {
+        [-18.0, -3.0].forEach((exX) => {
+          this.scene.add(this.sharedBox(0.38, 11.4, 0.65, trussSteelMat, exX, 14.3, st.sz + exZ));
+        });
+      }
+
       // Architectural Under-Concourse Soffit Louvers & Lighting Spine
       for (let sfz = -24; sfz <= 24; sfz += 6) {
         this.scene.add(this.sharedBox(14.0, 0.16, 0.45, trussSteelMat, -10.5, 8.48, st.sz + sfz));
@@ -2919,6 +3072,11 @@ export class DhakaCityEngine {
       for (let clz = -24; clz <= 24; clz += 8) {
         this.scene.add(this.sharedBox(10.5, 0.1, 0.35, concourseGlowMat, -10.5, 12.15, st.sz + clz));
       }
+      // Illuminated Concourse Baggage Scanner & Overhead Wayfinding Lightbox
+      this.scene.add(this.sharedBox(1.1, 1.35, 2.2, afcGateMat, -8.5, 9.64, st.sz - 12));
+      this.scene.add(this.sharedBox(0.14, 0.45, 1.4, ledGreenMat, -9.08, 9.85, st.sz - 12));
+      this.scene.add(this.sharedBox(4.2, 0.52, 0.18, mrtGreenTrimMat, -12.5, 11.65, st.sz + 3));
+      this.scene.add(this.sharedBox(3.8, 0.32, 0.22, concourseGlowMat, -12.5, 11.65, st.sz + 3));
       const l6DirSign = st.sz === -175 ? 1 : -1;
       const l6LandCenterZ = (st.sz === -175 ? st.sz - 22 : st.sz + 22) + l6DirSign * 15.5;
       // Outer glass concourse walls + mullions + sun-breaker louvers
@@ -3050,6 +3208,18 @@ export class DhakaCityEngine {
       [-14, 14].forEach((pz) => {
         this.scene.add(this.sharedBox(3.8, 0.85, 0.28, afcGateMat, -10.5, 16.5, st.sz + pz));
         this.scene.add(this.sharedBox(3.4, 0.55, 0.32, pidsAmberMat, -10.5, 16.5, st.sz + pz));
+      });
+
+      // Trackbed Railway Sleepers & End-of-Platform Red/Green Block Signal Aspect Masts
+      for (let tz = -28; tz <= 28; tz += 1.4) {
+        [-13.3, -11.1].forEach((trackX) => {
+          this.scene.add(this.sharedBox(1.5, 0.08, 0.24, afcGateMat, trackX, 13.2, st.sz + tz));
+        });
+      }
+      [-29.5, 29.5].forEach((sigZ) => {
+        this.scene.add(this.sharedBox(0.14, 2.6, 0.14, mastSteelMat, -10.1, 14.6, st.sz + sigZ));
+        this.scene.add(this.sharedBox(0.28, 0.72, 0.22, afcGateMat, -10.1, 15.85, st.sz + sigZ));
+        this.scene.add(this.sharedBox(0.16, 0.16, 0.26, ledGreenMat, -10.1, 16.0, st.sz + sigZ));
       });
 
       this.metroStationInteriors.push({
@@ -6767,15 +6937,17 @@ export class DhakaCityEngine {
       const stringerLen = Math.hypot(stairRun, deckY);
 
       [-spanWidth / 2 - 1.15, spanWidth / 2 + 1.15].forEach((sx) => {
-        // Heavy Concrete Pier Base & Structural Twin Steel Portal Columns
+        // Heavy Concrete Pier Base & Structural Twin Steel Portal Columns + Mid-Stair Support Strut
         const pierFooting = new THREE.Mesh(this.boxCache(2.4, 0.75, 2.4), plinthMat);
         pierFooting.position.set(sx, 0.375, 0);
         const pierCol = new THREE.Mesh(this.cylCache(0.36, 0.42, deckY, 10), steelMat);
         pierCol.position.set(sx, deckY / 2, 0);
         pierCol.castShadow = true;
-        fobGroup.add(pierFooting, pierCol);
+        const midStrut = new THREE.Mesh(this.cylCache(0.22, 0.28, deckY * 0.5, 8), plinthMat);
+        midStrut.position.set(sx, deckY * 0.25, 1.65 + stairRun * 0.5);
+        fobGroup.add(pierFooting, pierCol, midStrut);
 
-        // Stepped 3D Concrete Stair Treads descending south along the sidewalk
+        // Stepped 3D Concrete Stair Treads with Yellow Non-Slip Edge Stripes
         for (let s = 0; s < stairSteps; s++) {
           const sy = deckY - (s + 0.5) * stepRise;
           const sz = 1.65 + (s + 0.5) * stepRun;
@@ -6783,7 +6955,9 @@ export class DhakaCityEngine {
           tread.position.set(sx, sy, sz);
           tread.castShadow = true;
           tread.receiveShadow = true;
-          fobGroup.add(tread);
+          const noseStrip = new THREE.Mesh(this.boxCache(2.02, 0.035, 0.08), tactileYellowMat);
+          noseStrip.position.set(sx, sy + (stepRise + 0.14) * 0.5 + 0.01, sz + stepRun * 0.38);
+          fobGroup.add(tread, noseStrip);
         }
 
         // Sloped Steel Stringer Side Beams & Tubular Stainless Handrails
@@ -7402,7 +7576,7 @@ export class DhakaCityEngine {
       );
     });
 
-    // Articulated Stepped Roman Colonnade Pillars along South Frontage (leaving center entrance bay open!)
+    // Articulated Stepped Roman Colonnade Pillars + Curved Semi-Cylindrical Glass Entrance Rotunda Towers
     for (let c = -45; c <= 45; c += 9) {
       if (Math.abs(c) < 5) continue;
       const plinth = this.sharedBox(2.7, 0.75, 2.7, marbleMat, c, 0.45, 41.2);
@@ -7415,9 +7589,33 @@ export class DhakaCityEngine {
       jfpGroup.add(plinth, col, capitalBase, capitalTop);
       this.circleColliders.push({ x: MX + c, z: MZ + 41.2, radius: 1.35, tag: 'jfp_pillar' });
     }
+    // Signature Curved Glass Entrance Rotunda Flanking Towers (X = ±12.5, Z = 36)
+    [-12.5, 12.5].forEach((rx) => {
+      const rotundaGlass = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.8, 3.8, 17.4, 16, 1, false, -Math.PI * 0.5, Math.PI),
+        facadeGlassMat
+      );
+      rotundaGlass.position.set(rx, 8.8, 36.2);
+      const rotundaCrown = new THREE.Mesh(
+        new THREE.CylinderGeometry(4.1, 4.1, 0.65, 16, 1, false, -Math.PI * 0.5, Math.PI),
+        champagneGoldMat
+      );
+      rotundaCrown.position.set(rx, 17.8, 36.2);
+      const rotundaRingMid = new THREE.Mesh(
+        new THREE.TorusGeometry(3.92, 0.1, 6, 16, Math.PI).rotateX(Math.PI / 2),
+        neonCyanMat
+      );
+      rotundaRingMid.position.set(rx, 10.6, 36.2);
+      jfpGroup.add(rotundaGlass, rotundaCrown, rotundaRingMid);
+    });
     const colonnadeArch = this.sharedBox(102, 2.6, 6.8, marbleMat, 0, 19.1, 40.2);
     const colonnadeGoldTrim = this.sharedBox(102.4, 0.32, 7.0, champagneGoldMat, 0, 20.5, 40.2);
     jfpGroup.add(colonnadeArch, colonnadeGoldTrim);
+
+    // Rooftop Blockbuster IMAX Cinema Acoustic Dome Box (North-West Roof X=-36, Z=+14)
+    const cinemaRooftopShell = this.sharedBox(24, 4.8, 16, darkTrimMat, -36, MH + 2.4, 14);
+    const cinemaRoofNeon = this.sharedBox(24.4, 0.25, 16.4, neonVioletMat, -36, MH + 4.9, 14);
+    jfpGroup.add(cinemaRooftopShell, cinemaRoofNeon);
 
     // Grand Illuminated Jamuna Future Park Facade Marquee & Wing Signboards
     const jfpSignTex = createJamunaFutureParkFacadeTexture();
@@ -8468,8 +8666,8 @@ export class DhakaCityEngine {
   }
 
   /**
-   * Hatirjheel Arched Suspension Bridge & Water Taxi Jetty
-   * The iconic landmark of modern Dhaka, connecting Tejgaon, Rampura and Gulshan.
+   * Hatirjheel Water Taxi Ghat Terminal & Docked Passenger Boats
+   * Clean promenade terminal flanking the Hatirjheel Tied-Arch Bridge.
    */
   private buildHatirjheelArchedBridgeAndPromenade() {
     const hx = 220;
@@ -8477,13 +8675,12 @@ export class DhakaCityEngine {
 
     const steelWhiteMat = new THREE.MeshStandardMaterial({
       color: '#f8fafc',
-      metalness: 0.85,
+      metalness: 0.75,
       roughness: 0.25,
     });
-    const cableMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      metalness: 0.92,
-      roughness: 0.15,
+    const canopyMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      roughness: 0.4,
     });
     const woodJettyMat = new THREE.MeshStandardMaterial({
       color: '#78350f',
@@ -8493,39 +8690,38 @@ export class DhakaCityEngine {
       color: '#0284c7',
       roughness: 0.35,
     });
-
-    const bridgeGroup = new THREE.Group();
-    bridgeGroup.position.set(hx, 0, hz);
-
-    [-9.5, 9.5].forEach((ax) => {
-      const arch = new THREE.Mesh(
-        new THREE.TorusGeometry(58, 0.75, 12, 36, Math.PI),
-        steelWhiteMat
-      );
-      arch.position.set(ax, 0.5, 0);
-      arch.rotation.y = Math.PI / 2;
-      bridgeGroup.add(arch);
-
-      for (let cz = -50; cz <= 50; cz += 8) {
-        const archY = Math.sqrt(Math.max(0, 58 * 58 - cz * cz)) - 42;
-        if (archY > 1.2) {
-          const cable = new THREE.Mesh(this.cylCache(0.04, 0.04, archY, 6), cableMat);
-          cable.position.set(ax, 0.5 + archY / 2, cz);
-          bridgeGroup.add(cable);
-        }
-      }
+    const cabinWhiteMat = new THREE.MeshStandardMaterial({
+      color: '#f8fafc',
+      roughness: 0.45,
     });
 
-    const jetty = this.sharedBox(6.5, 0.45, 18, woodJettyMat, -16, 0.25, 0);
-    bridgeGroup.add(jetty);
+    const jettyGroup = new THREE.Group();
+    jettyGroup.position.set(hx, 0, hz);
 
-    [-5, 5].forEach((bz) => {
-      const boat = new THREE.Mesh(this.boxCache(2.6, 1.1, 6.2), taxiBoatMat);
-      boat.position.set(-21, 0.35, bz);
-      bridgeGroup.add(boat);
+    // Timber Pier Jetty + Mooring Pilings + Covered Terminal Canopy
+    const jetty = this.sharedBox(6.8, 0.45, 20, woodJettyMat, -16, 0.25, 0);
+    const canopyRoof = this.sharedBox(5.6, 0.18, 16, canopyMat, -16, 3.35, 0);
+    jettyGroup.add(jetty, canopyRoof);
+    [-6.5, 0, 6.5].forEach((pz) => {
+      [-18.2, -13.8].forEach((px) => {
+        const post = new THREE.Mesh(this.cylCache(0.1, 0.12, 3.1, 8), steelWhiteMat);
+        post.position.set(px, 1.8, pz);
+        jettyGroup.add(post);
+      });
     });
 
-    this.scene.add(bridgeGroup);
+    // Two Realistic Covered-Cabin Hatirjheel Water Taxis Moored at Jetty
+    [-5.2, 5.2].forEach((bz) => {
+      const boatHull = new THREE.Mesh(this.boxCache(2.7, 0.85, 6.4), taxiBoatMat);
+      boatHull.position.set(-21.2, 0.35, bz);
+      const boatCabin = new THREE.Mesh(this.boxCache(2.2, 1.05, 4.2), cabinWhiteMat);
+      boatCabin.position.set(-21.2, 1.25, bz);
+      const yellowTrim = new THREE.Mesh(this.boxCache(2.76, 0.18, 6.45), new THREE.MeshBasicMaterial({ color: '#facc15' }));
+      yellowTrim.position.set(-21.2, 0.72, bz);
+      jettyGroup.add(boatHull, boatCabin, yellowTrim);
+    });
+
+    this.scene.add(jettyGroup);
   }
 
   /**
@@ -9955,10 +10151,13 @@ export class DhakaCityEngine {
     eastRamp.rotation.z = -rampPitch;
     bridgeGroup.add(westRamp, eastRamp);
 
-    // Bridge Side Crash Barriers with Yellow Warning Reflectors
+    // Bridge Side Concrete Jersey Crash Barriers + Open Stainless Handrails + Yellow Reflectors
+    const baluStainlessMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.88, roughness: 0.18 });
+    const baluConcreteMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.68 });
     [-11.2, 11.2].forEach((bz) => {
-      const barrier = this.sharedBox(110, 1.1, 0.45, barrierMat, 590, 0.95, -315 + bz);
-      bridgeGroup.add(barrier);
+      const parapet = this.sharedBox(110, 0.75, 0.45, baluConcreteMat, 590, 0.96, -315 + bz);
+      const topRail = this.sharedBox(110, 0.09, 0.1, baluStainlessMat, 590, 1.48, -315 + bz);
+      bridgeGroup.add(parapet, topRail);
 
       // Guardrail colliders along Balu River 8-Lane Suspension Bridge
       this.buildingColliders.push({
@@ -9971,58 +10170,85 @@ export class DhakaCityEngine {
         tag: 'balu_bridge_guardrail',
       });
 
-      // Yellow Reflector Studs along the barrier
-      for (let rx = -50; rx <= 50; rx += 8) {
+      // Yellow Reflector Studs & Steel Cable Anchor Blisters along bridge edge
+      for (let rx = -50; rx <= 50; rx += 7) {
         const stud = new THREE.Mesh(this.boxCache(0.4, 0.2, 0.1), yellowStripeMat);
-        stud.position.set(590 + rx, 1.15, -315 + bz + (bz > 0 ? -0.25 : 0.25));
-        bridgeGroup.add(stud);
+        stud.position.set(590 + rx, 1.05, -315 + bz + (bz > 0 ? -0.25 : 0.25));
+        const blister = new THREE.Mesh(this.boxCache(0.65, 0.38, 0.55), whitePylonMat);
+        blister.position.set(590 + rx, 0.86, -315 + bz * 0.96);
+        bridgeGroup.add(stud, blister);
       }
     });
 
-    // 1.3 Dual A-Frame Pylon Towers (West Tower at X = 565, East Tower at X = 615)
+    // Bridgehead Concrete Abutment Wing Walls at X = 535 & X = 645 + Twin-Arm Sleek Center LED Light Masts
+    [535, 645].forEach((ax) => {
+      bridgeGroup.add(this.sharedBox(3.6, 1.9, 24.4, baluConcreteMat, ax, 0.15, -315));
+    });
+    for (let lx = 545; lx <= 635; lx += 30) {
+      const mast = new THREE.Mesh(this.cylCache(0.11, 0.16, 6.5, 8), baluStainlessMat);
+      mast.position.set(lx, 4.05, -315);
+      const crossArm = new THREE.Mesh(this.boxCache(0.14, 0.12, 3.6), baluStainlessMat);
+      crossArm.position.set(lx, 7.25, -315);
+      [-1.7, 1.7].forEach((lz) => {
+        const head = new THREE.Mesh(this.boxCache(0.38, 0.12, 0.55), new THREE.MeshBasicMaterial({ color: '#fef9c3' }));
+        head.position.set(lx, 7.22, -315 + lz);
+        bridgeGroup.add(head);
+      });
+      bridgeGroup.add(mast, crossArm);
+    }
+
+    // 1.3 Dual Diamond A-Frame Pylon Towers with Octagonal River Pile-Cap Cutwaters & Exact Cable Anchors (West X=565, East X=615)
     [565, 615].forEach((px) => {
       const pylonGroup = new THREE.Group();
       pylonGroup.position.set(px, 0, -315);
 
-      // Tower Legs angled inward to form soaring A-frame
+      // Octagonal Concrete Waterline Pier Dolphins anchoring A-frame legs in Balu River
+      [-11.2, 11.2].forEach((lz) => {
+        const dolphin = new THREE.Mesh(this.cylCache(1.85, 2.2, 1.5, 8), baluConcreteMat);
+        dolphin.position.set(0, 0.35, lz);
+        pylonGroup.add(dolphin);
+      });
+
+      // Lower vertical pedestal + Upper Inward-Sloped A-frame legs meeting cleanly at Y=32
       [-11, 11].forEach((lz) => {
-        const leg = new THREE.Mesh(this.cylCache(0.85, 1.4, 32, 8), whitePylonMat);
-        leg.position.set(0, 16, lz);
-        leg.rotation.x = lz > 0 ? -0.18 : 0.18;
+        const leg = new THREE.Mesh(this.cylCache(0.82, 1.42, 32.5, 10), whitePylonMat);
+        leg.position.set(0, 16, lz * 0.62);
+        leg.rotation.x = lz > 0 ? -0.26 : 0.26;
         pylonGroup.add(leg);
 
-        // Architectural Cyan LED light channel along tower leg
-        const ledStrip = new THREE.Mesh(this.boxCache(0.12, 31, 0.15), ledCyanMat);
-        ledStrip.position.set(0.9, 16, lz * 0.95);
-        ledStrip.rotation.x = lz > 0 ? -0.18 : 0.18;
+        const ledStrip = new THREE.Mesh(this.boxCache(0.12, 31.5, 0.15), ledCyanMat);
+        ledStrip.position.set(0.88, 16, lz * 0.62);
+        ledStrip.rotation.x = lz > 0 ? -0.26 : 0.26;
         pylonGroup.add(ledStrip);
       });
 
-      // Upper Cross-Strut Beam
-      const crossStrut = this.sharedBox(1.8, 1.2, 14, whitePylonMat, 0, 18, 0);
-      pylonGroup.add(crossStrut);
+      const lowerStrut = this.sharedBox(1.8, 1.1, 17, whitePylonMat, 0, 9.5, 0);
+      const crossStrut = this.sharedBox(1.8, 1.2, 11.5, whitePylonMat, 0, 20, 0);
+      pylonGroup.add(lowerStrut, crossStrut);
 
-      // Tower Peak Crown
-      const crown = this.sharedBox(2.2, 3.2, 3.6, whitePylonMat, 0, 32, 0);
-      const crownBeacon = new THREE.Mesh(this.cylCache(0.15, 0.35, 1.4, 8), ledBlueMat);
-      crownBeacon.position.set(0, 34.2, 0);
+      // Tapered Diamond Crown + Cable Anchor Saddles
+      const crown = this.sharedBox(2.4, 3.8, 4.2, whitePylonMat, 0, 32, 0);
+      const crownBeacon = new THREE.Mesh(this.cylCache(0.15, 0.4, 1.6, 8), ledBlueMat);
+      crownBeacon.position.set(0, 34.6, 0);
       pylonGroup.add(crown, crownBeacon);
 
-      // Symmetrical High-Tensile Stay Cables fanning down from Pylon Peak
+      // Symmetrical High-Tensile Stay Cables with exact quaternion alignment from saddle -> deck blister
       for (let c = -42; c <= 42; c += 7) {
-        if (Math.abs(c) < 4) continue;
+        if (Math.abs(c) < 5) continue;
         const targetX = px + c;
         if (targetX < 535 || targetX > 645) continue;
 
-        [-10.8, 10.8].forEach((cz) => {
-          const cableLen = Math.hypot(c, 31, cz);
+        const towerAttachY = 30.8 - Math.abs(c) * 0.14;
+        [-1, 1].forEach((zSign) => {
+          const startAnchor = new THREE.Vector3(0, towerAttachY, zSign * 1.4);
+          const endAnchor = new THREE.Vector3(c, 0.88, zSign * 10.75);
+          const vec = endAnchor.clone().sub(startAnchor);
           const cable = new THREE.Mesh(
-            this.cylCache(0.045, 0.045, cableLen, 6),
+            this.cylCache(0.048, 0.048, vec.length(), 6),
             steelCableMat
           );
-          cable.position.set(c / 2, 16, cz / 2);
-          cable.lookAt(new THREE.Vector3(c, 0.8, cz));
-          cable.rotateX(Math.PI / 2);
+          cable.position.copy(startAnchor).add(endAnchor).multiplyScalar(0.5);
+          cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vec.normalize());
           pylonGroup.add(cable);
         });
       }
@@ -10030,7 +10256,7 @@ export class DhakaCityEngine {
       bridgeGroup.add(pylonGroup);
     });
 
-    // 1.4 Grand Overhead Highway Gantry Sign
+    // 1.4 Grand Steel-Truss Overhead Highway Gantry Portal
     const gantrySignTex = createFlyoverGantryTexture(
       'পূর্বাচল ৩০০ ফিট এক্সপ্রেসওয়ে',
       'PURBACHAL 300FT GRAND SPEEDWAY',
@@ -10038,16 +10264,17 @@ export class DhakaCityEngine {
       'KANCHAN BRIDGE & DHAKA BYPASS'
     );
     const gantryBoard = new THREE.Mesh(
-      this.boxCache(14, 3.2, 0.35),
+      this.boxCache(0.38, 3.2, 16),
       new THREE.MeshStandardMaterial({ map: gantrySignTex, roughness: 0.35 })
     );
-    gantryBoard.position.set(542, 6.2, -315);
-    bridgeGroup.add(gantryBoard);
+    gantryBoard.position.set(542, 6.4, -315);
+    const gantryCrossBeam = new THREE.Mesh(this.boxCache(0.42, 0.45, 22.8), baluStainlessMat);
+    gantryCrossBeam.position.set(542, 7.6, -315);
+    bridgeGroup.add(gantryBoard, gantryCrossBeam);
 
-    // Gantry Support Posts
-    [-10.8, 10.8].forEach((gz) => {
-      const gPost = new THREE.Mesh(this.cylCache(0.35, 0.4, 7.2, 8), barrierMat);
-      gPost.position.set(542, 3.6, -315 + gz);
+    [-11.2, 11.2].forEach((gz) => {
+      const gPost = new THREE.Mesh(this.cylCache(0.32, 0.38, 7.8, 8), baluStainlessMat);
+      gPost.position.set(542, 3.9, -315 + gz);
       bridgeGroup.add(gPost);
     });
 
