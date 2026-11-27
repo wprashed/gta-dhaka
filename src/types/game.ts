@@ -171,6 +171,7 @@ export interface MissionStep {
   instructionEn: string;
   instructionBn: string;
   targetX: number;
+  targetY?: number;
   targetZ: number;
   radius: number;
   requireVehicleType?: VehicleType;

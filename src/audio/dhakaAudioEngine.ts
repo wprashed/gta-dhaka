@@ -1530,6 +1530,105 @@ class DhakaAudioEngine {
       window.clearInterval(this.radioInterval);
       this.radioInterval = null;
     }
+    if (station === 'off') return;
+
+    this.init();
+    if (!this.ctx) return;
+
+    const tempoMs =
+      station === 'dhaka_folk' ? 320 : station === 'gully_beat' ? 240 : 210;
+
+    // Scales (Hz): Bhatiali/Baul pentatonic folk, Urban minor bass hook, Nocturnal synth arpeggio
+    const folkNotes = [293.66, 329.63, 392.0, 440.0, 523.25, 440.0, 392.0, 329.63];
+    const gullyNotes = [110.0, 0, 110.0, 130.81, 146.83, 0, 164.81, 130.81];
+    const synthNotes = [220.0, 261.63, 329.63, 440.0, 392.0, 329.63, 261.63, 293.66];
+
+    this.radioInterval = window.setInterval(() => {
+      if (!this.ctx || this.currentStation === 'off' || this.musicVolume <= 0.01) return;
+      if (this.ctx.state === 'suspended') return;
+
+      const step = this.radioStep++ % 8;
+      const now = this.ctx.currentTime;
+      const vol = this.musicVolume;
+
+      if (this.currentStation === 'dhaka_folk') {
+        // Pentatonic flute/ektaara pluck + deep tabla thump on beats 0 & 4
+        const freq = folkNotes[step];
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(0.065 * vol, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.30);
+
+        if (step % 4 === 0) {
+          const d = this.ctx.createOscillator();
+          const dg = this.ctx.createGain();
+          d.type = 'sine';
+          d.frequency.setValueAtTime(98, now);
+          d.frequency.exponentialRampToValueAtTime(48, now + 0.14);
+          dg.gain.setValueAtTime(0.11 * vol, now);
+          dg.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+          d.connect(dg);
+          dg.connect(this.ctx.destination);
+          d.start(now);
+          d.stop(now + 0.17);
+        }
+      } else if (this.currentStation === 'gully_beat') {
+        // Boom-bap sub riff + snare snap
+        const bassF = gullyNotes[step];
+        if (bassF > 0) {
+          const b = this.ctx.createOscillator();
+          const lp = this.ctx.createBiquadFilter();
+          const bg = this.ctx.createGain();
+          b.type = 'sawtooth';
+          b.frequency.setValueAtTime(bassF, now);
+          lp.type = 'lowpass';
+          lp.frequency.setValueAtTime(340, now);
+          bg.gain.setValueAtTime(0.095 * vol, now);
+          bg.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+          b.connect(lp);
+          lp.connect(bg);
+          bg.connect(this.ctx.destination);
+          b.start(now);
+          b.stop(now + 0.22);
+        }
+        if (step % 4 === 2) {
+          const sn = this.ctx.createOscillator();
+          const sg = this.ctx.createGain();
+          sn.type = 'square';
+          sn.frequency.setValueAtTime(220, now);
+          sn.frequency.exponentialRampToValueAtTime(95, now + 0.08);
+          sg.gain.setValueAtTime(0.045 * vol, now);
+          sg.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          sn.connect(sg);
+          sg.connect(this.ctx.destination);
+          sn.start(now);
+          sn.stop(now + 0.10);
+        }
+      } else if (this.currentStation === 'hatirjheel_synth') {
+        // Warm analog synthwave arpeggio + sub root
+        const sFreq = synthNotes[step];
+        const osc = this.ctx.createOscillator();
+        const lp = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(sFreq, now);
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(1100, now);
+        g.gain.setValueAtTime(0.055 * vol, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+        osc.connect(lp);
+        lp.connect(g);
+        g.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.20);
+      }
+    }, tempoMs);
   }
 
   public setVolumes(music: number, sfx: number, ambience: number) {

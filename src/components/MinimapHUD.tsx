@@ -247,29 +247,7 @@ export const MinimapHUD: React.FC = () => {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw Intermediate Viaduct Stops (non-boarding track ticks)
-    const viaductStops = [
-      { x: -12.2, z: -1150, color: '#10b981' },
-      { x: -12.2, z: -850, color: '#10b981' },
-      { x: -12.2, z: 450, color: '#10b981' },
-      { x: -380, z: -198, color: '#f43f5e' },
-      { x: 95, z: -198, color: '#f43f5e' },
-      { x: 260, z: -198, color: '#f43f5e' },
-    ];
-    viaductStops.forEach((st) => {
-      const sp = worldToRadar(st.x, st.z);
-      if (Math.hypot(sp.rx, sp.rz) < half - 6) {
-        ctx.fillStyle = st.color;
-        ctx.beginPath();
-        ctx.arc(sp.rx, sp.rz, 2.8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    });
-
-    // Draw Interactive Boardable Dhaka Metro Rail Stations with Crisp "M" Badges & Labels
+    // Draw All 12 Interactive Boardable Dhaka Metro Rail Stations with Crisp "M" Badges & Labels
     METRO_STATIONS.forEach((st) => {
       const sp = worldToRadar(st.x, st.z);
       if (Math.hypot(sp.rx, sp.rz) < half - 8) {

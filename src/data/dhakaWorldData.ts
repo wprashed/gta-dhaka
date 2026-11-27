@@ -368,7 +368,7 @@ export const STREET_ATMS: Array<{ x: number; z: number; nameEn: string; nameBn: 
 ];
 
 export const SPEED_CAMERAS: Array<{ x: number; y: number; z: number }> = [
-  { x: 590, y: 11.2, z: -315 },
+  { x: 590, y: 0.80, z: -315 },
   { x: 14, y: 16.2, z: -100 },
   { x: 0, y: 0, z: -90 },
   { x: 155, y: 0, z: 25 },
@@ -1197,6 +1197,7 @@ export const STORY_MISSIONS: MissionDefinition[] = [
         instructionEn: 'Enter Jamuna Future Park Grand Atrium and eliminate the syndicate heavy enforcers!',
         instructionBn: 'যমুনা ফিউচার পার্কের ভেতরের অ্যাট্রিয়ামে প্রবেশ করে সিন্ডিকেটের সশস্ত্র ক্যাডারদের পরাস্ত করুন!',
         targetX: 520,
+        targetY: 0.25,
         targetZ: -385,
         radius: 16,
       },

@@ -61,6 +61,7 @@ import {
 } from './dhakaTextures';
 import { NearbyPrompt, useGameStore } from '../store/useGameStore';
 import { dhakaAudio } from '../audio/dhakaAudioEngine';
+import { evaluateRoadElevation } from './physics/roadElevation';
 
 interface BuildingCollider {
   minX: number;
@@ -3203,9 +3204,18 @@ export class DhakaCityEngine {
         }
       });
 
-      // Framed Platform Screen Doors (PSD) with Route Map Headers, Status LEDs & Tactile Safety Lines
+      // Framed Platform Screen Doors (PSD) with Route Map Headers, Status LEDs, Tactile Safety Lines & Track Fall Colliders
       [-14.2, -10.2].forEach((psdX) => {
         this.scene.add(this.sharedBox(0.12, 1.75, 56, psdGlassMat, psdX, 14.18, st.sz));
+        this.buildingColliders.push({
+          minX: psdX - 0.14,
+          maxX: psdX + 0.14,
+          minZ: st.sz - 28.0,
+          maxZ: st.sz + 28.0,
+          minY: 12.8,
+          maxY: 17.0,
+          tag: 'metro_psd',
+        });
         // Continuous Stainless + Emerald Overhead PSD Header Fascia
         this.scene.add(this.sharedBox(0.28, 0.42, 56.2, trussSteelMat, psdX, 15.25, st.sz));
         this.scene.add(this.sharedBox(0.30, 0.14, 56.2, mrtGreenTrimMat, psdX, 15.5, st.sz));
@@ -3558,6 +3568,15 @@ export class DhakaCityEngine {
       });
       [line5Z - 2.2, line5Z + 2.2].forEach((psdZ) => {
         this.scene.add(this.sharedBox(56, 1.75, 0.12, psdGlassMat, st.sx, 18.42, psdZ));
+        this.buildingColliders.push({
+          minX: st.sx - 28.0,
+          maxX: st.sx + 28.0,
+          minZ: psdZ - 0.14,
+          maxZ: psdZ + 0.14,
+          minY: 17.0,
+          maxY: 21.5,
+          tag: 'metro_psd',
+        });
         this.scene.add(this.sharedBox(56.2, 0.42, 0.28, trussSteelMat, st.sx, 19.48, psdZ));
         this.scene.add(this.sharedBox(56.2, 0.14, 0.30, mrtRedTrimMat, st.sx, 19.72, psdZ));
         const routeStrip5 = new THREE.Mesh(new THREE.PlaneGeometry(18, 0.38), routeMapMatL5);
@@ -11117,12 +11136,19 @@ export class DhakaCityEngine {
       }
     }
 
-    // 8. DMP Speed Camera Radar Poles across Major Corridors
+    // 8. DMP Speed Camera Radar Poles across Major Corridors (curb-aligned)
     const camLensMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
     SPEED_CAMERAS.forEach(({ x: cx, y: cy, z: cz }) => {
       this.speedCameraSpots.push({ x: cx, y: cy, z: cz });
       const camPole = new THREE.Group();
-      camPole.position.set(cx + 8.5, cy, cz);
+      if (cx === 590) {
+        camPole.position.set(cx, cy, cz - 9.8);
+        camPole.rotation.y = -Math.PI / 2;
+      } else if (cx === 14) {
+        camPole.position.set(cx + 6.4, cy, cz);
+      } else {
+        camPole.position.set(cx + 8.5, cy, cz);
+      }
       const p = new THREE.Mesh(this.cylCache(0.09, 0.12, 5.2, 8), sigPoleMat);
       p.position.y = 2.6;
       const head = new THREE.Mesh(this.boxCache(0.65, 0.42, 0.55), sigBoxMat);
@@ -11780,6 +11806,7 @@ export class DhakaCityEngine {
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('mouseup', this.onMouseUp);
     dhakaAudio.updateMetroSound(false, 0, 0);
+    dhakaAudio.setRadioStation('off');
     this.renderer.dispose();
   }
 
@@ -13401,6 +13428,17 @@ export class DhakaCityEngine {
           targetVeh.maxHealth = Math.round(targetVeh.maxHealth * 1.35);
           targetVeh.health = targetVeh.maxHealth;
           this.vehicleSpeedBoostMap.set(targetVeh.id, 1.25);
+          const vMesh = this.vehicleMeshes.get(targetVeh.id);
+          if (vMesh && !vMesh.userData.hasTurboTrim) {
+            vMesh.userData.hasTurboTrim = true;
+            const underGlow = new THREE.Mesh(
+              new THREE.BoxGeometry(1.65, 0.06, 3.6),
+              new THREE.MeshBasicMaterial({ color: '#22d3ee' })
+            );
+            underGlow.position.set(0, 0.16, 0);
+            underGlow.name = 'accent_turbo_glow';
+            vMesh.add(underGlow);
+          }
         }
       }
       store.clearEngineRequests();
@@ -13422,8 +13460,8 @@ export class DhakaCityEngine {
         this.playerLimbs.group.visible = true;
         store.setActiveMetroRide(null);
       }
-      const { x, z } = store.teleportRequest;
-      const targetElev = this.getRoadElevation(x, z, 0);
+      const { x, y, z } = store.teleportRequest;
+      const targetElev = this.getRoadElevation(x, z, y ?? 0);
       this.playerPos.set(x, targetElev, z);
       this.playerLimbs.group.position.set(x, targetElev, z);
       this.playerLimbs.group.rotation.x = 0;
@@ -13512,7 +13550,7 @@ export class DhakaCityEngine {
         const activeTool = store.tools.find((t) => t.id === store.equippedToolId);
         const wCat = activeTool?.isFirearm ? (activeTool.id === 'pistol_9mm' || activeTool.id === 'smg_uzi' ? 'pistol' : 'rifle') : activeTool?.category === 'local_arm' ? 'melee' : 'fists';
         setCharacterAnimationState(this.playerLimbs, 'idle', dt, 0, false, 1.0, wCat);
-        this.playerLimbs.group.position.set(this.playerPos.x, 0, this.playerPos.z);
+        this.playerLimbs.group.position.set(this.playerPos.x, this.playerPos.y, this.playerPos.z);
         this.playerLimbs.group.rotation.x = 0;
       } else if (this.metroRide) {
         this.updateMetroRide(dt);
@@ -16082,8 +16120,9 @@ export class DhakaCityEngine {
           (v) => v.id === this.activeVehicleId
         );
         if (playerVeh) {
+          const sameDeck = Math.abs(veh.y - playerVeh.y) < 3.0;
           const dist = Math.hypot(veh.x - playerVeh.x, veh.z - playerVeh.z);
-          if (dist < 2.85 && Math.abs(playerVeh.speed) > 4) {
+          if (sameDeck && dist < 2.85 && Math.abs(playerVeh.speed) > 4) {
             dhakaAudio.playSfx('crash');
             this.cameraTrauma = Math.min(
               1.0,
@@ -16906,7 +16945,8 @@ export class DhakaCityEngine {
       const step = activeMission.steps[store.activeMissionStepIndex];
       if (step) {
         this.missionMarkerGroup.visible = true;
-        this.missionMarkerGroup.position.set(step.targetX, 0, step.targetZ);
+        const markerY = this.getRoadElevation(step.targetX, step.targetZ, step.targetY ?? this.playerPos.y);
+        this.missionMarkerGroup.position.set(step.targetX, markerY, step.targetZ);
         this.missionRingMesh.rotation.z += dt * 1.8;
 
         // Spawn hostile Syndicate Enforcers on combat mission steps!
@@ -16956,10 +16996,12 @@ export class DhakaCityEngine {
           this.playerPos.x - step.targetX,
           this.playerPos.z - step.targetZ
         );
+        const verticalOk =
+          step.targetY === undefined || Math.abs(this.playerPos.y - step.targetY) <= 3.0;
 
         if (step.id === 'm1_s2' && this.activeVehicleId) {
           store.advanceMissionStep();
-        } else if (distToTarget <= step.radius && step.id !== 'm1_s2') {
+        } else if (distToTarget <= step.radius && verticalOk && step.id !== 'm1_s2') {
           store.advanceMissionStep();
         }
       } else {
@@ -16967,9 +17009,10 @@ export class DhakaCityEngine {
       }
     } else if (store.customWaypoint) {
       this.missionMarkerGroup.visible = true;
+      const wpY = this.getRoadElevation(store.customWaypoint.x, store.customWaypoint.z, this.playerPos.y);
       this.missionMarkerGroup.position.set(
         store.customWaypoint.x,
-        0,
+        wpY,
         store.customWaypoint.z
       );
     } else {
@@ -17030,6 +17073,7 @@ export class DhakaCityEngine {
       this.lastTelemetryKey = telemetryKey;
       store.updateTelemetry({
         x: this.playerPos.x,
+        y: this.playerPos.y,
         z: this.playerPos.z,
         rotation: this.playerRotation,
         district,
@@ -17318,408 +17362,15 @@ export class DhakaCityEngine {
 
   /**
    * Returns vertical ground/road elevation at world coordinates (X, Z).
-   * Supports seamless transition onto elevated Dhaka flyovers, highway approach ramps, and bridges
-   * while preserving ground level for pedestrians and vehicles passing underneath.
+   * Delegates to pure solver evaluateRoadElevation() in src/engine/physics/roadElevation.ts.
    */
   public getRoadElevation(x: number, z: number, currentY?: number): number {
-    const expDeckElev = 16.2;
-
-    // -1. Jamuna Future Park 3-Floor Shopping Mall & Escalators (X: 464..576, Z: -421..-349)
-    const jx = x - this.jfpCenter.x;
-    const jz = z - this.jfpCenter.z;
-    if (Math.abs(jx) <= 56 && Math.abs(jz) <= 36) {
-      const Y0 = 0.25;
-      const FLOOR_H = 5.15;
-      const Y1 = Y0 + FLOOR_H;     // 5.40m
-      const Y2 = Y0 + FLOOR_H * 2; // 10.55m
-
-      // West Escalator (GF Y0 <-> 1F Y1): localX in [-25.0, -20.0], localZ in [-9, +9]
-      if (jx >= -25.0 && jx <= -20.0 && jz >= -9.0 && jz <= 9.0) {
-        const t = (9.0 - jz) / 18.0;
-        const rampY = Y0 + FLOOR_H * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY >= 8.2) {
-          return Y2; // 2F gallery walks over West escalator well
-        }
-        if (currentY === undefined || Math.abs(currentY - rampY) <= 2.35) {
-          return rampY;
-        }
-        return Y0;
-      }
-
-      // East Escalator (1F Y1 <-> 2F Y2): localX in [+20.0, +25.0], localZ in [-9, +9]
-      if (jx >= 20.0 && jx <= 25.0 && jz >= -9.0 && jz <= 9.0) {
-        const t = (9.0 - jz) / 18.0;
-        const rampY = Y1 + FLOOR_H * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY >= 3.0 && Math.abs(currentY - rampY) <= 2.35) {
-          return rampY;
-        }
-        return Y0;
-      }
-
-      // Open Central Atrium Void (|jx| < 13.8 && |jz| < 10.8): no 1F/2F floor slab!
-      const inAtriumVoid = Math.abs(jx) < 13.8 && Math.abs(jz) < 10.8;
-      if (!inAtriumVoid && currentY !== undefined) {
-        if (currentY >= 8.2) return Y2;
-        if (currentY >= 3.2) return Y1;
-      }
-      return Y0;
-    }
-    // Jamuna Future Park South Drop-off Marble Plaza Apron
-    if (Math.abs(jx) <= 59 && jz > 36 && jz <= 57) {
-      return 0.16;
-    }
-
-    // 0. High Elevated Structures (Y >= 12.0m) - Priority for top-level Expressway
-    if (currentY !== undefined && currentY >= 12.0) {
-      if (Math.abs(x - 14) <= 7.1 && z >= -340 && z <= 240) {
-        return expDeckElev;
-      }
-    }
-
-    // 0.5 Walkable Pedestrian Covered Foot Over Bridges & Metro Station Interiors/Escalators
-    // Evaluated BEFORE Expressway Ramps (Section 1) so East sidewalk staircases at X~14 are never clamped to Y=0 underneath!
-    const fobs: Array<{ bx: number; bz: number; halfSpan: number }> = [
-      { bx: 0, bz: -55, halfSpan: 13.5 },
-      { bx: 0, bz: 48, halfSpan: 13.0 },
-      { bx: 0, bz: 166, halfSpan: 12.5 },
-      { bx: -380, bz: -115, halfSpan: 12.5 },
-    ];
-    for (const f of fobs) {
-      const lx = x - f.bx;
-      const lz = z - f.bz;
-      if (Math.abs(lx) <= f.halfSpan + 3.0 && lz >= -2.2 && lz <= 12.4 && (currentY === undefined || currentY < 9.5)) {
-        // Overhead covered walkway deck (Y = 6.40m)
-        if (Math.abs(lz) <= 1.75 && Math.abs(lx) <= f.halfSpan + 1.65) {
-          if (currentY === undefined || (currentY >= 3.8 && currentY <= 9.2)) {
-            return 6.40;
-          }
-        }
-        // West & East stepped staircases + ground entry pads along both sidewalks
-        const onSideStair =
-          Math.abs(lx - -(f.halfSpan + 1.15)) <= 1.35 ||
-          Math.abs(lx - (f.halfSpan + 1.15)) <= 1.35;
-        if (onSideStair && lz >= 1.65 && lz <= 12.3) {
-          if (lz > 10.05) {
-            if (currentY === undefined || currentY <= 2.2) return 0.18;
-          } else {
-            const t = Math.max(0, Math.min(1, (10.05 - lz) / 8.4));
-            const stairElev = 0.42 + t * (6.38 - 0.42);
-            if (currentY === undefined || (Math.abs(currentY - stairElev) <= 2.8 && currentY <= 9.2) || stairElev <= 1.5) {
-              return stairElev;
-            }
-          }
-        }
-      }
-    }
-
-    // 0.6 Walkable Metro Rail Entry Kiosks, Escalators, Upper Concourse Halls & Train Platforms (L6 & L5)
-    for (const stInt of this.metroStationInteriors) {
-      const idx = stInt.inX2 - stInt.inX1;
-      const idz = stInt.inZ2 - stInt.inZ1;
-      const iLenSq = idx * idx + idz * idz;
-      if (iLenSq > 0.1) {
-        const rawT = ((x - stInt.inX1) * idx + (z - stInt.inZ1) * idz) / iLenSq;
-        if (rawT >= -0.04 && rawT <= 1.03) {
-          const t = Math.max(0, Math.min(1, rawT));
-          const ipx = stInt.inX1 + idx * t;
-          const ipz = stInt.inZ1 + idz * t;
-          if (Math.hypot(x - ipx, z - ipz) <= stInt.inHalfW) {
-            const stairY = stInt.inY1 + (stInt.inY2 - stInt.inY1) * t;
-            // Only snap to stair ramp when actively near its slope, never dropping through upper platform floor
-            const walkingHighOnPlatform =
-              currentY !== undefined &&
-              currentY >= stInt.platY - 0.55 &&
-              Math.abs(stairY - stInt.platY) > 1.05;
-            if (
-              !walkingHighOnPlatform &&
-              currentY !== undefined &&
-              Math.abs(currentY - stairY) <= 1.85 &&
-              currentY >= stInt.inY1 - 1.5
-            ) {
-              return stairY;
-            }
-          }
-        }
-      }
-      if (
-        x >= stInt.platMinX &&
-        x <= stInt.platMaxX &&
-        z >= stInt.platMinZ &&
-        z <= stInt.platMaxZ &&
-        currentY !== undefined &&
-        currentY >= stInt.platY - 1.4 &&
-        currentY <= stInt.platY + 3.0
-      ) {
-        return stInt.platY;
-      }
-      if (
-        x >= stInt.concourseMinX &&
-        x <= stInt.concourseMaxX &&
-        z >= stInt.concourseMinZ &&
-        z <= stInt.concourseMaxZ &&
-        currentY !== undefined &&
-        currentY >= stInt.concourseY - 2.0 &&
-        currentY <= stInt.concourseY + 2.5
-      ) {
-        return stInt.concourseY;
-      }
-    }
-    for (const esc of this.metroEscalators) {
-      if (
-        x >= esc.landMinX &&
-        x <= esc.landMaxX &&
-        z >= esc.landMinZ &&
-        z <= esc.landMaxZ &&
-        (currentY === undefined || (currentY >= esc.landY - 3.2 && currentY <= esc.landY + 2.5))
-      ) {
-        return esc.landY;
-      }
-      if (Math.abs(x - esc.kioskX) <= esc.kioskHalfX && Math.abs(z - esc.kioskZ) <= esc.kioskHalfZ) {
-        if (currentY === undefined || currentY <= 2.2) {
-          return 0.22;
-        }
-      }
-      const dx = esc.x2 - esc.x1;
-      const dz = esc.z2 - esc.z1;
-      const lenSq = dx * dx + dz * dz;
-      if (lenSq > 0.1) {
-        const rawT = ((x - esc.x1) * dx + (z - esc.z1) * dz) / lenSq;
-        if (rawT >= -0.03 && rawT <= 1.03) {
-          const t = Math.max(0, Math.min(1, rawT));
-          const px = esc.x1 + dx * t;
-          const pz = esc.z1 + dz * t;
-          if (Math.hypot(x - px, z - pz) <= esc.halfWidth) {
-            const rampElev = esc.y1 + (esc.y2 - esc.y1) * t;
-            if (currentY === undefined || (Math.abs(currentY - rampElev) <= 2.6 && currentY <= esc.y2 + 1.5) || rampElev <= 1.2) {
-              return rampElev;
-            }
-          }
-        }
-      }
-    }
-
-    // 1. Dhaka Elevated Expressway On/Off Ramps (Farmgate)
-    // Farmgate Southbound On-Ramp (Z: -160 to -40, X: 13.5 to 22.5)
-    if (z >= -160 && z <= -40 && x >= 13.2 && x <= 22.8) {
-      const t = (z - (-160)) / 120;
-      const rampElev = expDeckElev * Math.max(0, Math.min(1, t));
-      if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-        return 0; // Ground traffic passing underneath approach
-      }
-      if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-        return rampElev;
-      }
-    }
-    // Farmgate Northbound Exit Off-Ramp (Z: 40 to 160, X: 13.5 to 22.5)
-    if (z >= 40 && z <= 160 && x >= 13.2 && x <= 22.8) {
-      const t = 1 - (z - 40) / 120;
-      const rampElev = expDeckElev * Math.max(0, Math.min(1, t));
-      if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-        return 0; // Ground traffic passing underneath approach
-      }
-      if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-        return rampElev;
-      }
-    }
-
-    // 2. Mohakhali Elevated Flyover (Z = -175, road width = 13.6m, Y = 9.6m)
-    if (Math.abs(z - (-175)) <= 6.8) {
-      // West Approach Ramp (-340m to -240m)
-      if (x >= -340 && x < -240) {
-        const t = (x - (-340)) / 100;
-        const rampElev = 9.6 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0; // Ground traffic passing underneath west approach
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      // East Approach Ramp (240m to 340m)
-      if (x > 240 && x <= 340) {
-        const t = 1 - (x - 240) / 100;
-        const rampElev = 9.6 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0; // Ground traffic passing underneath east approach
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      // Main Elevated Flyover Deck (-240m to +240m) at Y = 9.6m
-      if (x >= -240 && x <= 240) {
-        if (currentY !== undefined && (currentY < 4.5 || currentY > 13.0)) {
-          // Pass-through: ground street passing freely under flyover (clearance > 8.0m)
-          return 0;
-        }
-        return 9.6;
-      }
-    }
-
-    // 3. Dhaka Elevated Expressway Main Deck (when not caught above)
-    if (Math.abs(x - 14) <= 7.1 && z >= -340 && z <= 240) {
-      if (currentY !== undefined && currentY < 11.5) {
-        if (Math.abs(z - (-175)) <= 6.8) return 9.6; // Mohakhali Flyover underneath
-        if (Math.abs(z - 240) <= 7.1) return 11.2;   // Hanif Flyover underneath
-        return 0; // Ground street passing under Expressway
-      }
-      return expDeckElev;
-    }
-
-    // 4. Mayor Mohammad Hanif Flyover (Z = 240, width 14.2m, Y = 11.2m)
-    if (Math.abs(z - 240) <= 7.1) {
-      // West Approach Ramp (X: -560 to -440, clear of Mirpur-10 Avenue at X = -380)
-      if (x >= -560 && x < -440) {
-        const t = (x - (-560)) / 120;
-        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0; // Ground street passing under approach ramp
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      // East Approach Ramp (X: 440 to 560, clear of Badda Avenue at X = 440)
-      if (x > 440 && x <= 560) {
-        const t = 1 - (x - 440) / 120;
-        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0; // Ground street passing under approach ramp
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      // Main Elevated Span Deck (X: -440 to +440) at Y = 11.2m
-      if (x >= -440 && x <= 440) {
-        if (currentY !== undefined && (currentY < 5.5 || currentY > 13.5)) {
-          // Ground street passing under with generous > 9.5m clearance
-          return 0;
-        }
-        return 11.2;
-      }
-    }
-
-    // 5. Kuril Interchange Flyover (Z = -315, width 14.2m, Y = 11.2m)
-    if (Math.abs(z - (-315)) <= 7.1) {
-      // West Approach On-Ramp (X: 280 to 360)
-      if (x >= 280 && x < 360) {
-        const t = (x - 280) / 80;
-        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0;
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      // East Off-Ramp (X: 720 to 800)
-      if (x > 720 && x <= 800) {
-        const t = 1 - (x - 720) / 80;
-        const rampElev = 11.2 * Math.max(0, Math.min(1, t));
-        if (currentY !== undefined && currentY < 2.0 && rampElev > 2.5) {
-          return 0;
-        }
-        if (currentY === undefined || Math.abs(currentY - rampElev) <= 2.8 || rampElev <= 0.6) {
-          return rampElev;
-        }
-      }
-      if (x >= 360 && x <= 720) {
-        if (currentY !== undefined && currentY < 5.5) {
-          // Over Balu River Suspension Bridge (X: 525..655), let Section 9 return bridge elevation (Y = 0.80m + ramps)
-          if (x < 525 || x > 655) {
-            return 0; // Entity is on 300ft ground expressway under Kuril interchange
-          }
-        } else {
-          return 11.2;
-        }
-      }
-    }
-
-    // 6. Buriganga River Bridges with Continuous Smooth Approach Ramps (Z: 265 to 480)
-    if (z >= 265 && z <= 480) {
-      // Central First Buriganga Bridge (China-Bangladesh Friendship Bridge at X = 0)
-      if (Math.abs(x - 0) <= 12.5) {
-        if (z < 285 || z > 460) return 0.08;
-        const t = (z - 285) / 175;
-        const archElev = 0.08 + 2.75 * Math.sin(t * Math.PI);
-        return archElev;
-      }
-
-      // Check all North-South arterial bridge crossings spanning Buriganga
-      const bRoad = DhakaCityEngine.NS_ROADS.find(
-        (r) => r.zMax >= 450 && r.zMin <= 300 && Math.abs(x - r.x) <= r.width / 2 + 2.0
-      );
-      if (bRoad) {
-        // 6.1 North Approach Ramp (Z: 265 to 285, smoothly ascending 0.08 -> 1.0)
-        if (z >= 265 && z < 285) {
-          const t = (z - 265) / 20;
-          return 0.08 + t * 0.92;
-        }
-        // 6.2 Level River Span Deck (Z: 285 to 460 at Y = 1.0)
-        if (z >= 285 && z <= 460) {
-          return 1.0;
-        }
-        // 6.3 South Approach Ramp (Z: 460 to 480, smoothly descending 1.0 -> 0.08)
-        if (z > 460 && z <= 480) {
-          const t = (480 - z) / 20;
-          return 0.08 + t * 0.92;
-        }
-      }
-    }
-
-    // 7. Buriganga River Promenade & Sadarghat Embankment (Z: 288 to 303.5, natural curb Y = 0.16m)
-    // Only on pedestrian promenade segments, NOT across ANY active road bridge corridor!
-    if (z >= 288 && z <= 303.5 && Math.abs(x) <= 950) {
-      const onBridgeRoad = DhakaCityEngine.NS_ROADS.some(
-        (r) => r.zMax >= 310 && r.zMin <= 290 && Math.abs(x - r.x) <= r.width / 2 + 2.5
-      );
-      if (onBridgeRoad) {
-        // Return smooth bridge elevation for the road corridor rather than abrupt step
-        if (Math.abs(x) <= 12.5) {
-          const t = (z - 285) / 175;
-          return 0.08 + 2.75 * Math.sin(t * Math.PI);
-        }
-        return 1.0;
-      }
-      return 0.16; // Pedestrian embankment promenade at natural curb elevation
-    }
-
-    // 8. Hatirjheel Tied-Arch Bridge Deck (X: 210..230, Z: -52.5..42.5 at Y = 0.50m) with smooth 5m approach ramps
-    if (x >= 210 && x <= 230 && z >= -57.5 && z <= 47.5) {
-      if (z < -52.5) {
-        const t = (z - (-57.5)) / 5;
-        return 0.08 + t * 0.42;
-      }
-      if (z > 42.5) {
-        const t = (47.5 - z) / 5;
-        return 0.08 + t * 0.42;
-      }
-      return 0.50;
-    }
-
-    // 9. Balu River 8-Lane Suspension Bridge Deck at Purbachal (X: 535..645, Z: -326..-304 at Y = 0.80m) with smooth 10m ramps
-    if (Math.abs(z - (-315)) <= 11.0 && x >= 525 && x <= 655 && (currentY === undefined || currentY < 5.5)) {
-      if (x < 535) {
-        const t = (x - 525) / 10;
-        return 0.08 + t * 0.72;
-      }
-      if (x > 645) {
-        const t = (655 - x) / 10;
-        return 0.08 + t * 0.72;
-      }
-      return 0.80;
-    }
-
-    // 10. Elevated Monument & Exhibition Plazas (Shaheed Minar red altar, BBCFEC entrance plaza)
-    if (x >= -45.5 && x <= -30.5 && z >= 53 && z <= 63) {
-      return 0.80;
-    }
-    if (x >= 770 && x <= 830 && z >= -243 && z <= -213) {
-      return 0.16;
-    }
-
-    return 0;
+    return evaluateRoadElevation(x, z, currentY, {
+      jfpCenter: this.jfpCenter,
+      metroStationInteriors: this.metroStationInteriors,
+      metroEscalators: this.metroEscalators,
+      nsRoads: DhakaCityEngine.NS_ROADS,
+    });
   }
 
   private checkBuildingCollision(

@@ -47,6 +47,7 @@ interface GameState {
 
   // Player & Vehicle telemetry
   playerX: number;
+  playerY: number;
   playerZ: number;
   playerRotation: number;
   health: number;
@@ -126,7 +127,7 @@ interface GameState {
   repairVehicleRequest: boolean;
   resprayVehicleRequest: string | null;
   upgradeVehicleRequest: boolean;
-  teleportRequest: { x: number; z: number } | null;
+  teleportRequest: { x: number; y?: number; z: number } | null;
   metroRideRequest: { fromId: string; toId: string } | null;
   metroDisembarkRequest: boolean;
   activeMetroRide: {
@@ -199,6 +200,7 @@ interface GameState {
 
   updateTelemetry: (data: {
     x: number;
+    y?: number;
     z: number;
     rotation: number;
     district: DistrictId;
@@ -277,6 +279,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   cameraMode: 'third_person',
 
   playerX: 6,
+  playerY: 0,
   playerZ: 16,
   playerRotation: Math.PI,
   health: 100,
@@ -459,11 +462,28 @@ export const useGameStore = create<GameState>((set, get) => ({
           storyHonor: data.storyHonor ?? 0,
           storyEndingEn: data.storyEndingEn ?? null,
           storyEndingBn: data.storyEndingBn ?? null,
+          timeOfDay: typeof data.timeOfDay === 'number' ? data.timeOfDay : 15.5,
+          weather: data.weather ?? 'clear',
+          customWaypoint: data.customWaypoint ?? null,
+          radioStation: data.radioStation ?? 'off',
+          cameraMode: data.cameraMode ?? 'third_person',
+          graphicsQuality: data.graphicsQuality ?? 'high',
+          musicVolume: typeof data.musicVolume === 'number' ? data.musicVolume : 0.45,
+          sfxVolume: typeof data.sfxVolume === 'number' ? data.sfxVolume : 0.7,
+          ambienceVolume: typeof data.ambienceVolume === 'number' ? data.ambienceVolume : 0.4,
+          playerY: typeof data.playerY === 'number' ? data.playerY : 0,
           teleportRequest: {
             x: data.playerX ?? 10,
+            y: typeof data.playerY === 'number' ? data.playerY : 0,
             z: data.playerZ ?? 18,
           },
         });
+        dhakaAudio.setVolumes(
+          typeof data.musicVolume === 'number' ? data.musicVolume : 0.45,
+          typeof data.sfxVolume === 'number' ? data.sfxVolume : 0.7,
+          typeof data.ambienceVolume === 'number' ? data.ambienceVolume : 0.4
+        );
+        dhakaAudio.setRainActive((data.weather ?? 'clear') === 'monsoon_rain');
         get().showBanner({
           titleEn: 'SAVED GAME LOADED',
           titleBn: 'সেভ করা গেম লোড হয়েছে',
@@ -513,6 +533,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   updateTelemetry: (data) => {
     set((s) => ({
       playerX: data.x,
+      playerY: data.y ?? s.playerY,
       playerZ: data.z,
       playerRotation: data.rotation,
       currentDistrict: data.district,
@@ -1206,6 +1227,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       health: s.health,
       armor: s.armor,
       playerX: s.playerX,
+      playerY: s.playerY,
       playerZ: s.playerZ,
       completedMissionIds: s.completedMissionIds,
       activeMissionId: s.activeMissionId,
@@ -1219,6 +1241,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       storyHonor: s.storyHonor,
       storyEndingEn: s.storyEndingEn,
       storyEndingBn: s.storyEndingBn,
+      timeOfDay: s.timeOfDay,
+      weather: s.weather,
+      customWaypoint: s.customWaypoint,
+      radioStation: s.radioStation,
+      cameraMode: s.cameraMode,
+      graphicsQuality: s.graphicsQuality,
+      musicVolume: s.musicVolume,
+      sfxVolume: s.sfxVolume,
+      ambienceVolume: s.ambienceVolume,
       savedAt: new Date().toISOString(),
     };
     try {
