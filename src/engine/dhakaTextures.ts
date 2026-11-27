@@ -29,37 +29,78 @@ export function loadRealTexture(
 }
 
 export function createBanglaSignTexture(index: number): THREE.CanvasTexture {
-  const key = `sign_${index}`;
+  const key = `sign_hd_${index}`;
   if (canvasCache.has(key)) return canvasCache.get(key)!;
 
   const sign = BANGLA_SHOP_SIGNS[index % BANGLA_SHOP_SIGNS.length];
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 160;
+  canvas.width = 1024;
+  canvas.height = 320;
   const ctx = canvas.getContext('2d')!;
 
-  const grad = ctx.createLinearGradient(0, 0, 512, 160);
+  // Rich Backlit Acrylic Lightbox Backdrop
+  const grad = ctx.createLinearGradient(0, 0, 1024, 320);
   grad.addColorStop(0, sign.bg);
-  grad.addColorStop(1, '#0f172a');
+  grad.addColorStop(0.55, sign.bg);
+  grad.addColorStop(1, '#020617');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 160);
+  ctx.fillRect(0, 0, 1024, 320);
 
+  // Subtle decorative left brand color pillar + diagonal shopfront sheen
+  ctx.fillStyle = sign.fg;
+  ctx.fillRect(22, 22, 18, 276);
+
+  const sheen = ctx.createLinearGradient(0, 0, 1024, 0);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.16)');
+  sheen.addColorStop(0.45, 'rgba(255,255,255,0.03)');
+  sheen.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  // Crisp aluminum inner trim & corner fastener dots
   ctx.strokeStyle = sign.fg;
   ctx.lineWidth = 8;
-  ctx.strokeRect(8, 8, 496, 144);
+  ctx.strokeRect(14, 14, 996, 292);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(26, 26, 972, 268);
 
+  // Top-right badge pill
   ctx.fillStyle = sign.fg;
-  ctx.font = 'bold 40px "Noto Sans Bengali", "Inter", sans-serif';
+  ctx.beginPath();
+  ctx.roundRect(808, 34, 174, 36, 18);
+  ctx.fill();
+  ctx.fillStyle = '#090d16';
+  ctx.font = '800 18px "Inter", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(sign.titleBn, 256, 62);
+  ctx.fillText('DHAKA • VERIFIED', 895, 52);
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 22px "Inter", sans-serif';
-  ctx.fillText(sign.subEn, 256, 118);
+  // Drop-shadowed Bangla Shopfront Header
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.65)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = sign.fg;
+  ctx.font = 'bold 68px "Noto Sans Bengali", "Hind Siliguri", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(sign.titleBn, 520, 128);
+  ctx.restore();
+
+  // Horizontal accent rule + English brand subtitle
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(160, 194, 704, 2);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 34px "Inter", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(sign.subEn.toUpperCase(), 520, 240);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
   canvasCache.set(key, tex);
   return tex;
@@ -70,36 +111,64 @@ export function createHighwaySignTexture(
   titleEn: string,
   subText: string
 ): THREE.CanvasTexture {
-  const key = `hwy_${titleEn}_${subText}`;
+  const key = `hwy_hd_${titleEn}_${subText}`;
   if (canvasCache.has(key)) return canvasCache.get(key)!;
 
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 192;
+  canvas.width = 1024;
+  canvas.height = 360;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#004d34';
-  ctx.fillRect(0, 0, 512, 192);
+  const grad = ctx.createLinearGradient(0, 0, 0, 360);
+  grad.addColorStop(0, '#065f46');
+  grad.addColorStop(0.55, '#064e3b');
+  grad.addColorStop(1, '#022c22');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 360);
 
+  // Reflective double white highway sign border
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 8;
-  ctx.strokeRect(10, 10, 492, 172);
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.roundRect(14, 14, 996, 332, 20);
+  ctx.stroke();
 
-  ctx.fillStyle = '#fde047';
-  ctx.font = 'bold 42px "Noto Sans Bengali", sans-serif';
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(28, 28, 968, 304, 14);
+  ctx.stroke();
+
+  // Route Badge on Left
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.roundRect(48, 46, 92, 46, 10);
+  ctx.fill();
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '900 24px "Inter", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(titleBn, 256, 68);
+  ctx.textBaseline = 'middle';
+  ctx.fillText('N1 • RHD', 94, 69);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fde047';
+  ctx.font = 'bold 54px "Noto Sans Bengali", "Hind Siliguri", sans-serif';
+  ctx.fillText(titleBn, 540, 118);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 28px "Inter", sans-serif';
-  ctx.fillText(titleEn, 256, 116);
+  ctx.font = '800 36px "Inter", sans-serif';
+  ctx.fillText(titleEn, 512, 208);
 
-  ctx.fillStyle = '#a7f3d0';
-  ctx.font = 'bold 20px "Inter", sans-serif';
-  ctx.fillText(subText, 256, 154);
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fillRect(100, 250, 824, 3);
+
+  ctx.fillStyle = '#6ee7b7';
+  ctx.font = 'bold 28px "Inter", sans-serif';
+  ctx.fillText(subText, 512, 296);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
   canvasCache.set(key, tex);
   return tex;
@@ -688,7 +757,7 @@ export function createBrtcSideDecalTexture(seed = 1): THREE.CanvasTexture {
 }
 
 /**
- * Luminous Dhaka & Cyberpunk Neon Signs with Multi-layer Bloom & Glow Halo
+ * Luminous Dhaka & Cyberpunk Neon Signs with Multi-layer Bloom & Glow Halo (1024x512 HD)
  */
 export function createNeonSignTexture(
   textBn: string,
@@ -696,61 +765,98 @@ export function createNeonSignTexture(
   neonColor = '#06b6d4',
   bgHex = '#090d16'
 ): THREE.CanvasTexture {
-  const key = `neon_${textBn}_${textEn}_${neonColor}`;
+  const key = `neon_hd_${textBn}_${textEn}_${neonColor}`;
   if (canvasCache.has(key)) return canvasCache.get(key)!;
 
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  // Deep dark metal sign backing
+  // Deep dark anodized louver cabinet backing
   ctx.fillStyle = bgHex;
-  ctx.fillRect(0, 0, 512, 256);
+  ctx.fillRect(0, 0, 1024, 512);
 
-  // Subtle acrylic gloss sheen
-  const gloss = ctx.createLinearGradient(0, 0, 512, 256);
-  gloss.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
-  gloss.addColorStop(0.5, 'rgba(255, 255, 255, 0.02)');
-  gloss.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
-  ctx.fillStyle = gloss;
-  ctx.fillRect(0, 0, 512, 256);
+  // Subtle horizontal brushed-metal / louver slats on cabinet background
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
+  for (let y = 0; y < 512; y += 14) {
+    ctx.fillRect(0, y, 1024, 3);
+  }
 
-  // Outer Neon Tube Border Frame with Glow
+  // Soft ambient wall wash from the neon tubes behind text
+  const wallGlow = ctx.createRadialGradient(512, 240, 30, 512, 240, 480);
+  wallGlow.addColorStop(0, `${neonColor}44`);
+  wallGlow.addColorStop(0.55, `${neonColor}18`);
+  wallGlow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = wallGlow;
+  ctx.fillRect(0, 0, 1024, 512);
+
+  // Double rounded glass neon tube border frame with standoffs
   ctx.save();
   ctx.strokeStyle = neonColor;
   ctx.shadowColor = neonColor;
-  ctx.shadowBlur = 24;
-  ctx.lineWidth = 6;
-  ctx.strokeRect(16, 16, 480, 224);
+  ctx.shadowBlur = 42;
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  ctx.roundRect(26, 26, 972, 460, 34);
+  ctx.stroke();
 
-  // Second pass: bright core of the tube frame
   ctx.strokeStyle = '#ffffff';
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(16, 16, 480, 224);
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(26, 26, 972, 460, 34);
+  ctx.stroke();
+
+  // Corner insulated tube standoff mounts
+  [
+    [54, 54],
+    [970, 54],
+    [54, 458],
+    [970, 458],
+  ].forEach(([cx, cy]) => {
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
   ctx.restore();
 
-  // Multi-pass glowing Bangla typography
+  // Multi-pass glowing Bangla neon tube typography
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 44px "Hind Siliguri", "Noto Sans Bengali", sans-serif';
+  ctx.font = 'bold 78px "Hind Siliguri", "Noto Sans Bengali", sans-serif';
 
-  // Glow layer 1: wide soft bloom
   ctx.shadowColor = neonColor;
-  ctx.shadowBlur = 28;
+  ctx.shadowBlur = 48;
   ctx.fillStyle = neonColor;
-  ctx.fillText(textBn, 256, 105);
+  ctx.fillText(textBn, 512, 198);
 
-  // Glow layer 2: medium intense aura
-  ctx.shadowBlur = 14;
-  ctx.fillText(textBn, 256, 105);
+  ctx.shadowBlur = 20;
+  ctx.fillText(textBn, 512, 198);
 
-  // Core layer: pure brilliant white neon tube center
-  ctx.shadowBlur = 4;
+  ctx.shadowBlur = 6;
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(textBn, 256, 105);
+  ctx.fillText(textBn, 512, 198);
+  ctx.restore();
+
+  // Glowing horizontal neon divider tube
+  ctx.save();
+  ctx.strokeStyle = neonColor;
+  ctx.shadowColor = neonColor;
+  ctx.shadowBlur = 20;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(150, 286);
+  ctx.lineTo(874, 286);
+  ctx.stroke();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
   ctx.restore();
 
   // Multi-pass glowing English subtitle
@@ -758,21 +864,22 @@ export function createNeonSignTexture(
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 24px "Inter", sans-serif';
+    ctx.font = '900 44px "Inter", sans-serif';
 
     ctx.shadowColor = neonColor;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 30;
     ctx.fillStyle = neonColor;
-    ctx.fillText(textEn.toUpperCase(), 256, 175);
+    ctx.fillText(textEn.toUpperCase(), 512, 366);
 
-    ctx.shadowBlur = 3;
+    ctx.shadowBlur = 5;
     ctx.fillStyle = '#f8fafc';
-    ctx.fillText(textEn.toUpperCase(), 256, 175);
+    ctx.fillText(textEn.toUpperCase(), 512, 366);
     ctx.restore();
   }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   canvasCache.set(key, tex);
   return tex;
 }

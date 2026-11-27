@@ -1123,38 +1123,74 @@ export class DhakaCityEngine {
   }
 
   private buildSketchfabGtaLandmarks() {
-    // 1. Giant Illuminated Dhaka Bangla Commercial Billboards (Replacing generic GTA thumbnails)
+    // 1. Giant Illuminated Dhaka Unipole Steel Billboards (Framed Cabinet + Catwalk + Overhead Floodlights)
     const billboardLocations = [
       { x: 24, z: -22, signIdx: 0, rot: -0.4 },
       { x: -25, z: 24, signIdx: 3, rot: 0.5 },
       { x: 202, z: -158, signIdx: 5, rot: -0.3 },
       { x: 202, z: 158, signIdx: 7, rot: 0.3 },
     ];
+    const unipoleSteelMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.78, roughness: 0.32 });
+    const unipolePlinthMat = new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.85 });
+    const floodBulbMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
 
     billboardLocations.forEach((b) => {
       this.circleColliders.push({
         x: b.x,
         z: b.z,
-        radius: 0.6,
+        radius: 0.65,
         tag: 'billboard_pole',
       });
       const poleGroup = new THREE.Group();
       poleGroup.position.set(b.x, 0, b.z);
       poleGroup.rotation.y = b.rot;
 
-      const pole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.36, 9.2, 12),
-        new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.75 })
-      );
+      // Concrete pedestal + steel flange + tapered tubular mast
+      const plinth = new THREE.Mesh(this.cylCache(0.62, 0.72, 0.9, 10), unipolePlinthMat);
+      plinth.position.y = 0.45;
+      const pole = new THREE.Mesh(this.cylCache(0.30, 0.40, 9.2, 12), unipoleSteelMat);
       pole.position.y = 4.6;
-      poleGroup.add(pole);
+      pole.castShadow = true;
+      poleGroup.add(plinth, pole);
 
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(9.6, 4.4, 0.42),
-        new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(b.signIdx) })
-      );
-      board.position.y = 9.4;
-      poleGroup.add(board);
+      // Diagonal V-brace yoke + Maintenance Catwalk Platform
+      [-2.2, 2.2].forEach((vx) => {
+        const vArm = new THREE.Mesh(this.boxCache(0.24, 2.4, 0.24), unipoleSteelMat);
+        vArm.position.set(vx * 0.5, 7.6, 0);
+        vArm.rotation.z = vx > 0 ? -0.55 : 0.55;
+        poleGroup.add(vArm);
+      });
+      const catwalk = new THREE.Mesh(this.boxCache(10.2, 0.14, 1.35), unipoleSteelMat);
+      catwalk.position.set(0, 7.05, 0);
+      poleGroup.add(catwalk);
+
+      // Dark anodized steel outer signboard cabinet
+      const cabinet = new THREE.Mesh(this.boxCache(10.0, 4.7, 0.44), unipoleSteelMat);
+      cabinet.position.y = 9.5;
+      cabinet.castShadow = true;
+      poleGroup.add(cabinet);
+
+      const boardMat = new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(b.signIdx) });
+      const frontFace = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 4.35), boardMat);
+      frontFace.position.set(0, 9.5, 0.23);
+      const backFace = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 4.35), boardMat);
+      backFace.position.set(0, 9.5, -0.23);
+      backFace.rotation.y = Math.PI;
+      poleGroup.add(frontFace, backFace);
+
+      // 3 Gooseneck LED Floodlight Hoods along top edge (both sides)
+      [-3.2, 0, 3.2].forEach((lx) => {
+        [1, -1].forEach((side) => {
+          const arm = new THREE.Mesh(this.boxCache(0.08, 0.08, 1.25), unipoleSteelMat);
+          arm.position.set(lx, 12.05, side * 0.65);
+          const hood = new THREE.Mesh(this.boxCache(0.42, 0.14, 0.28), unipoleSteelMat);
+          hood.position.set(lx, 11.98, side * 1.25);
+          hood.rotation.x = side * 0.45;
+          const bulb = new THREE.Mesh(this.boxCache(0.32, 0.05, 0.18), floodBulbMat);
+          bulb.position.set(lx, 11.92, side * 1.25);
+          poleGroup.add(arm, hood, bulb);
+        });
+      });
 
       this.scene.add(poleGroup);
     });
@@ -3290,55 +3326,71 @@ export class DhakaCityEngine {
 
     const poleMat = new THREE.MeshStandardMaterial({
       color: '#475569',
-      metalness: 0.6,
+      metalness: 0.68,
+      roughness: 0.35,
     });
-    const canopyMat = new THREE.MeshStandardMaterial({
-      color: '#15803d',
-      roughness: 0.4,
+    const cabinetMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      metalness: 0.75,
+      roughness: 0.32,
     });
+    const gantryPlinthMat = new THREE.MeshStandardMaterial({
+      color: '#cbd5e1',
+      roughness: 0.85,
+    });
+    const gantryFloodMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
 
-    signs.forEach((s, idx) => {
+    signs.forEach((s) => {
       const g = new THREE.Group();
       g.position.set(s.x, 0, s.z);
 
-      const leftPole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.22, 7.5, 8),
-        poleMat
-      );
-      leftPole.position.set(-7.8, 3.75, 0);
-      g.add(leftPole);
+      // Twin Portal Columns outside traffic lanes with concrete foundation pedestals
+      [-8.4, 8.4].forEach((px) => {
+        const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.52, 0.8, 10), gantryPlinthMat);
+        plinth.position.set(px, 0.4, 0);
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 8.2, 10), poleMat);
+        col.position.set(px, 4.1, 0);
+        col.castShadow = true;
+        g.add(plinth, col);
+      });
 
-      const rightPole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.22, 7.5, 8),
-        poleMat
-      );
-      rightPole.position.set(7.8, 3.75, 0);
-      g.add(rightPole);
-
-      // Iconic Dhaka Pedestrian Foot-Overbridge Deck & Green Canopy Roof at Farmgate & Karwan Bazar
-      if (idx < 2) {
-        const walkway = new THREE.Mesh(
-          new THREE.BoxGeometry(16.2, 0.35, 2.4),
-          poleMat
-        );
-        walkway.position.set(0, 5.2, 0);
-        g.add(walkway);
-
-        const roof = new THREE.Mesh(
-          new THREE.BoxGeometry(16.4, 0.18, 2.8),
-          canopyMat
-        );
-        roof.position.set(0, 7.6, 0);
-        g.add(roof);
+      // Open Steel Lattice Overhead Truss Crossbeam (top & bottom chords + vertical struts)
+      const trussBottom = new THREE.Mesh(new THREE.BoxGeometry(17.4, 0.22, 0.42), poleMat);
+      trussBottom.position.set(0, 5.4, 0);
+      const trussTop = new THREE.Mesh(new THREE.BoxGeometry(17.4, 0.22, 0.42), poleMat);
+      trussTop.position.set(0, 7.85, 0);
+      g.add(trussBottom, trussTop);
+      for (let bx = -7.2; bx <= 7.2; bx += 2.4) {
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.4, 0.32), poleMat);
+        strut.position.set(bx, 6.62, 0);
+        g.add(strut);
       }
 
+      // Framed Aluminum Signboard Cabinet + Double-Sided High-Res RHD Highway Panels
+      const cabinet = new THREE.Mesh(new THREE.BoxGeometry(14.8, 3.35, 0.34), cabinetMat);
+      cabinet.position.set(0, 6.65, 0);
+      cabinet.castShadow = true;
+      g.add(cabinet);
+
       const tex = createHighwaySignTexture(s.titleBn, s.titleEn, s.sub);
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(14.5, 3.0, 0.28),
-        new THREE.MeshBasicMaterial({ map: tex })
-      );
-      board.position.set(0, 6.6, 0);
-      g.add(board);
+      const signFaceMat = new THREE.MeshBasicMaterial({ map: tex });
+      const frontBoard = new THREE.Mesh(new THREE.PlaneGeometry(14.4, 3.05), signFaceMat);
+      frontBoard.position.set(0, 6.65, 0.18);
+      const backBoard = new THREE.Mesh(new THREE.PlaneGeometry(14.4, 3.05), signFaceMat);
+      backBoard.position.set(0, 6.65, -0.18);
+      backBoard.rotation.y = Math.PI;
+      g.add(frontBoard, backBoard);
+
+      // Overhead Gooseneck LED Floodlights lighting the gantry signboard
+      [-4.8, -1.6, 1.6, 4.8].forEach((lx) => {
+        [1, -1].forEach((dir) => {
+          const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.95), poleMat);
+          arm.position.set(lx, 8.42, dir * 0.48);
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.2), gantryFloodMat);
+          lamp.position.set(lx, 8.34, dir * 0.92);
+          g.add(arm, lamp);
+        });
+      });
 
       this.scene.add(g);
     });
@@ -4090,14 +4142,24 @@ export class DhakaCityEngine {
         }
       }
 
-      // Stacked Multi-Floor Bangla Commercial Signboards (Ground, 2nd & 3rd Floor)
+      // Stacked Multi-Floor Bangla Commercial Signboards in Dark Anodized Lightbox Frames
       if (b.signIndex !== undefined) {
         const signW = Math.min(b.w * 0.86, 12.5);
+        const bezelKey = 'sign_bezel_frame';
+        let bezelMat = this.matCache.get(bezelKey) as THREE.MeshStandardMaterial | undefined;
+        if (!bezelMat) {
+          bezelMat = new THREE.MeshStandardMaterial({
+            color: '#0f172a',
+            metalness: 0.72,
+            roughness: 0.34,
+          });
+          this.matCache.set(bezelKey, bezelMat);
+        }
+
         [0, 1, 2].forEach((tier) => {
           if (tier === 2 && b.h < 18) return;
           const signTexIdx = (b.signIndex! + tier * 3) % 8;
-          // One material per sign artwork, reused by every board showing it.
-          const signKey = `sign|${signTexIdx}`;
+          const signKey = `sign_face|${signTexIdx}`;
           let signMat = this.matCache.get(signKey) as THREE.MeshBasicMaterial | undefined;
           if (!signMat) {
             signMat = new THREE.MeshBasicMaterial({
@@ -4107,47 +4169,36 @@ export class DhakaCityEngine {
           }
           const signY = 4.0 + tier * 3.4;
 
-          // Front-facing Bangla Signboard
+          // Front-facing Lightbox Frame + Inset Graphic Face
           this.scene.add(
-            this.sharedBox(
-              signW,
-              2.2,
-              0.32,
-              signMat,
-              b.x,
-              signY,
-              b.z + b.d / 2 + 0.22
-            )
+            this.sharedBox(signW + 0.36, 2.38, 0.28, bezelMat!, b.x, signY, b.z + b.d / 2 + 0.16)
           );
+          const fFace = new THREE.Mesh(new THREE.PlaneGeometry(signW, 2.1), signMat);
+          fFace.position.set(b.x, signY, b.z + b.d / 2 + 0.31);
+          this.scene.add(fFace);
 
-          // Back-facing Bangla Signboard
+          // Back-facing Lightbox Frame + Inset Graphic Face
           this.scene.add(
-            this.sharedBox(
-              signW,
-              2.2,
-              0.32,
-              signMat,
-              b.x,
-              signY,
-              b.z - b.d / 2 - 0.22
-            )
+            this.sharedBox(signW + 0.36, 2.38, 0.28, bezelMat!, b.x, signY, b.z - b.d / 2 - 0.16)
           );
+          const bFace = new THREE.Mesh(new THREE.PlaneGeometry(signW, 2.1), signMat);
+          bFace.position.set(b.x, signY, b.z - b.d / 2 - 0.31);
+          bFace.rotation.y = Math.PI;
+          this.scene.add(bFace);
 
-          // Street-facing Side Bangla Signboard
-          const sideSign = new THREE.Mesh(
-            this.boxCache(0.32, 2.2, Math.min(b.d * 0.82, 11.5)),
-            signMat
-          );
-          sideSign.position.set(
-            b.x + (b.x > 0 ? -b.w / 2 - 0.22 : b.w / 2 + 0.22),
-            signY,
-            b.z
-          );
-          this.scene.add(sideSign);
+          // Street-facing Side Lightbox Frame + Inset Graphic Face
+          const sideW = Math.min(b.d * 0.82, 11.5);
+          const sideX = b.x + (b.x > 0 ? -b.w / 2 - 0.16 : b.w / 2 + 0.16);
+          const faceOffset = b.x > 0 ? -0.15 : 0.15;
+          this.scene.add(this.sharedBox(0.28, 2.38, sideW + 0.36, bezelMat!, sideX, signY, b.z));
+          const sFace = new THREE.Mesh(new THREE.PlaneGeometry(sideW, 2.1), signMat);
+          sFace.position.set(sideX + faceOffset, signY, b.z);
+          sFace.rotation.y = b.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+          this.scene.add(sFace);
         });
       }
 
-      // 3D Illuminated Neon Blade Signs projecting from commercial & glass buildings
+      // 3D Illuminated Double-Sided Neon Blade Signs with Wall Brackets & Glowing Tube Rim
       if ((b.style === 'commercial' || b.style === 'modern_glass') && b.h >= 16) {
         const neonPresets = [
           { bn: 'ফার্মগেট ফার্মেসী ২৪/৭', en: 'FARMGATE PHARMACY', col: '#06b6d4', bg: '#030712' },
@@ -4159,19 +4210,52 @@ export class DhakaCityEngine {
           { bn: 'মোবাইল ও গ্যাজেট পয়েন্ট', en: 'SMARTPHONE TECH LAB', col: '#38bdf8', bg: '#021526' },
         ];
         const np = neonPresets[Math.abs(Math.round(b.x * 3 + b.z * 7)) % neonPresets.length];
-        const neonTex = createNeonSignTexture(np.bn, np.en, np.col, np.bg);
-        const neonMat = new THREE.MeshBasicMaterial({ map: neonTex, side: THREE.DoubleSide });
-        const signMesh = new THREE.Mesh(this.boxCache(0.12, 2.4, 2.0), neonMat);
-        const sx = b.x + (b.x >= 0 ? -b.w / 2 - 1.05 : b.w / 2 + 1.05);
-        const sz = b.z + (b.z >= 0 ? b.d / 2 - 1.2 : -b.d / 2 + 1.2);
-        signMesh.position.set(sx, 5.8, sz);
-        this.scene.add(signMesh);
+        const neonKey = `neon_face|${np.bn}|${np.col}`;
+        let neonMat = this.matCache.get(neonKey) as THREE.MeshBasicMaterial | undefined;
+        if (!neonMat) {
+          const neonTex = createNeonSignTexture(np.bn, np.en, np.col, np.bg);
+          neonMat = new THREE.MeshBasicMaterial({ map: neonTex });
+          this.matCache.set(neonKey, neonMat);
+        }
+        const rimKey = `neon_rim|${np.col}`;
+        let rimMat = this.matCache.get(rimKey) as THREE.MeshBasicMaterial | undefined;
+        if (!rimMat) {
+          rimMat = new THREE.MeshBasicMaterial({ color: np.col });
+          this.matCache.set(rimKey, rimMat);
+        }
 
-        // Mounting steel bracket arm to facade
-        const bracketMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.8, roughness: 0.3 });
-        const bracketArm = new THREE.Mesh(this.boxCache(2.1, 0.08, 0.08), bracketMat);
-        bracketArm.position.set(b.x + (b.x >= 0 ? -b.w / 2 - 1.0 : b.w / 2 + 1.0), 6.8, sz);
-        this.scene.add(bracketArm);
+        const sideDir = b.x >= 0 ? -1 : 1;
+        const wallX = b.x + (sideDir * b.w) / 2;
+        const cabinetCenterX = wallX + sideDir * 1.45;
+        const sz = b.z + (b.z >= 0 ? b.d / 2 - 1.2 : -b.d / 2 + 1.2);
+        const neonCabMat = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.8, roughness: 0.28 });
+
+        // Projecting Steel Lightbox Cabinet (2.5m wide x 1.35m tall x 0.24m thick) + Dual Neon Faces
+        const cab = new THREE.Mesh(this.boxCache(2.5, 1.38, 0.24), neonCabMat);
+        cab.position.set(cabinetCenterX, 5.85, sz);
+        const faceN = new THREE.Mesh(new THREE.PlaneGeometry(2.38, 1.26), neonMat);
+        faceN.position.set(cabinetCenterX, 5.85, sz + 0.125);
+        const faceS = new THREE.Mesh(new THREE.PlaneGeometry(2.38, 1.26), neonMat);
+        faceS.position.set(cabinetCenterX, 5.85, sz - 0.125);
+        faceS.rotation.y = Math.PI;
+        this.scene.add(cab, faceN, faceS);
+
+        // Glowing 3D Neon Edge Tubes wrapping top/bottom/outer lip
+        this.scene.add(this.sharedBox(2.56, 0.06, 0.28, rimMat, cabinetCenterX, 6.56, sz));
+        this.scene.add(this.sharedBox(2.56, 0.06, 0.28, rimMat, cabinetCenterX, 5.14, sz));
+        this.scene.add(this.sharedBox(0.06, 1.44, 0.28, rimMat, cabinetCenterX + sideDir * 1.26, 5.85, sz));
+
+        // Dual Wall Mounting Steel Brackets + Diagonal Support Strut
+        const bracketMat = new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.82, roughness: 0.28 });
+        [5.35, 6.35].forEach((by) => {
+          const arm = new THREE.Mesh(this.boxCache(0.45, 0.1, 0.14), bracketMat);
+          arm.position.set(wallX + sideDir * 0.22, by, sz);
+          this.scene.add(arm);
+        });
+        const tieRod = new THREE.Mesh(this.cylCache(0.03, 0.03, 1.7, 6), bracketMat);
+        tieRod.position.set(wallX + sideDir * 0.85, 6.95, sz);
+        tieRod.rotation.z = sideDir * -0.92;
+        this.scene.add(tieRod);
       }
 
       this.buildingColliders.push({
@@ -4993,21 +5077,26 @@ export class DhakaCityEngine {
           sidewalkPlinth.receiveShadow = true;
           this.scene.add(sidewalkPlinth);
 
-          // Authentic Bangla Shopfront Signboards on street facade
+          // Authentic Bangla Shopfront Signboard in Lightbox Frame aligned to rotated tower facade
           const signIndex = Math.floor(rnd() * 8);
           const signTex = createBanglaSignTexture(signIndex);
           const signMat = new THREE.MeshBasicMaterial({ map: signTex });
-          const signMesh = this.sharedBox(
-            Math.min(width * 0.78, 12.5),
-            2.1,
-            0.28,
-            signMat,
-            bx,
+          const signW = Math.min(width * 0.78, 12.5);
+          const rotY = towerMesh.rotation.y;
+          const offDist = depth / 2 + 0.18;
+          const sx = bx + Math.sin(rotY) * offDist;
+          const sz = bz + Math.cos(rotY) * offDist;
+
+          const signFrame = this.sharedBox(signW + 0.34, 2.28, 0.26, mechCrownMat, sx, 4.2, sz);
+          signFrame.rotation.y = rotY;
+          const signFace = new THREE.Mesh(new THREE.PlaneGeometry(signW, 2.02), signMat);
+          signFace.position.set(
+            bx + Math.sin(rotY) * (offDist + 0.14),
             4.2,
-            bz + depth / 2 + 0.18
+            bz + Math.cos(rotY) * (offDist + 0.14)
           );
-          signMesh.rotation.y = towerMesh.rotation.y;
-          this.scene.add(signMesh);
+          signFace.rotation.y = rotY;
+          this.scene.add(signFrame, signFace);
         }
 
         // Rooftop Parapet Ledge (ছাদের রেলিং) so buildings don't have razor-blade raw tops
@@ -6136,24 +6225,45 @@ export class DhakaCityEngine {
   }
 
   /**
-   * Authentic Dhaka Covered Pedestrian Foot Over Bridges (ফুট ওভার ব্রিজ)
-   * Spanning multi-lane corridors with stairs, tubular lattice cages, corrugated roofs,
-   * and prominent Bangladeshi commercial advertising billboards (bKash, Grameenphone, Daraz, PRAN).
+   * Authentic Dhaka Covered Steel-Truss Pedestrian Foot Over Bridges (ফুট ওভার ব্রিজ)
+   * Complete with Warren steel lattice cages, arched ribbed roofs, warm LED walkway lighting,
+   * dual stepped concrete staircases with stainless handrails on both sidewalks,
+   * and steel-framed illuminated commercial advertising billboards with floodlight hoods.
    */
   private buildDhakaFootOverBridges() {
     const steelMat = new THREE.MeshStandardMaterial({
       color: '#0284c7',
-      metalness: 0.65,
-      roughness: 0.35,
+      metalness: 0.68,
+      roughness: 0.32,
+    });
+    const darkSteelMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      metalness: 0.72,
+      roughness: 0.36,
+    });
+    const chromeRailMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.88,
+      roughness: 0.16,
     });
     const roofMat = new THREE.MeshStandardMaterial({
       color: '#0369a1',
-      roughness: 0.45,
+      roughness: 0.42,
+      metalness: 0.25,
     });
     const stairConcreteMat = new THREE.MeshStandardMaterial({
       color: '#94a3b8',
-      roughness: 0.78,
+      roughness: 0.82,
     });
+    const plinthMat = new THREE.MeshStandardMaterial({
+      color: '#475569',
+      roughness: 0.88,
+    });
+    const tactileYellowMat = new THREE.MeshStandardMaterial({
+      color: '#facc15',
+      roughness: 0.45,
+    });
+    const ceilingGlowMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
 
     const createFob = (
       bridgeX: number,
@@ -6172,54 +6282,148 @@ export class DhakaCityEngine {
       fobGroup.position.set(bridgeX, 0, bridgeZ);
 
       const deckY = 6.2;
-      const walkwayW = 3.2;
+      const walkwayW = 3.4;
 
-      const floor = this.sharedBox(spanWidth, 0.35, walkwayW, stairConcreteMat, 0, deckY, 0);
-      fobGroup.add(floor);
+      // 1. Non-slip Concrete Walkway Deck + Central Yellow Tactile Strip & Curbs
+      const floor = this.sharedBox(spanWidth + 3.2, 0.4, walkwayW, stairConcreteMat, 0, deckY, 0);
+      floor.receiveShadow = true;
+      const tactileLine = this.sharedBox(spanWidth + 2.4, 0.04, 0.24, tactileYellowMat, 0, deckY + 0.21, 0);
+      fobGroup.add(floor, tactileLine);
 
+      // 2. Arched Steel Canopy Roof + Exposed Structural Rib Arches & Overhead LED Strip
       const roof = new THREE.Mesh(
-        new THREE.CylinderGeometry(walkwayW / 1.7, walkwayW / 1.7, spanWidth, 12, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
+        new THREE.CylinderGeometry(walkwayW / 1.65, walkwayW / 1.65, spanWidth + 3.4, 14, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
         roofMat
       );
-      roof.position.set(0, deckY + 2.65, 0);
+      roof.position.set(0, deckY + 2.75, 0);
+      roof.castShadow = true;
       fobGroup.add(roof);
 
+      const ledStrip = this.sharedBox(spanWidth - 1.0, 0.08, 0.35, ceilingGlowMat, 0, deckY + 2.65, 0);
+      fobGroup.add(ledStrip);
+
+      for (let rx = -spanWidth / 2; rx <= spanWidth / 2 + 0.1; rx += 2.6) {
+        const rib = new THREE.Mesh(
+          new THREE.TorusGeometry(walkwayW / 1.62, 0.065, 6, 14, Math.PI),
+          chromeRailMat
+        );
+        rib.rotation.y = Math.PI / 2;
+        rib.position.set(rx, deckY + 2.75, 0);
+        fobGroup.add(rib);
+      }
+
+      // 3. Full Steel Warren Lattice Trusses (Chords, Vertical Stanchions, Diagonal Braces & Safety Rails)
       [-walkwayW / 2, walkwayW / 2].forEach((trussZ) => {
-        for (let x = -spanWidth / 2 + 1.5; x <= spanWidth / 2 - 1.5; x += 2.8) {
-          const post = new THREE.Mesh(this.boxCache(0.12, 2.7, 0.12), steelMat);
-          post.position.set(x, deckY + 1.35, trussZ);
+        const bottomChord = this.sharedBox(spanWidth + 3.2, 0.16, 0.16, steelMat, 0, deckY + 0.22, trussZ);
+        const midRail = this.sharedBox(spanWidth + 3.2, 0.07, 0.07, chromeRailMat, 0, deckY + 1.08, trussZ);
+        const topChord = this.sharedBox(spanWidth + 3.2, 0.16, 0.16, steelMat, 0, deckY + 2.72, trussZ);
+        fobGroup.add(bottomChord, midRail, topChord);
+
+        const stepX = 2.6;
+        for (let x = -spanWidth / 2; x <= spanWidth / 2; x += stepX) {
+          const post = new THREE.Mesh(this.boxCache(0.14, 2.65, 0.14), steelMat);
+          post.position.set(x, deckY + 1.46, trussZ);
           fobGroup.add(post);
+
+          if (x + stepX <= spanWidth / 2 + 0.05) {
+            const diagLen = Math.hypot(stepX, 2.5);
+            const diag1 = new THREE.Mesh(this.boxCache(0.08, diagLen, 0.08), steelMat);
+            diag1.position.set(x + stepX * 0.5, deckY + 1.46, trussZ);
+            diag1.rotation.z = Math.atan2(stepX, 2.5);
+            const diag2 = new THREE.Mesh(this.boxCache(0.08, diagLen, 0.08), steelMat);
+            diag2.position.set(x + stepX * 0.5, deckY + 1.46, trussZ);
+            diag2.rotation.z = -Math.atan2(stepX, 2.5);
+            fobGroup.add(diag1, diag2);
+          }
         }
       });
 
-      [-spanWidth / 2, spanWidth / 2].forEach((sx) => {
-        const isEast = sx > 0;
-        const stairDir = isEast ? 1 : -1;
-        const flight = new THREE.Mesh(this.boxCache(1.8, 0.3, 7.5), stairConcreteMat);
-        flight.position.set(sx + stairDir * 0.9, deckY / 2, 4.2);
-        flight.rotation.x = 0.68;
-        fobGroup.add(flight);
+      // 4. Sidewalk Support Piers & Real 18-Step Concrete Staircases at BOTH Ends (Z: +1.7 -> +10.2)
+      const stairSteps = 18;
+      const stairRun = 8.4;
+      const stepRun = stairRun / stairSteps;
+      const stepRise = (deckY - 0.15) / stairSteps;
+      const stairAngle = Math.atan2(deckY, stairRun);
+      const stringerLen = Math.hypot(stairRun, deckY);
 
-        const stairPier = new THREE.Mesh(this.cylCache(0.3, 0.3, deckY, 8), steelMat);
-        stairPier.position.set(sx + stairDir * 1.5, deckY / 2, 0);
-        fobGroup.add(stairPier);
+      [-spanWidth / 2 - 1.15, spanWidth / 2 + 1.15].forEach((sx) => {
+        // Heavy Concrete Pier Base & Structural Twin Steel Portal Columns
+        const pierFooting = new THREE.Mesh(this.boxCache(2.4, 0.75, 2.4), plinthMat);
+        pierFooting.position.set(sx, 0.375, 0);
+        const pierCol = new THREE.Mesh(this.cylCache(0.36, 0.42, deckY, 10), steelMat);
+        pierCol.position.set(sx, deckY / 2, 0);
+        pierCol.castShadow = true;
+        fobGroup.add(pierFooting, pierCol);
+
+        // Stepped 3D Concrete Stair Treads descending south along the sidewalk
+        for (let s = 0; s < stairSteps; s++) {
+          const sy = deckY - (s + 0.5) * stepRise;
+          const sz = 1.65 + (s + 0.5) * stepRun;
+          const tread = new THREE.Mesh(this.boxCache(2.05, stepRise + 0.14, stepRun + 0.06), stairConcreteMat);
+          tread.position.set(sx, sy, sz);
+          tread.castShadow = true;
+          tread.receiveShadow = true;
+          fobGroup.add(tread);
+        }
+
+        // Sloped Steel Stringer Side Beams & Tubular Stainless Handrails
+        [-1.08, 1.08].forEach((hx) => {
+          const stringer = new THREE.Mesh(this.boxCache(0.14, 0.32, stringerLen), steelMat);
+          stringer.position.set(sx + hx, deckY * 0.5 - 0.12, 1.65 + stairRun * 0.5);
+          stringer.rotation.x = stairAngle;
+
+          const handrail = new THREE.Mesh(this.boxCache(0.08, 0.08, stringerLen + 0.4), chromeRailMat);
+          handrail.position.set(sx + hx, deckY * 0.5 + 0.92, 1.65 + stairRun * 0.5);
+          handrail.rotation.x = stairAngle;
+          fobGroup.add(stringer, handrail);
+
+          for (let p = 0; p <= 4; p++) {
+            const frac = p / 4;
+            const bal = new THREE.Mesh(this.cylCache(0.035, 0.035, 1.0, 6), chromeRailMat);
+            bal.position.set(sx + hx, deckY * (1 - frac) + 0.46, 1.65 + stairRun * frac);
+            fobGroup.add(bal);
+          }
+        });
+
+        // Ground Entry Landing Pad & Safety Yellow Sidewalk Bollards
+        const entryPad = this.sharedBox(2.8, 0.18, 2.2, plinthMat, sx, 0.09, 1.65 + stairRun + 0.95);
+        fobGroup.add(entryPad);
+        [-1.0, 1.0].forEach((bx) => {
+          const bollard = new THREE.Mesh(this.cylCache(0.08, 0.09, 0.9, 8), tactileYellowMat);
+          bollard.position.set(sx + bx, 0.45, 1.65 + stairRun + 1.85);
+          fobGroup.add(bollard);
+        });
       });
 
+      // 5. Steel-Framed Illuminated Commercial Ad Billboards + Gooseneck Floodlights
+      const adW = spanWidth * 0.86;
+      const adH = 2.2;
       const northTex = createFobBillboardTexture(northAdBrand, northAdBn, northAdEn, northAdColor);
-      const northSign = new THREE.Mesh(
-        new THREE.PlaneGeometry(spanWidth * 0.88, 2.1),
-        new THREE.MeshBasicMaterial({ map: northTex, side: THREE.DoubleSide })
-      );
-      northSign.position.set(0, deckY + 1.45, -walkwayW / 2 - 0.08);
-      fobGroup.add(northSign);
-
       const southTex = createFobBillboardTexture(southAdBrand, southAdBn, southAdEn, southAdColor);
-      const southSign = new THREE.Mesh(
-        new THREE.PlaneGeometry(spanWidth * 0.88, 2.1),
-        new THREE.MeshBasicMaterial({ map: southTex, side: THREE.DoubleSide })
-      );
-      southSign.position.set(0, deckY + 1.45, walkwayW / 2 + 0.08);
-      fobGroup.add(southSign);
+
+      [
+        { z: -walkwayW / 2 - 0.18, rotY: Math.PI, dir: -1, tex: northTex },
+        { z: walkwayW / 2 + 0.18, rotY: 0, dir: 1, tex: southTex },
+      ].forEach((side) => {
+        const frame = new THREE.Mesh(this.boxCache(adW + 0.38, adH + 0.34, 0.18), darkSteelMat);
+        frame.position.set(0, deckY + 1.5, side.z);
+        frame.castShadow = true;
+        const adFace = new THREE.Mesh(
+          new THREE.PlaneGeometry(adW, adH),
+          new THREE.MeshBasicMaterial({ map: side.tex })
+        );
+        adFace.position.set(0, deckY + 1.5, side.z + side.dir * 0.10);
+        if (side.dir < 0) adFace.rotation.y = Math.PI;
+        fobGroup.add(frame, adFace);
+
+        for (let lx = -adW * 0.36; lx <= adW * 0.36 + 0.1; lx += adW * 0.24) {
+          const arm = new THREE.Mesh(this.boxCache(0.06, 0.06, 0.72), darkSteelMat);
+          arm.position.set(lx, deckY + 2.82, side.z + side.dir * 0.38);
+          const lamp = new THREE.Mesh(this.boxCache(0.28, 0.08, 0.18), ceilingGlowMat);
+          lamp.position.set(lx, deckY + 2.74, side.z + side.dir * 0.72);
+          fobGroup.add(arm, lamp);
+        }
+      });
 
       this.scene.add(fobGroup);
     };
@@ -6239,7 +6443,22 @@ export class DhakaCityEngine {
       '#0284c7'
     );
 
-    // 2. Shahbagh & TSC Foot Over Bridge (Z = 145)
+    // 2. Karwan Bazar Central Foot Over Bridge (Z = 48)
+    createFob(
+      0,
+      48,
+      26,
+      'Nagad',
+      'নগদ - সবচেয়ে কম খরচে মুহূর্তেই সেন্ড মানি ও পেমেন্ট!',
+      'Fastest Digital Financial Service Across Every District',
+      '#c2410c',
+      'BRAC Bank',
+      'ব্র্যাক ব্যাংক - আস্থা ও সমৃদ্ধির ২৪ ঘণ্টা ব্যাংকিং সেবা',
+      'Trusted Banking & SME Loans Built for Modern Dhaka',
+      '#0369a1'
+    );
+
+    // 3. Shahbagh & TSC Foot Over Bridge (Z = 145)
     createFob(
       0,
       145,
@@ -6254,7 +6473,7 @@ export class DhakaCityEngine {
       '#15803d'
     );
 
-    // 3. Mirpur-10 Circle Foot Over Bridge (X = -380, Z = -115)
+    // 4. Mirpur-10 Circle Foot Over Bridge (X = -380, Z = -115)
     createFob(
       -380,
       -115,

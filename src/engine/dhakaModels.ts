@@ -5124,36 +5124,66 @@ export function createFlyoverGantryTexture(
   canvas.height = 320;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#14532d'; // Highway Green
+  const grad = ctx.createLinearGradient(0, 0, 0, 320);
+  grad.addColorStop(0, '#166534');
+  grad.addColorStop(0.55, '#14532d');
+  grad.addColorStop(1, '#052e16');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 1024, 320);
 
-  ctx.lineWidth = 12;
+  // Retro-reflective outer white border + subtle diagonal metallic sheen
+  ctx.lineWidth = 11;
   ctx.strokeStyle = '#ffffff';
-  ctx.strokeRect(16, 16, 992, 288);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 38px sans-serif';
-  ctx.fillText(`↑  ${line1Bn}`, 48, 85);
-  ctx.font = '600 28px sans-serif';
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillText(`    ${line1En}`, 48, 130);
-
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(48, 160);
-  ctx.lineTo(976, 160);
+  ctx.roundRect(14, 14, 996, 292, 16);
   ctx.stroke();
 
+  const gloss = ctx.createLinearGradient(0, 0, 1024, 320);
+  gloss.addColorStop(0, 'rgba(255,255,255,0.10)');
+  gloss.addColorStop(0.5, 'rgba(255,255,255,0)');
+  gloss.addColorStop(1, 'rgba(0,0,0,0.2)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  // Top lane direction pill
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.beginPath();
+  ctx.roundRect(38, 34, 62, 74, 12);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 42px sans-serif';
+  ctx.fillText('↑', 56, 84);
+
+  ctx.font = 'bold 40px "Noto Sans Bengali", sans-serif';
+  ctx.fillText(line1Bn, 120, 76);
+  ctx.font = '700 26px sans-serif';
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillText(line1En, 120, 120);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(44, 156);
+  ctx.lineTo(980, 156);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(250,204,21,0.18)';
+  ctx.beginPath();
+  ctx.roundRect(38, 178, 62, 92, 12);
+  ctx.fill();
   ctx.fillStyle = '#facc15';
-  ctx.font = 'bold 38px sans-serif';
-  ctx.fillText(`↗  ${line2Bn}`, 48, 225);
-  ctx.font = '600 28px sans-serif';
+  ctx.font = '900 40px sans-serif';
+  ctx.fillText('↗', 54, 236);
+
+  ctx.font = 'bold 38px "Noto Sans Bengali", sans-serif';
+  ctx.fillText(line2Bn, 120, 218);
+  ctx.font = '700 26px sans-serif';
   ctx.fillStyle = '#fde68a';
-  ctx.fillText(`    ${line2En}`, 48, 270);
+  ctx.fillText(line2En, 120, 266);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -5165,26 +5195,74 @@ export function createFobBillboardTexture(
 ): THREE.Texture {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
-  canvas.height = 256;
+  canvas.height = 288;
   const ctx = canvas.getContext('2d')!;
 
+  // Rich commercial gradient backdrop + overhead floodlight illumination wash
+  const grad = ctx.createLinearGradient(0, 0, 1024, 288);
+  grad.addColorStop(0, bgColor);
+  grad.addColorStop(0.75, bgColor);
+  grad.addColorStop(1, '#090d16');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 288);
+
+  const floodWash = ctx.createRadialGradient(512, -20, 20, 512, 110, 540);
+  floodWash.addColorStop(0, 'rgba(255,255,255,0.28)');
+  floodWash.addColorStop(0.65, 'rgba(255,255,255,0.06)');
+  floodWash.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = floodWash;
+  ctx.fillRect(0, 0, 1024, 288);
+
+  // Decorative diagonal brand ribbon on left & white contrast frame
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(310, 0);
+  ctx.lineTo(250, 288);
+  ctx.lineTo(0, 288);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(10, 10, 1004, 268);
+
+  // Stylized Brand Pill Badge on Left
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(36, 48, 224, 86, 18);
+  ctx.fill();
   ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, 1024, 256);
+  ctx.font = '900 38px "Inter", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(brand, 148, 92);
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '900 48px sans-serif';
-  ctx.fillText(brand, 48, 75);
+  // Official Dhaka Campaign Tag under Brand Pill
+  ctx.fillStyle = 'rgba(254, 240, 138, 0.92)';
+  ctx.font = '800 17px "Inter", sans-serif';
+  ctx.fillText('OFFICIAL DHAKA AD', 148, 178);
 
-  ctx.font = 'bold 36px sans-serif';
+  // Main Headline & Subtitle cleanly aligned in right feature panel
+  ctx.textAlign = 'left';
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 8;
   ctx.fillStyle = '#fef08a';
-  ctx.fillText(headlineBn, 48, 145);
+  ctx.font = 'bold 38px "Noto Sans Bengali", "Hind Siliguri", sans-serif';
+  ctx.fillText(headlineBn, 300, 110);
+  ctx.restore();
 
-  ctx.font = '600 26px sans-serif';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(subEn, 48, 205);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillRect(300, 152, 680, 3);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '700 24px "Inter", sans-serif';
+  ctx.fillText(subEn, 300, 200);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -5257,27 +5335,43 @@ export function createMallSignboardTexture(
   canvas.height = 320;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = primaryColor;
+  const grad = ctx.createLinearGradient(0, 0, 1024, 320);
+  grad.addColorStop(0, primaryColor);
+  grad.addColorStop(1, '#090d16');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  const sheen = ctx.createRadialGradient(512, 40, 20, 512, 160, 520);
+  sheen.addColorStop(0, 'rgba(250, 204, 21, 0.16)');
+  sheen.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = sheen;
   ctx.fillRect(0, 0, 1024, 320);
 
   ctx.strokeStyle = '#facc15';
-  ctx.lineWidth = 8;
+  ctx.lineWidth = 10;
   ctx.strokeRect(12, 12, 1000, 296);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(24, 24, 976, 272);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 48px sans-serif';
-  ctx.fillText(mallNameBn, 48, 90);
+  ctx.font = 'bold 52px "Noto Sans Bengali", sans-serif';
+  ctx.fillText(mallNameBn, 54, 96);
 
   ctx.fillStyle = '#facc15';
-  ctx.font = 'bold 38px sans-serif';
-  ctx.fillText(mallNameEn, 48, 160);
+  ctx.font = '900 40px "Inter", sans-serif';
+  ctx.fillText(mallNameEn, 54, 168);
+
+  ctx.fillStyle = 'rgba(250, 204, 21, 0.5)';
+  ctx.fillRect(54, 198, 900, 2);
 
   ctx.fillStyle = '#e2e8f0';
-  ctx.font = '600 26px sans-serif';
-  ctx.fillText(tagline, 48, 240);
+  ctx.font = '600 26px "Inter", sans-serif';
+  ctx.fillText(tagline, 54, 248);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -5293,33 +5387,53 @@ export function createHeritageSignboardTexture(
   canvas.height = 320;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = bgColor;
+  const grad = ctx.createLinearGradient(0, 0, 0, 320);
+  grad.addColorStop(0, bgColor);
+  grad.addColorStop(1, '#111827');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 1024, 320);
 
-  // Mughal arch-inspired decorative border
+  const spot = ctx.createRadialGradient(512, 0, 10, 512, 140, 500);
+  spot.addColorStop(0, 'rgba(255,255,255,0.16)');
+  spot.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = spot;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  // Mughal arch-inspired decorative double border + corner filigree squares
   ctx.strokeStyle = accentColor;
   ctx.lineWidth = 10;
   ctx.strokeRect(16, 16, 992, 288);
 
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
   ctx.lineWidth = 3;
-  ctx.strokeRect(26, 26, 972, 268);
+  ctx.strokeRect(28, 28, 968, 264);
+
+  [
+    [28, 28],
+    [972, 28],
+    [28, 268],
+    [972, 268],
+  ].forEach(([rx, ry]) => {
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(rx, ry, 24, 24);
+  });
 
   ctx.fillStyle = accentColor;
-  ctx.font = 'bold 50px "Noto Sans Bengali", sans-serif';
+  ctx.font = 'bold 52px "Noto Sans Bengali", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(titleBn, 512, 95);
+  ctx.fillText(titleBn, 512, 98);
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.fillText(titleEn, 512, 170);
+  ctx.font = '900 36px "Inter", sans-serif';
+  ctx.fillText(titleEn, 512, 174);
 
   ctx.fillStyle = '#fde68a';
-  ctx.font = 'italic 26px sans-serif';
-  ctx.fillText(subtitle, 512, 240);
+  ctx.font = 'italic 26px "Inter", serif';
+  ctx.fillText(subtitle, 512, 242);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
