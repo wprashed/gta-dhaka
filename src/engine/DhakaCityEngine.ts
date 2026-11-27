@@ -3050,7 +3050,12 @@ export class DhakaCityEngine {
           this.circleColliders.push({ x: px, z: st.sz + bz, radius: 0.92, tag: 'metro_station_pier' });
         });
         this.scene.add(this.sharedBox(15.2, 0.9, 1.4, concreteMat, -10.5, 8.2, st.sz + bz));
-        this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
+        if (bz !== -7) {
+          this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
+        } else {
+          // Leave interior stairwell void (-16.8..-14.7) unobstructed
+          this.scene.add(this.sharedBox(11.6, 1.0, 1.6, concreteMat, -8.8, 12.3, st.sz + bz));
+        }
       });
 
       // External Architectural Station Envelope U-Frame Cladding Ribs (every 12m along station)
@@ -3122,26 +3127,44 @@ export class DhakaCityEngine {
         this.scene.add(this.sharedBox(0.05, 0.65, 0.45, psdGlassMat, -11.4, 9.45, st.sz + dz + 0.85));
       });
 
-      // Interior Escalator Stairway connecting Concourse Hall (Y=8.96) -> West Side Platform (Y=13.30)
+      // Interior Escalator Stairway connecting Concourse Hall (Y=8.96) -> West Side Platform (Y=13.30) cleanly flush!
       const intZ1 = st.sz - 8.5;
       const intZ2 = st.sz + 1.5;
-      const intX = -15.4;
-      for (let is = 0; is < 14; is++) {
-        const ft = (is + 0.5) / 14;
-        const stepY = THREE.MathUtils.lerp(8.96, 13.28, ft) + 0.08;
+      const intX = -15.75;
+      for (let is = 0; is < 18; is++) {
+        const ft = (is + 0.5) / 18;
+        const stepY = THREE.MathUtils.lerp(8.92, 13.10, ft);
         const stepZ = THREE.MathUtils.lerp(intZ1, intZ2, ft);
-        const step = new THREE.Mesh(this.boxCache(2.0, 0.24, 0.8), afcGateMat);
+        const step = new THREE.Mesh(this.boxCache(1.85, 0.38, 0.72), afcGateMat);
         step.position.set(intX, stepY, stepZ);
         this.scene.add(step);
-        this.scene.add(this.sharedBox(1.96, 0.04, 0.08, yellowLineMat, intX, stepY + 0.13, stepZ - 0.34));
+        this.scene.add(this.sharedBox(1.82, 0.035, 0.08, yellowLineMat, intX, stepY + 0.195, stepZ - 0.30));
       }
-      // Guardrail along Interior Escalator Well at Platform edge
-      this.scene.add(this.sharedBox(0.12, 1.05, 10.2, trussSteelMat, -14.3, 13.85, (intZ1 + intZ2) * 0.5));
 
-      // 3. Open Dual-Side Upper Train Platform Deck (Walkable West/East Platforms Y=13.30)
-      this.scene.add(this.sharedBox(15.2, 0.52, 64, concourseMat, -10.5, 12.6, st.sz));
-      this.scene.add(this.sharedBox(4.0, 0.44, 62, concourseMat, -15.9, 13.08, st.sz));
-      this.scene.add(this.sharedBox(5.6, 0.44, 62, concourseMat, -6.5, 13.08, st.sz));
+      // Guardrails + Colliders around the 3 closed edges of the Platform Stairwell Cutout (X: -16.8..-14.7, Z: st.sz-8.8..+1.7)
+      this.scene.add(this.sharedBox(0.12, 1.05, 10.5, trussSteelMat, -14.7, 13.85, (intZ1 + intZ2) * 0.5));
+      this.scene.add(this.sharedBox(0.12, 1.05, 10.5, trussSteelMat, -16.8, 13.85, (intZ1 + intZ2) * 0.5));
+      this.scene.add(this.sharedBox(2.2, 1.05, 0.12, trussSteelMat, intX, 13.85, st.sz - 8.8));
+      this.buildingColliders.push(
+        { minX: -14.8, maxX: -14.6, minZ: st.sz - 8.9, maxZ: st.sz + 1.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' },
+        { minX: -16.9, maxX: -16.7, minZ: st.sz - 8.9, maxZ: st.sz + 1.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' },
+        { minX: -16.9, maxX: -14.6, minZ: st.sz - 8.9, maxZ: st.sz - 8.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' }
+      );
+
+      // 3. Open Dual-Side Upper Train Platform Deck with TRUE Stairwell Cutout Void (Walkable Y=13.30)
+      // Sub-deck structural girder split cleanly around stairwell cutout (X: -16.8..-14.7, Z: st.sz-8.8..+1.7)
+      this.scene.add(this.sharedBox(11.8, 0.52, 64, concourseMat, -8.8, 12.6, st.sz));         // Trackbed + East platform
+      this.scene.add(this.sharedBox(1.3, 0.52, 64, concourseMat, -17.45, 12.6, st.sz));        // West outer strip
+      this.scene.add(this.sharedBox(2.1, 0.52, 23.2, concourseMat, intX, 12.6, st.sz - 20.4)); // North of stairwell
+      this.scene.add(this.sharedBox(2.1, 0.52, 30.3, concourseMat, intX, 12.6, st.sz + 16.85));// South of stairwell
+
+      // West boarding platform finish surface (Y=13.30) split cleanly around stairwell cutout
+      this.scene.add(this.sharedBox(0.8, 0.44, 62, concourseMat, -14.3, 13.08, st.sz));        // East boarding aisle by PSD
+      this.scene.add(this.sharedBox(1.1, 0.44, 62, concourseMat, -17.35, 13.08, st.sz));       // West outer aisle
+      this.scene.add(this.sharedBox(2.1, 0.44, 22.2, concourseMat, intX, 13.08, st.sz - 19.9));// North of stairwell
+      this.scene.add(this.sharedBox(2.1, 0.44, 29.3, concourseMat, intX, 13.08, st.sz + 16.35));// South of stairwell
+
+      this.scene.add(this.sharedBox(5.6, 0.44, 62, concourseMat, -6.5, 13.08, st.sz));         // East boarding platform (X: -9.3..-3.7)
 
       // Symmetric Dual Gull-Wing Architectural Canopy + Central Polycarbonate Skylight & Steel Arch Trusses (Y=18.8m clear above pantographs)
       [-1, 1].forEach((wingSide) => {
@@ -3239,7 +3262,7 @@ export class DhakaCityEngine {
         inX2: intX,
         inZ2: intZ2,
         inY2: 13.30,
-        inHalfW: 1.25,
+        inHalfW: 1.0,
       });
 
       // 4. Ground-Anchored West Sidewalk Entry Pavilion & Covered Escalator Bridge (Y = 0 -> Concourse Y = 9.0m)
@@ -3454,24 +3477,37 @@ export class DhakaCityEngine {
         this.scene.add(this.sharedBox(0.24, 0.24, 0.08, ledGreenMat, st.sx + ax, 13.75, line5Z + 1.34));
       });
 
-      // Interior staircase from Line-5 Concourse (Y=12.86) -> Platform (Y=17.55)
+      // Interior staircase from Line-5 Concourse (Y=12.86) -> Platform (Y=17.55) with true floor void cutout
       const int5X1 = st.sx + 4;
       const int5X2 = st.sx + 14;
-      const int5Z = line5Z - 4.4;
-      for (let is = 0; is < 15; is++) {
-        const ft = (is + 0.5) / 15;
-        const sy5 = THREE.MathUtils.lerp(12.86, 17.55, ft) + 0.08;
+      const int5Z = line5Z - 4.9;
+      for (let is = 0; is < 18; is++) {
+        const ft = (is + 0.5) / 18;
+        const sy5 = THREE.MathUtils.lerp(12.82, 17.36, ft);
         const sx5 = THREE.MathUtils.lerp(int5X1, int5X2, ft);
-        const step = new THREE.Mesh(this.boxCache(0.8, 0.24, 2.0), afcGateMat);
+        const step = new THREE.Mesh(this.boxCache(0.76, 0.38, 1.85), afcGateMat);
         step.position.set(sx5, sy5, int5Z);
         this.scene.add(step);
-        this.scene.add(this.sharedBox(0.08, 0.04, 1.96, yellowLineMat, sx5 - 0.34, sy5 + 0.13, int5Z));
+        this.scene.add(this.sharedBox(0.08, 0.035, 1.82, yellowLineMat, sx5 - 0.30, sy5 + 0.195, int5Z));
       }
-      this.scene.add(this.sharedBox(10.2, 1.05, 0.12, trussSteelMat, (int5X1 + int5X2) * 0.5, 18.08, int5Z + 1.15));
+      this.scene.add(this.sharedBox(10.4, 1.05, 0.12, trussSteelMat, (int5X1 + int5X2) * 0.5, 18.08, int5Z + 1.02));
+      this.scene.add(this.sharedBox(10.4, 1.05, 0.12, trussSteelMat, (int5X1 + int5X2) * 0.5, 18.08, int5Z - 1.02));
+      this.scene.add(this.sharedBox(0.12, 1.05, 2.04, trussSteelMat, int5X1 - 0.2, 18.08, int5Z));
+      this.buildingColliders.push(
+        { minX: int5X1 - 0.25, maxX: int5X2 + 0.2, minZ: int5Z + 0.94, maxZ: int5Z + 1.12, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' },
+        { minX: int5X1 - 0.25, maxX: int5X2 + 0.2, minZ: int5Z - 1.12, maxZ: int5Z - 0.94, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' },
+        { minX: int5X1 - 0.3, maxX: int5X1 - 0.1, minZ: int5Z - 1.05, maxZ: int5Z + 1.05, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' }
+      );
 
-      // 3. Open Dual-Side Upper Train Platform Deck + Gull-Wing Canopy & Steel Trusses (Y=23.0m clear above Line-5 pantographs)
-      this.scene.add(this.sharedBox(64, 0.52, 15.2, concourseMat, st.sx, 16.85, line5Z));
-      this.scene.add(this.sharedBox(62, 0.44, 4.8, concourseMat, st.sx, 17.33, line5Z - 4.9));
+      // 3. Open Dual-Side Upper Train Platform Deck with TRUE Stairwell Void Cutout (Y=23.0m roof)
+      this.scene.add(this.sharedBox(64, 0.52, 11.4, concourseMat, st.sx, 16.85, line5Z + 1.9));
+      this.scene.add(this.sharedBox(35.8, 0.52, 3.8, concourseMat, st.sx - 14.1, 16.85, line5Z - 5.7));
+      this.scene.add(this.sharedBox(17.5, 0.52, 3.8, concourseMat, st.sx + 23.25, 16.85, line5Z - 5.7));
+      // North boarding platform surface split cleanly around stairwell (X: st.sx+3.8..+14.3, Z: line5Z-5.95..-3.85)
+      this.scene.add(this.sharedBox(62, 0.44, 1.4, concourseMat, st.sx, 17.33, line5Z - 3.2));
+      this.scene.add(this.sharedBox(62, 0.44, 1.35, concourseMat, st.sx, 17.33, line5Z - 6.62));
+      this.scene.add(this.sharedBox(34.8, 0.44, 2.1, concourseMat, st.sx - 13.6, 17.33, int5Z));
+      this.scene.add(this.sharedBox(16.7, 0.44, 2.1, concourseMat, st.sx + 22.65, 17.33, int5Z));
       this.scene.add(this.sharedBox(62, 0.44, 4.8, concourseMat, st.sx, 17.33, line5Z + 4.9));
 
       this.metroStationInteriors.push({
@@ -3491,7 +3527,7 @@ export class DhakaCityEngine {
         inX2: int5X2,
         inZ2: int5Z,
         inY2: 17.55,
-        inHalfW: 1.25,
+        inHalfW: 1.0,
       });
 
       [-1, 1].forEach((wingSide) => {
@@ -17383,13 +17419,23 @@ export class DhakaCityEngine {
       const iLenSq = idx * idx + idz * idz;
       if (iLenSq > 0.1) {
         const rawT = ((x - stInt.inX1) * idx + (z - stInt.inZ1) * idz) / iLenSq;
-        if (rawT >= -0.05 && rawT <= 1.05) {
+        if (rawT >= -0.04 && rawT <= 1.03) {
           const t = Math.max(0, Math.min(1, rawT));
           const ipx = stInt.inX1 + idx * t;
           const ipz = stInt.inZ1 + idz * t;
           if (Math.hypot(x - ipx, z - ipz) <= stInt.inHalfW) {
             const stairY = stInt.inY1 + (stInt.inY2 - stInt.inY1) * t;
-            if (currentY !== undefined && Math.abs(currentY - stairY) <= 2.4 && currentY >= stInt.inY1 - 1.5) {
+            // Only snap to stair ramp when actively near its slope, never dropping through upper platform floor
+            const walkingHighOnPlatform =
+              currentY !== undefined &&
+              currentY >= stInt.platY - 0.55 &&
+              Math.abs(stairY - stInt.platY) > 1.05;
+            if (
+              !walkingHighOnPlatform &&
+              currentY !== undefined &&
+              Math.abs(currentY - stairY) <= 1.85 &&
+              currentY >= stInt.inY1 - 1.5
+            ) {
               return stairY;
             }
           }
@@ -17401,7 +17447,7 @@ export class DhakaCityEngine {
         z >= stInt.platMinZ &&
         z <= stInt.platMaxZ &&
         currentY !== undefined &&
-        currentY >= stInt.platY - 1.6 &&
+        currentY >= stInt.platY - 1.4 &&
         currentY <= stInt.platY + 3.0
       ) {
         return stInt.platY;
