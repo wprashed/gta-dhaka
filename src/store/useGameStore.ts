@@ -320,7 +320,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   wantedCooldown: 0,
   timeOfDay: 15.5,
   weather: 'clear',
-  radioStation: 'dhaka_folk',
+  radioStation: 'off',
   musicVolume: 0.45,
   sfxVolume: 0.7,
   ambienceVolume: 0.4,
@@ -369,6 +369,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   startNewGame: () => {
     dhakaAudio.init();
+    dhakaAudio.setRadioStation('off');
     dhakaAudio.playSfx('ui');
     set({
       gamePhase: 'playing',
@@ -404,6 +405,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       customWaypoint: null,
       isWasted: false,
       isBusted: false,
+      radioStation: 'off',
       teleportRequest: { x: 10, z: 18 },
       activeDialogue: {
         speakerEn: 'Arif Rahman (Chapter 1: Back to Dhaka)',
@@ -465,7 +467,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           timeOfDay: typeof data.timeOfDay === 'number' ? data.timeOfDay : 15.5,
           weather: data.weather ?? 'clear',
           customWaypoint: data.customWaypoint ?? null,
-          radioStation: data.radioStation ?? 'off',
+          radioStation: 'off',
           cameraMode: data.cameraMode ?? 'third_person',
           graphicsQuality: data.graphicsQuality ?? 'high',
           musicVolume: typeof data.musicVolume === 'number' ? data.musicVolume : 0.45,
@@ -838,7 +840,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setTimeOfDay: (hour) => set({ timeOfDay: hour % 24 }),
 
   setRadioStation: (station) => {
-    dhakaAudio.init();
+    if (station !== 'off') dhakaAudio.init();
     dhakaAudio.setRadioStation(station);
     set({ radioStation: station });
   },
@@ -1076,7 +1078,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         `Bought Outfit: ${target.nameEn}`,
         `পোশাক ক্রয়: ${target.nameBn}`
       );
-      if (!ok) return;
+      if (!ok) {
+        dhakaAudio.playSfx('ui');
+        get().showBanner({
+          titleEn: `INSUFFICIENT TAKA (NEED ৳${target.price})`,
+          titleBn: `অপর্যাপ্ত টাকা (প্রয়োজন ৳${target.price})`,
+          subtitleEn: `You have ৳${s.taka.toLocaleString()} — earn more Taka before buying ${target.nameEn}.`,
+          subtitleBn: `আপনার ব্যালেন্স ৳${s.taka.toLocaleString()} — ${target.nameBn} কিনতে আরও টাকা প্রয়োজন।`,
+          tone: 'red',
+        });
+        return;
+      }
       set({
         outfits: s.outfits.map((o) =>
           o.id === outfitId ? { ...o, unlocked: true } : o
@@ -1100,7 +1112,17 @@ export const useGameStore = create<GameState>((set, get) => ({
         `Bought Gear: ${target.nameEn}`,
         `সরঞ্জাম ক্রয়: ${target.nameBn}`
       );
-      if (!ok) return;
+      if (!ok) {
+        dhakaAudio.playSfx('ui');
+        get().showBanner({
+          titleEn: `INSUFFICIENT TAKA (NEED ৳${target.price})`,
+          titleBn: `অপর্যাপ্ত টাকা (প্রয়োজন ৳${target.price})`,
+          subtitleEn: `You have ৳${s.taka.toLocaleString()} — earn more Taka before buying ${target.nameEn}.`,
+          subtitleBn: `আপনার ব্যালেন্স ৳${s.taka.toLocaleString()} — ${target.nameBn} কিনতে আরও টাকা প্রয়োজন।`,
+          tone: 'red',
+        });
+        return;
+      }
       set({
         tools: s.tools.map((t) =>
           t.id === toolId ? { ...t, unlocked: true } : t

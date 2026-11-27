@@ -72,3 +72,90 @@ test('Bridges and flyovers keep ground streets separate from overhead decks', ()
   // Hatirjheel Bridge center deck
   assert.equal(evaluateRoadElevation(220, 0, 0.5, baseCtx), 0.5);
 });
+
+function assertSmoothRampSweep(
+  label: string,
+  points: Array<{ x: number; z: number }>,
+  expectedStartY: number,
+  expectedEndY: number,
+  seedY?: number
+) {
+  let prevY = evaluateRoadElevation(points[0].x, points[0].z, seedY ?? expectedStartY, baseCtx);
+  assert.ok(
+    Math.abs(prevY - expectedStartY) <= 0.45,
+    `${label} start elevation expected ~${expectedStartY}, got ${prevY}`
+  );
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    const y = evaluateRoadElevation(p.x, p.z, prevY, baseCtx);
+    const delta = Math.abs(y - prevY);
+    assert.ok(
+      delta <= 0.42,
+      `${label} discontinuity at step ${i} (${p.x},${p.z}): ${prevY.toFixed(3)} -> ${y.toFixed(3)}`
+    );
+    prevY = y;
+  }
+  assert.ok(
+    Math.abs(prevY - expectedEndY) <= 0.45,
+    `${label} end elevation expected ~${expectedEndY}, got ${prevY}`
+  );
+}
+
+test('All elevated flyover & bridge ramps are continuous with zero cliff ledges', () => {
+  // Farmgate Elevated Expressway north & south ramps (Z: -160..-40 & 40..160 at X = 18)
+  const expNorth: Array<{ x: number; z: number }> = [];
+  for (let z = -160; z <= -40; z += 2) expNorth.push({ x: 18, z });
+  assertSmoothRampSweep('Expressway North Ramp', expNorth, 0, 16.2, 0.2);
+
+  const expSouth: Array<{ x: number; z: number }> = [];
+  for (let z = 40; z <= 160; z += 2) expSouth.push({ x: 18, z });
+  assertSmoothRampSweep('Expressway South Ramp', expSouth, 16.2, 0, 16.2);
+
+  // Mohakhali Flyover west & east ramps (X: -340..-240 & 240..340 at Z = -175)
+  const mohaW: Array<{ x: number; z: number }> = [];
+  for (let x = -340; x <= -240; x += 2) mohaW.push({ x, z: -175 });
+  assertSmoothRampSweep('Mohakhali West Ramp', mohaW, 0, 9.6, 0.2);
+
+  const mohaE: Array<{ x: number; z: number }> = [];
+  for (let x = 240; x <= 340; x += 2) mohaE.push({ x, z: -175 });
+  assertSmoothRampSweep('Mohakhali East Ramp', mohaE, 9.6, 0, 9.6);
+
+  // Mayor Hanif Flyover west & east ramps (X: -560..-440 & 440..560 at Z = 240)
+  const hanifW: Array<{ x: number; z: number }> = [];
+  for (let x = -560; x <= -440; x += 2) hanifW.push({ x, z: 240 });
+  assertSmoothRampSweep('Mayor Hanif West Ramp', hanifW, 0, 11.2, 0.2);
+
+  const hanifE: Array<{ x: number; z: number }> = [];
+  for (let x = 440; x <= 560; x += 2) hanifE.push({ x, z: 240 });
+  assertSmoothRampSweep('Mayor Hanif East Ramp', hanifE, 11.2, 0, 11.2);
+
+  // Kuril Flyover west & east ramps (X: 280..360 & 720..800 at Z = -315)
+  const kurilW: Array<{ x: number; z: number }> = [];
+  for (let x = 280; x <= 360; x += 2) kurilW.push({ x, z: -315 });
+  assertSmoothRampSweep('Kuril West Ramp', kurilW, 0, 11.2, 0.2);
+
+  const kurilE: Array<{ x: number; z: number }> = [];
+  for (let x = 720; x <= 800; x += 2) kurilE.push({ x, z: -315 });
+  assertSmoothRampSweep('Kuril East Ramp', kurilE, 11.2, 0, 11.2);
+
+  // Buriganga 1st Bridge arch deck & arterial bridge ramps
+  const buriArch: Array<{ x: number; z: number }> = [];
+  for (let z = 285; z <= 460; z += 2.5) buriArch.push({ x: 0, z });
+  assertSmoothRampSweep('Buriganga 1st Bridge Arch', buriArch, 0.08, 0.08, 0.08);
+
+  const buriGulshan: Array<{ x: number; z: number }> = [];
+  for (let z = 265; z <= 480; z += 2) buriGulshan.push({ x: 220, z });
+  assertSmoothRampSweep('Buriganga Arterial Bridge (X=220)', buriGulshan, 0.08, 0.08, 0.08);
+
+  // Hatirjheel Bridge & Balu Bridge continuous ramps
+  const hatir: Array<{ x: number; z: number }> = [];
+  for (let z = -57.5; z <= 47.5; z += 1.5) hatir.push({ x: 220, z });
+  assertSmoothRampSweep('Hatirjheel Bridge', hatir, 0.08, 0.08, 0.08);
+
+  const balu: Array<{ x: number; z: number }> = [];
+  for (let x = 525; x <= 655; x += 2) balu.push({ x, z: -315 });
+  assertSmoothRampSweep('Balu River Bridge', balu, 0.08, 0.08, 0.08);
+
+  // Staying on the elevated Expressway main deck above the ramp stays flat at 16.2m
+  assert.equal(evaluateRoadElevation(18, -100, 16.2, baseCtx), 16.2);
+});

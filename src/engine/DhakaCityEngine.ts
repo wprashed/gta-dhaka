@@ -17,6 +17,7 @@ import {
   DistrictId,
   NPCEntity,
   NPCRole,
+  RadioStationId,
   VehicleEntity,
   VehicleType,
   PlayableCharacterId,
@@ -30,11 +31,8 @@ import {
   createVehicleMesh,
   ensureNpcUmbrella,
   createFlyoverGantryTexture,
-  createFobBillboardTexture,
   createStadiumScoreboardTexture,
   createMallSignboardTexture,
-  createMetroStationSignTexture,
-  createMetroRouteMapTexture,
   createJamunaFutureParkFacadeTexture,
   createHeritageSignboardTexture,
   createHighwaySpeedSignTexture,
@@ -62,23 +60,17 @@ import {
 import { NearbyPrompt, useGameStore } from '../store/useGameStore';
 import { dhakaAudio } from '../audio/dhakaAudioEngine';
 import { evaluateRoadElevation } from './physics/roadElevation';
-
-interface BuildingCollider {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-  minY?: number;
-  maxY?: number;
-  tag?: string;
-}
-
-interface CircleCollider {
-  x: number;
-  z: number;
-  radius: number;
-  tag?: string;
-}
+import {
+  buildBurigangaRiverBridgesInScene,
+  buildDhakaFootOverBridgesInScene,
+  buildHatirjheelBridgeInScene,
+} from './builders/buildBridges';
+import { buildMetroNetworkInScene } from './builders/buildMetroNetwork';
+import type {
+  BuildingCollider,
+  CircleCollider,
+  SceneBuilderContext,
+} from './builders/buildTypes';
 
 interface CashPickupDrop {
   mesh: THREE.Group;
@@ -197,6 +189,7 @@ export class DhakaCityEngine {
   private fuelSputterCooldown = 0;
   private headlightsManual: boolean | null = null;
   private flashlightOn = false;
+  private lastVehicleRadioStation: RadioStationId = 'off';
   private fareMarkerGroup!: THREE.Group;
   private policeFireCooldown = 0;
   private isSwimming = false;
@@ -1813,6 +1806,13 @@ export class DhakaCityEngine {
     this.activeVehicleId = null;
     this.headlightSpot.intensity = 0;
     dhakaAudio.updateEngine(false, null, 0);
+    const curRadio = useGameStore.getState().radioStation;
+    this.lastVehicleRadioStation = curRadio;
+    if (curRadio !== 'off') {
+      useGameStore.getState().setRadioStation('off');
+    } else {
+      dhakaAudio.setRadioStation('off');
+    }
     useGameStore.setState({ inVehicleId: null, currentVehicleType: null });
   }
 
@@ -1862,6 +1862,7 @@ export class DhakaCityEngine {
         return;
       }
 
+      const dropElev = this.getRoadElevation(dropX, dropZ, veh.y);
       const droppedId = `ejected_driver_${Date.now()}_${Math.floor(Math.random() * 999)}`;
       const droppedNPC: NPCEntity = {
         id: droppedId,
@@ -1874,6 +1875,7 @@ export class DhakaCityEngine {
           : 'citizen',
         x: dropX,
         z: dropZ,
+        homeY: dropElev,
         rotation: veh.rotation + Math.PI + (Math.random() - 0.5) * 0.4,
         shirtColor: veh.isPolice ? '#1e3a8a' : '#d97706',
         pantsColor: '#1e293b',
@@ -1894,8 +1896,7 @@ export class DhakaCityEngine {
         false
       );
 
-      // Ejected driver hits the street pavement (ragdoll tumbling on the ground)
-      const dropElev = this.getRoadElevation(dropX, dropZ, veh.y);
+      // Ejected driver hits the deck/street pavement (ragdoll tumbling on the ground)
       droppedLimbs.group.position.set(dropX, dropElev + 0.08, dropZ);
       droppedLimbs.group.rotation.x = -Math.PI / 2; // Lies flat on the pavement
       droppedLimbs.group.rotation.y = veh.rotation + Math.PI / 2;
@@ -1905,7 +1906,7 @@ export class DhakaCityEngine {
       this.npcLimbsMap.set(droppedId, droppedLimbs);
 
       // Spawn road scrape dust & play impact grunt sound
-      this.spawnImpactSparks(dropX, 0.18, dropZ, '#cbd5e1', 2.0);
+      this.spawnImpactSparks(dropX, dropElev + 0.18, dropZ, '#cbd5e1', 2.0);
       dhakaAudio.playSfx('hit');
 
       store.showBanner({
@@ -2011,482 +2012,16 @@ export class DhakaCityEngine {
    * heavy concrete river piers, illuminated yellow crash barriers, and iconic bilingual highway entrance portals.
    */
   private buildBurigangaRiverBridges() {
-    const bridgeConcreteMat = new THREE.MeshStandardMaterial({
-      color: '#cbd5e1',
-      roughness: 0.72,
-    });
-    const bridgeAsphaltMat = new THREE.MeshStandardMaterial({
-      map: loadRealTexture('/textures/dhaka_asphalt.jpg', 3, 18, true),
-      color: '#334155',
-      roughness: 0.88,
-    });
-    const whiteLaneMat = new THREE.MeshBasicMaterial({ color: '#f8fafc' });
-    const pierMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: '#0f172a',
-      roughness: 0.65,
-    });
-    const yellowStripeMat = new THREE.MeshStandardMaterial({
-      color: '#facc15',
-      emissive: new THREE.Color('#facc15'),
-      emissiveIntensity: 0.35,
-      roughness: 0.45,
-    });
-    const portalFrameMat = new THREE.MeshStandardMaterial({
-      color: '#047857', // Iconic Bangladesh Emerald Green
-      metalness: 0.55,
-      roughness: 0.35,
-    });
-    const lampLightMat = new THREE.MeshStandardMaterial({
-      color: '#fef08a',
-      emissive: new THREE.Color('#fef08a'),
-      emissiveIntensity: 1.0,
-      roughness: 0.2,
-    });
-    this.streetLampStdMats.push(lampLightMat);
-
-    // 1. First Buriganga Bridge (China-Bangladesh Friendship Bridge - Babubazar / Sadarghat Central Spine at X = 0)
-    // Span: Z: 285 to 460 (Length 175m, Width 22m)
-    const bridgeX = 0;
-    const bridgeW = 22;
-    const zStart = 285;
-    const zEnd = 460;
-    const bridgeLen = zEnd - zStart;
-    const stainlessMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      metalness: 0.85,
-      roughness: 0.2,
-    });
-    const bridgeDeckElev = (z: number) => {
-      const t = Math.max(0, Math.min(1, (z - zStart) / bridgeLen));
-      return 0.08 + 2.75 * Math.sin(t * Math.PI);
-    };
-
-    // Smoothly sloped chorded arch road deck over Buriganga (arch peak Y = 2.83m at Z = 372.5)
-    const numBridgeSegs = 20;
-    const segLen = bridgeLen / numBridgeSegs;
-    for (let i = 0; i < numBridgeSegs; i++) {
-      const segZ1 = zStart + i * segLen;
-      const segZ2 = zStart + (i + 1) * segLen;
-      const midZ = (segZ1 + segZ2) / 2;
-      const e1 = bridgeDeckElev(segZ1);
-      const e2 = bridgeDeckElev(segZ2);
-      const segElev = (e1 + e2) * 0.5;
-      const chordLen = Math.hypot(segLen, e2 - e1) + 0.14;
-      const pitch = -Math.atan2(e2 - e1, segLen);
-
-      const segGroup = new THREE.Group();
-      segGroup.position.set(bridgeX, segElev, midZ);
-      segGroup.rotation.x = pitch;
-
-      // Haunched Pre-Stressed Concrete Box Girder + Dark Asphalt + Center Divider + Raised Walkways
-      const slab = this.sharedBox(bridgeW, 0.72, chordLen, bridgeConcreteMat, 0, -0.44, 0);
-      const boxBelly = this.sharedBox(bridgeW - 4.4, 0.65, chordLen, pierMat, 0, -1.05, 0);
-      slab.receiveShadow = true;
-      const roadTop = this.sharedBox(bridgeW - 2.6, 0.14, chordLen, bridgeAsphaltMat, 0, -0.05, 0);
-      roadTop.receiveShadow = true;
-      const centerLineW = this.sharedBox(0.16, 0.02, chordLen, yellowStripeMat, -0.16, 0.03, 0);
-      const centerLineE = this.sharedBox(0.16, 0.02, chordLen, yellowStripeMat, 0.16, 0.03, 0);
-      const laneDashL = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, -4.6, 0.03, 0);
-      const laneDashR = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, 4.6, 0.03, 0);
-      const walkL = this.sharedBox(1.2, 0.24, chordLen, bridgeConcreteMat, -bridgeW / 2 + 0.95, 0.05, 0);
-      const walkR = this.sharedBox(1.2, 0.24, chordLen, bridgeConcreteMat, bridgeW / 2 - 0.95, 0.05, 0);
-      segGroup.add(slab, boxBelly, roadTop, centerLineW, centerLineE, laneDashL, laneDashR, walkL, walkR);
-
-      // Concrete Jersey Crash Parapets + Open Stainless Double-Tube Bridge Guardrails
-      [-bridgeW / 2 + 0.3, bridgeW / 2 - 0.3].forEach((bx) => {
-        const jerseyBase = this.sharedBox(0.46, 0.68, chordLen, bridgeConcreteMat, bx, 0.34, 0);
-        const hazardStripe = this.sharedBox(0.48, 0.16, chordLen, yellowStripeMat, bx, 0.18, 0);
-        const topRail = this.sharedBox(0.1, 0.08, chordLen, stainlessMat, bx, 1.12, 0);
-        const midRail = this.sharedBox(0.08, 0.06, chordLen, stainlessMat, bx, 0.88, 0);
-        segGroup.add(jerseyBase, hazardStripe, topRail, midRail);
-      });
-
-      this.scene.add(segGroup);
-    }
-
-    // Bridgehead Concrete Wing-Wall Abutments anchoring North (285) and South (460) banks
-    [zStart, zEnd].forEach((az) => {
-      const abut = this.sharedBox(bridgeW + 2.4, 2.2, 4.5, pierMat, bridgeX, 0.2, az);
-      this.scene.add(abut);
-    });
-
-    // Guardrail colliders for First Buriganga Bridge (China-Bangladesh Friendship Bridge at X = 0)
-    this.buildingColliders.push({
-      minX: bridgeX - bridgeW / 2 - 0.2,
-      maxX: bridgeX - bridgeW / 2 + 0.55,
-      minZ: zStart - 5,
-      maxZ: zEnd + 5,
-      minY: 0.1,
-      maxY: 4.5,
-      tag: 'buriganga_bridge_guardrail',
-    });
-    this.buildingColliders.push({
-      minX: bridgeX + bridgeW / 2 - 0.55,
-      maxX: bridgeX + bridgeW / 2 + 0.2,
-      minZ: zStart - 5,
-      maxZ: zEnd + 5,
-      minY: 0.1,
-      maxY: 4.5,
-      tag: 'buriganga_bridge_guardrail',
-    });
-
-    // Heavy Concrete Piers + Waterline Cutwater Dolphins in the Buriganga River Channel
-    for (let pz = 315; pz <= 435; pz += 38) {
-      const pierElev = bridgeDeckElev(pz);
-      const pierH = pierElev + 2.4;
-
-      [-bridgeW / 3, bridgeW / 3].forEach((px) => {
-        const pier = new THREE.Mesh(this.cylCache(1.35, 1.65, pierH, 14), pierMat);
-        pier.position.set(bridgeX + px, pierElev - 1.15 - pierH / 2, pz);
-        pier.castShadow = true;
-        // Octagonal Ship-Impact Cutwater Fender Dolphin at Waterline
-        const cutwater = new THREE.Mesh(this.cylCache(2.05, 2.35, 1.4, 8), bridgeConcreteMat);
-        cutwater.position.set(bridgeX + px, 0.25, pz);
-        this.scene.add(pier, cutwater);
-
-        this.circleColliders.push({
-          x: bridgeX + px,
-          z: pz,
-          radius: 2.25,
-          tag: 'bridge_pier',
-        });
-      });
-
-      const crossBeam = this.sharedBox(bridgeW + 1.4, 1.35, 3.4, bridgeConcreteMat, bridgeX, pierElev - 1.35, pz);
-      this.scene.add(crossBeam);
-
-      // Sleek Arched Twin-Arm Highway High-Mast Streetlights on Bridge
-      [-bridgeW / 2 + 0.3, bridgeW / 2 - 0.3].forEach((lx) => {
-        const pole = new THREE.Mesh(this.cylCache(0.11, 0.16, 6.4, 10), stainlessMat);
-        pole.position.set(bridgeX + lx, pierElev + 3.2, pz);
-        const armDir = lx > 0 ? -1 : 1;
-        const arm = new THREE.Mesh(this.boxCache(1.6, 0.1, 0.12), stainlessMat);
-        arm.position.set(bridgeX + lx + armDir * 0.75, pierElev + 6.35, pz);
-        arm.rotation.z = armDir * 0.16;
-        const lum = new THREE.Mesh(this.boxCache(0.75, 0.14, 0.36), lampLightMat);
-        lum.position.set(bridgeX + lx + armDir * 1.4, pierElev + 6.42, pz);
-        this.scene.add(pole, arm, lum);
-      });
-    }
-
-    // Monumental Bangladesh Emerald-and-Gold Welcome Bridgehead Pylon Portals at North (287) & South (458)
-    [zStart + 2, zEnd - 2].forEach((az, aIdx) => {
-      const archGroup = new THREE.Group();
-      archGroup.position.set(bridgeX, 0, az);
-
-      [-bridgeW / 2 - 0.75, bridgeW / 2 + 0.75].forEach((px) => {
-        const pylonBase = new THREE.Mesh(this.boxCache(1.6, 2.2, 1.8), pierMat);
-        pylonBase.position.set(px, 1.1, 0);
-        const pylonShaft = new THREE.Mesh(this.boxCache(1.15, 8.6, 1.25), portalFrameMat);
-        pylonShaft.position.set(px, 6.4, 0);
-        const pylonCrown = new THREE.Mesh(this.cylCache(0.25, 0.85, 1.4, 8), yellowStripeMat);
-        pylonCrown.position.set(px, 11.4, 0);
-        archGroup.add(pylonBase, pylonShaft, pylonCrown);
-      });
-
-      const lintel = new THREE.Mesh(this.boxCache(bridgeW + 2.8, 1.35, 1.05), portalFrameMat);
-      lintel.position.set(0, 9.4, 0);
-      const lintelTrim = new THREE.Mesh(this.boxCache(bridgeW + 3.0, 0.22, 1.15), yellowStripeMat);
-      lintelTrim.position.set(0, 10.1, 0);
-      archGroup.add(lintel, lintelTrim);
-
-      const signTex = createFlyoverGantryTexture(
-        '১ম বুড়িগঙ্গা সেতু (চীন-বাংলাদেশ মৈত্রী সেতু)',
-        '1ST BURIGANGA BRIDGE (CHINA-BANGLADESH FRIENDSHIP BRIDGE)',
-        aIdx === 0 ? 'কেরানীগঞ্জ ও মাওয়া এক্সপ্রেসওয়ে সংযোগ' : 'সদরঘাট, চকবাজার ও গুলিস্তান সংযোগ',
-        aIdx === 0 ? 'KERANIGANJ & MAWA EXPRESSWAY LINK' : 'SADARGHAT, CHAWKBAZAR & GULISTAN LINK'
-      );
-      const signBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(bridgeW * 0.88, 2.4, 0.16),
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.35 })
-      );
-      signBoard.position.set(0, 7.6, 0);
-      archGroup.add(signBoard);
-
-      this.scene.add(archGroup);
-    });
-
-    // 2. Concrete Bridge Decks & Smooth Approach Ramps for ALL North-South arteries crossing Buriganga
-    const otherBridgeXs = [-950, -780, -580, -480, -380, -170, 220, 440, 640, 840, 950];
-    const rampLen2 = 20;
-    const rampAngle = Math.atan2(0.92, rampLen2);
-
-    otherBridgeXs.forEach((ox) => {
-      const oRoad = DhakaCityEngine.NS_ROADS.find((r) => r.x === ox);
-      const oW = oRoad ? oRoad.width : 18;
-
-      // 2.1 North Approach Ramp (Z: 265 to 285, rising Y: 0.08 -> 1.0)
-      const northRamp = new THREE.Mesh(this.boxCache(oW - 1.8, 0.8, rampLen2 + 0.2), bridgeAsphaltMat);
-      northRamp.position.set(ox, 0.54, 275);
-      northRamp.rotation.x = -rampAngle;
-      northRamp.receiveShadow = true;
-      this.scene.add(northRamp);
-
-      [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const rail = new THREE.Mesh(this.boxCache(0.42, 0.72, rampLen2 + 0.2), bridgeConcreteMat);
-        rail.position.set(ox + gx, 1.15, 275);
-        rail.rotation.x = -rampAngle;
-        const topTube = new THREE.Mesh(this.boxCache(0.1, 0.08, rampLen2 + 0.2), stainlessMat);
-        topTube.position.set(ox + gx, 1.65, 275);
-        topTube.rotation.x = -rampAngle;
-        this.scene.add(rail, topTube);
-      });
-
-      // 2.2 Solid Concrete Structural Bridge Deck + Raised Sidewalks + Asphalt Roadway
-      const oDeck = this.sharedBox(oW, 0.74, bridgeLen, bridgeConcreteMat, ox, 0.51, (zStart + zEnd) / 2);
-      oDeck.receiveShadow = true;
-      const oAsphalt = this.sharedBox(oW - 2.4, 0.14, bridgeLen, bridgeAsphaltMat, ox, 0.94, (zStart + zEnd) / 2);
-      oAsphalt.receiveShadow = true;
-      const oWalkL = this.sharedBox(1.0, 0.2, bridgeLen, bridgeConcreteMat, ox - oW / 2 + 0.85, 1.01, (zStart + zEnd) / 2);
-      const oWalkR = this.sharedBox(1.0, 0.2, bridgeLen, bridgeConcreteMat, ox + oW / 2 - 0.85, 1.01, (zStart + zEnd) / 2);
-      const oCenterN = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox - 0.15, 1.02, (zStart + zEnd) / 2);
-      const oCenterS = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox + 0.15, 1.02, (zStart + zEnd) / 2);
-      this.scene.add(oDeck, oAsphalt, oWalkL, oWalkR, oCenterN, oCenterS);
-
-      // Wing-Wall Bridgehead Abutments at North/South river bank joints
-      [zStart, zEnd].forEach((az) => {
-        this.scene.add(this.sharedBox(oW + 1.8, 1.8, 3.6, pierMat, ox, 0.1, az));
-      });
-
-      // Side Jersey Parapets + Open Stainless Railings & Yellow Hazard Studs
-      [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const parapet = this.sharedBox(0.42, 0.72, bridgeLen, bridgeConcreteMat, ox + gx, 1.24, (zStart + zEnd) / 2);
-        const topTube = this.sharedBox(0.1, 0.08, bridgeLen, stainlessMat, ox + gx, 1.72, (zStart + zEnd) / 2);
-        this.scene.add(parapet, topTube);
-
-        for (let rz = zStart + 10; rz <= zEnd - 10; rz += 20) {
-          const stud = new THREE.Mesh(this.boxCache(0.44, 0.18, 0.85), yellowStripeMat);
-          stud.position.set(ox + gx, 1.15, rz);
-          this.scene.add(stud);
-        }
-      });
-
-      // 2.3 South Approach Ramp (Z: 460 to 480, declining Y: 1.0 -> 0.08)
-      const southRamp = new THREE.Mesh(this.boxCache(oW - 1.8, 0.8, rampLen2 + 0.2), bridgeAsphaltMat);
-      southRamp.position.set(ox, 0.54, 470);
-      southRamp.rotation.x = rampAngle;
-      southRamp.receiveShadow = true;
-      this.scene.add(southRamp);
-
-      [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
-        const rail = new THREE.Mesh(this.boxCache(0.42, 0.72, rampLen2 + 0.2), bridgeConcreteMat);
-        rail.position.set(ox + gx, 1.15, 470);
-        rail.rotation.x = rampAngle;
-        const topTube = new THREE.Mesh(this.boxCache(0.1, 0.08, rampLen2 + 0.2), stainlessMat);
-        topTube.position.set(ox + gx, 1.65, 470);
-        topTube.rotation.x = rampAngle;
-        this.scene.add(rail, topTube);
-      });
-
-      this.buildingColliders.push({
-        minX: ox - oW / 2 - 0.2,
-        maxX: ox - oW / 2 + 0.55,
-        minZ: 265,
-        maxZ: 480,
-        minY: 0.1,
-        maxY: 3.5,
-        tag: 'buriganga_bridge_guardrail',
-      });
-      this.buildingColliders.push({
-        minX: ox + oW / 2 - 0.55,
-        maxX: ox + oW / 2 + 0.2,
-        minZ: 265,
-        maxZ: 480,
-        minY: 0.1,
-        maxY: 3.5,
-        tag: 'buriganga_bridge_guardrail',
-      });
-
-      // 2.4 Twin-Column Concrete Pier Bents + Hammerhead Crossbeam + Cutwater Dolphins + River Bridge Streetlights
-      for (let pz = 320; pz <= 430; pz += 36) {
-        [-oW * 0.3, oW * 0.3].forEach((px) => {
-          const pier = new THREE.Mesh(this.cylCache(0.95, 1.15, 2.8, 12), pierMat);
-          pier.position.set(ox + px, -0.85, pz);
-          pier.castShadow = true;
-          const cutwater = new THREE.Mesh(this.cylCache(1.45, 1.65, 1.0, 8), bridgeConcreteMat);
-          cutwater.position.set(ox + px, 0.05, pz);
-          this.scene.add(pier, cutwater);
-          this.circleColliders.push({ x: ox + px, z: pz, radius: 1.55, tag: 'bridge_pier' });
-        });
-        this.scene.add(this.sharedBox(oW + 0.8, 0.65, 2.2, bridgeConcreteMat, ox, -0.05, pz));
-
-        // Highway Side Streetlamps along bridge piers
-        [-oW / 2 + 0.3, oW / 2 - 0.3].forEach((lx) => {
-          const armDir = lx > 0 ? -1 : 1;
-          const pole = new THREE.Mesh(this.cylCache(0.1, 0.13, 5.4, 8), stainlessMat);
-          pole.position.set(ox + lx, 3.7, pz);
-          const lum = new THREE.Mesh(this.boxCache(0.65, 0.12, 0.28), lampLightMat);
-          lum.position.set(ox + lx + armDir * 0.45, 6.4, pz);
-          this.scene.add(pole, lum);
-        });
-      }
+    buildBurigangaRiverBridgesInScene({
+      ...this.getBuilderContext(),
+      nsRoads: DhakaCityEngine.NS_ROADS,
     });
   }
 
   private buildHatirjheelBridge() {
-    const archGroup = new THREE.Group();
-    archGroup.position.set(220, 0, -5);
-
-    const asphaltTex = loadRealTexture(
-      '/textures/dhaka_asphalt.jpg',
-      2,
-      12,
-      true
-    );
-    const steelArchMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      metalness: 0.72,
-      roughness: 0.22,
-    });
-    const concreteDeckMat = new THREE.MeshStandardMaterial({
-      color: '#cbd5e1',
-      roughness: 0.68,
-    });
-    const darkPierMat = new THREE.MeshStandardMaterial({
-      color: '#475569',
-      roughness: 0.78,
-    });
-    const chromeRailMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      metalness: 0.9,
-      roughness: 0.16,
-    });
-    const hangerCableMat = new THREE.MeshStandardMaterial({
-      color: '#cbd5e1',
-      metalness: 0.92,
-      roughness: 0.14,
-    });
-    const glassRailMat = new THREE.MeshStandardMaterial({
-      color: '#bae6fd',
-      transparent: true,
-      opacity: 0.42,
-      roughness: 0.1,
-    });
-
-    // Concrete Box Girder Underside + Asphalt Road Deck + Center Divider + Sidewalks (Z: -47.5..+47.5 around local 0)
-    const boxGirder = this.sharedBox(20.6, 0.75, 95, concreteDeckMat, 0, 0.12, 0);
-    const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(17.4, 0.16, 95),
-      new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.75 })
-    );
-    deck.position.set(0, 0.48, 0);
-    deck.receiveShadow = true;
-    const walkW = this.sharedBox(1.4, 0.24, 95, concreteDeckMat, -9.4, 0.56, 0);
-    const walkE = this.sharedBox(1.4, 0.24, 95, concreteDeckMat, 9.4, 0.56, 0);
-    const centerLineL = this.sharedBox(0.14, 0.02, 94, new THREE.MeshBasicMaterial({ color: '#facc15' }), -0.14, 0.57, 0);
-    const centerLineR = this.sharedBox(0.14, 0.02, 94, new THREE.MeshBasicMaterial({ color: '#facc15' }), 0.14, 0.57, 0);
-    archGroup.add(boxGirder, deck, walkW, walkE, centerLineL, centerLineR);
-
-    for (let dz = -42; dz <= 42; dz += 7) {
-      archGroup.add(this.sharedBox(0.12, 0.02, 3.2, new THREE.MeshBasicMaterial({ color: '#f8fafc' }), -4.3, 0.57, dz));
-      archGroup.add(this.sharedBox(0.12, 0.02, 3.2, new THREE.MeshBasicMaterial({ color: '#f8fafc' }), 4.3, 0.57, dz));
-    }
-
-    // Bridgehead Concrete Wing-Wall Abutments & Lake Guardrail Balustrades
-    [-46, 46].forEach((az) => {
-      archGroup.add(this.sharedBox(22.8, 2.0, 4.2, darkPierMat, 0, 0.1, az));
-    });
-    [-10.0, 10.0].forEach((rx) => {
-      archGroup.add(this.sharedBox(0.14, 0.82, 95, glassRailMat, rx, 1.05, 0));
-      archGroup.add(this.sharedBox(0.18, 0.09, 95, chromeRailMat, rx, 1.48, 0));
-      archGroup.add(this.sharedBox(0.28, 0.35, 95, concreteDeckMat, rx, 0.72, 0));
-    });
-
-    // Twin Cantilevered Continuous White Steel Parabolic Tied Arches + Overhead Cross-Bracing + Exact Tension Hangers
-    const archHeightAtZ = (lz: number) => 0.55 + 16.8 * Math.max(0, 1 - (lz / 44) * (lz / 44));
-    const archSteps = 22;
-    const neonColors = ['#ec4899', '#06b6d4', '#a855f7', '#38bdf8'];
-    [-9.8, 9.8].forEach((sideX, sIdx) => {
-      const tiltDir = sideX > 0 ? -1 : 1;
-      for (let i = 0; i < archSteps; i++) {
-        const z1 = -44 + (i / archSteps) * 88;
-        const z2 = -44 + ((i + 1) / archSteps) * 88;
-        const y1 = archHeightAtZ(z1);
-        const y2 = archHeightAtZ(z2);
-        const x1 = sideX + tiltDir * ((y1 - 0.55) * 0.09);
-        const x2 = sideX + tiltDir * ((y2 - 0.55) * 0.09);
-
-        const p1 = new THREE.Vector3(x1, y1, z1);
-        const p2 = new THREE.Vector3(x2, y2, z2);
-        const chordVec = p2.clone().sub(p1);
-        const segL = chordVec.length() + 0.12;
-        const ribSeg = new THREE.Mesh(this.boxCache(0.75, segL, 0.85), steelArchMat);
-        ribSeg.position.copy(p1).add(p2).multiplyScalar(0.5);
-        ribSeg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), chordVec.normalize());
-        ribSeg.castShadow = true;
-        archGroup.add(ribSeg);
-
-        // Glowing architectural LED collar node + Tension Hanger Cable down to deck anchor socket
-        if (i > 0 && i % 2 === 0) {
-          const col = neonColors[(i / 2 + sIdx) % neonColors.length];
-          const collar = new THREE.Mesh(
-            this.boxCache(0.92, 0.24, 0.92),
-            new THREE.MeshBasicMaterial({ color: col })
-          );
-          collar.position.copy(p1);
-          archGroup.add(collar);
-
-          const deckAnchor = new THREE.Vector3(sideX, 0.65, z1);
-          const hangerVec = p1.clone().sub(deckAnchor);
-          const hLen = hangerVec.length();
-          if (hLen > 0.8) {
-            const cable = new THREE.Mesh(this.cylCache(0.055, 0.055, hLen, 8), hangerCableMat);
-            cable.position.copy(deckAnchor).add(p1).multiplyScalar(0.5);
-            cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), hangerVec.normalize());
-            archGroup.add(cable);
-
-            const socket = new THREE.Mesh(this.cylCache(0.14, 0.18, 0.38, 8), darkPierMat);
-            socket.position.set(sideX, 0.8, z1);
-            archGroup.add(socket);
-          }
-        }
-      }
-    });
-
-    // Sculptural Steel Cross-Bracing Struts & X-Wind Portal between West and East Arches
-    [-20, -10, 0, 10, 20].forEach((cz) => {
-      const yCross = archHeightAtZ(cz);
-      const xSpan = (9.8 - (yCross - 0.55) * 0.09) * 2;
-      const strut = new THREE.Mesh(this.cylCache(0.24, 0.24, xSpan, 10).rotateZ(Math.PI / 2), steelArchMat);
-      strut.position.set(0, yCross, cz);
-      archGroup.add(strut);
-      const glowBand = new THREE.Mesh(
-        this.boxCache(xSpan * 0.55, 0.14, 0.34),
-        new THREE.MeshBasicMaterial({ color: cz === 0 ? '#ec4899' : '#06b6d4' })
-      );
-      glowBand.position.set(0, yCross - 0.18, cz);
-      archGroup.add(glowBand);
-    });
-
-    const bridgeLight = new THREE.PointLight('#ec4899', 2.4, 75);
-    bridgeLight.position.set(0, 14, 0);
-    archGroup.add(bridgeLight);
-    this.hatirjheelLights.push(bridgeLight);
-
-    this.scene.add(archGroup);
-
-    // Hatirjheel Bridge guardrails (prevent driving off into the lake!)
-    this.buildingColliders.push({
-      minX: 209.2,
-      maxX: 210.4,
-      minZ: -52.5,
-      maxZ: 42.5,
-      minY: 0.0,
-      maxY: 3.5,
-      tag: 'bridge_rail_west',
-    });
-    this.buildingColliders.push({
-      minX: 229.6,
-      maxX: 230.8,
-      minZ: -52.5,
-      maxZ: 42.5,
-      minY: 0.0,
-      maxY: 3.5,
-      tag: 'bridge_rail_east',
+    buildHatirjheelBridgeInScene({
+      ...this.getBuilderContext(),
+      hatirjheelLights: this.hatirjheelLights,
     });
   }
 
@@ -2801,1204 +2336,18 @@ export class DhakaCityEngine {
   }
 
   private buildMetroViaductPillars() {
-    const concreteMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.85,
+    const trains = buildMetroNetworkInScene({
+      ...this.getBuilderContext(),
+      metroEscalators: this.metroEscalators,
+      metroStationInteriors: this.metroStationInteriors,
+      metroPortalRings: this.metroPortalRings,
     });
-    const railSteelMat = new THREE.MeshStandardMaterial({
-      color: '#64748b',
-      metalness: 0.92,
-      roughness: 0.18,
-    });
-    const mastSteelMat = new THREE.MeshStandardMaterial({
-      color: '#475569',
-      metalness: 0.85,
-      roughness: 0.35,
-    });
-    const wireMat = new THREE.MeshBasicMaterial({ color: '#334155' });
-    const canopyMat = new THREE.MeshStandardMaterial({
-      color: '#0f766e',
-      metalness: 0.45,
-      roughness: 0.25,
-      side: THREE.DoubleSide,
-    });
-    const concourseMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      roughness: 0.72,
-    });
-    const glassMat = new THREE.MeshPhysicalMaterial({
-      color: '#bae6fd',
-      transmission: 0.82,
-      roughness: 0.08,
-      transparent: true,
-      opacity: 0.85,
-    });
-    const psdGlassMat = new THREE.MeshPhysicalMaterial({
-      color: '#38bdf8',
-      transmission: 0.75,
-      roughness: 0.12,
-      transparent: true,
-      opacity: 0.75,
-    });
-
-    // =========================================================================
-    // SECTION A: MRT LINE-6 (NORTH-SOUTH) VIADUCT (Uttara Depot Z=-1250 to Kamalapur Z=+470)
-    // =========================================================================
-    const line6CrossRoads = [-1100, -850, -620, -460, -315, -198, -175, -28, 0, 175, 240, 285, 440];
-    for (let z = -1240; z <= 460; z += 42) {
-      // Exclude cross streets, flyover intersections, and SAARC Fountain Roundabout (-28)
-      if (line6CrossRoads.some((cr) => Math.abs(z - cr) < (cr === -28 ? 26 : 18))) continue;
-
-      const nearBurigangaBridge = z >= 278 && z <= 468;
-      const pierX = nearBurigangaBridge ? -15.2 : -12.2;
-
-      this.circleColliders.push({
-        x: pierX,
-        z,
-        radius: 1.15,
-        tag: 'metro_pillar',
-      });
-      const pier = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.05, 1.25, 11.5, 14),
-        concreteMat
-      );
-      pier.position.set(pierX, 5.75, z);
-      pier.castShadow = true;
-      this.scene.add(pier);
-
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(nearBurigangaBridge ? 7.8 : 6.4, 1.4, 3.4),
-        concreteMat
-      );
-      cap.position.set(nearBurigangaBridge ? -12.9 : -12.2, 11.5, z);
-      this.scene.add(cap);
-
-      // Steel Catenary Overhead Mast (Line-6)
-      if (z % 84 === 0) {
-        const mast = new THREE.Mesh(new THREE.BoxGeometry(0.24, 6.2, 0.24), mastSteelMat);
-        mast.position.set(-15.3, 15.6, z);
-        this.scene.add(mast);
-
-        const cantilever = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.18, 0.18), mastSteelMat);
-        cantilever.position.set(-13.0, 18.2, z);
-        this.scene.add(cantilever);
-
-        const dropArm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), mastSteelMat);
-        dropArm1.position.set(-13.3, 17.8, z);
-        this.scene.add(dropArm1);
-
-        const dropArm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), mastSteelMat);
-        dropArm2.position.set(-11.1, 17.8, z);
-        this.scene.add(dropArm2);
-      }
-    }
-
-    // Continuous Pre-Stressed Concrete Box Girder (1720m length, Z: -1250 to +470)
-    const line6Girder = new THREE.Mesh(
-      new THREE.BoxGeometry(5.4, 1.25, 1720),
-      concreteMat
-    );
-    line6Girder.position.set(-12.2, 12.6, -390);
-    line6Girder.castShadow = true;
-    this.scene.add(line6Girder);
-
-    // Continuous Line-6 Dual Overhead Catenary Contact Wires
-    [-13.3, -11.1].forEach((wireX) => {
-      const contactWire = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1720, 6), wireMat);
-      contactWire.position.set(wireX, 17.4, -390);
-      contactWire.rotation.x = Math.PI / 2;
-      this.scene.add(contactWire);
-    });
-
-    // Dual Steel Track Rails with Timber Sleepers (Line-6)
-    [-13.3, -11.1].forEach((trackX) => {
-      [-0.45, 0.45].forEach((railOffsetX) => {
-        const rail = this.sharedBox(0.12, 0.14, 1720, railSteelMat, trackX + railOffsetX, 13.28, -390);
-        this.scene.add(rail);
-      });
-    });
-
-    // =========================================================================
-    // SECTION B: MRT LINE-5 NORTHERN ROUTE (EAST-WEST) VIADUCT (X: -460 to +650 at Z = -198)
-    // Running parallel north of Mohakhali Flyover with zero roadway obstructions
-    // Passes 4.2m OVER Line-6 at Mirpur-10 (Deck Y = 16.8m, Rails Y = 17.5m)
-    // =========================================================================
-    const line5Z = -198;
-    const line5CrossAvenues = [-420, -280, -170, -12.2, 14, 120, 260, 420, 560];
-    for (let x = -460; x <= 640; x += 42) {
-      if (line5CrossAvenues.some((ca) => Math.abs(x - ca) < 18)) continue;
-
-      this.circleColliders.push({
-        x,
-        z: line5Z,
-        radius: 1.2,
-        tag: 'metro_pillar',
-      });
-      const pier5 = new THREE.Mesh(
-        new THREE.CylinderGeometry(1.1, 1.35, 15.6, 14),
-        concreteMat
-      );
-      pier5.position.set(x, 7.8, line5Z);
-      pier5.castShadow = true;
-      this.scene.add(pier5);
-
-      const cap5 = new THREE.Mesh(
-        new THREE.BoxGeometry(3.4, 1.4, 6.4),
-        concreteMat
-      );
-      cap5.position.set(x, 15.6, line5Z);
-      this.scene.add(cap5);
-
-      // Steel Catenary Overhead Mast (Line-5)
-      if (x % 84 === 0) {
-        const mast5 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 6.2, 0.24), mastSteelMat);
-        mast5.position.set(x, 19.8, line5Z - 3.2);
-        this.scene.add(mast5);
-
-        const cantilever5 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 4.8), mastSteelMat);
-        cantilever5.position.set(x, 22.4, line5Z - 0.9);
-        this.scene.add(cantilever5);
-
-        const dropArm5A = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), mastSteelMat);
-        dropArm5A.position.set(x, 22.0, line5Z - 1.2);
-        this.scene.add(dropArm5A);
-
-        const dropArm5B = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), mastSteelMat);
-        dropArm5B.position.set(x, 22.0, line5Z + 1.2);
-        this.scene.add(dropArm5B);
-      }
-    }
-
-    // Continuous Line-5 Box Girder (1110m length, X: -460 to +650, Z = -198, Y = 16.8m)
-    const line5Girder = new THREE.Mesh(
-      new THREE.BoxGeometry(1110, 1.25, 5.4),
-      concreteMat
-    );
-    line5Girder.position.set(95, 16.8, line5Z);
-    line5Girder.castShadow = true;
-    this.scene.add(line5Girder);
-
-    // Continuous Line-5 Dual Overhead Catenary Contact Wires
-    [line5Z - 1.2, line5Z + 1.2].forEach((wireZ) => {
-      const contactWire5 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1110, 6), wireMat);
-      contactWire5.position.set(95, 21.6, wireZ);
-      contactWire5.rotation.z = Math.PI / 2;
-      this.scene.add(contactWire5);
-    });
-
-    // Dual Steel Track Rails (Line-5, East-West)
-    [line5Z - 1.2, line5Z + 1.2].forEach((trackZ) => {
-      [-0.45, 0.45].forEach((railOffsetZ) => {
-        const rail5 = this.sharedBox(1110, 0.14, 0.12, railSteelMat, 95, 17.48, trackZ + railOffsetZ);
-        this.scene.add(rail5);
-      });
-    });
-
-    // =========================================================================
-    // SECTION C: COMPLETE 2-TIER DHAKA MRT STATIONS, PORTAL PIERS & ESCALATORS
-    // =========================================================================
-    const concourseGlowMat = new THREE.MeshStandardMaterial({
-      color: '#fef3c7',
-      emissive: new THREE.Color('#fde68a'),
-      emissiveIntensity: 0.55,
-      roughness: 0.18,
-    });
-    const roofSilverMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      metalness: 0.68,
-      roughness: 0.28,
-      side: THREE.DoubleSide,
-    });
-    const graniteTileMat = new THREE.MeshStandardMaterial({
-      color: '#475569',
-      roughness: 0.42,
-      metalness: 0.15,
-    });
-    const mrtGreenTrimMat = new THREE.MeshStandardMaterial({ color: '#059669', roughness: 0.35, metalness: 0.25 });
-    const mrtRedTrimMat = new THREE.MeshStandardMaterial({ color: '#be123c', roughness: 0.35, metalness: 0.25 });
-    const yellowLineMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
-    const trussSteelMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', metalness: 0.65, roughness: 0.28 });
-    const afcGateMat = new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.7, roughness: 0.3 });
-    const ledGreenMat = new THREE.MeshBasicMaterial({ color: '#22c55e' });
-    const ledCyanMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
-    const pidsAmberMat = new THREE.MeshBasicMaterial({ color: '#fbbf24' });
-    const rubberHandrailMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.45 });
-
-    const line6Stations = [
-      { nameBn: 'উত্তরা উত্তর ডিপো স্টেশন', nameEn: 'UTTARA NORTH DEPOT', sz: -1150, hasStairs: true },
-      { nameBn: 'উত্তরা সেন্টার মেট্রো স্টেশন', nameEn: 'UTTARA CENTER METRO', sz: -850, hasStairs: true },
-      { nameBn: 'উত্তরা উত্তর / পল্লবী স্টেশন', nameEn: 'UTTARA NORTH / PALLABI', sz: -530, hasStairs: true },
-      { nameBn: 'মিরপুর-১০ ইন্টারচেঞ্জ স্টেশন', nameEn: 'MIRPUR-10 GRAND INTERCHANGE', sz: -175, hasStairs: true, isHub: true },
-      { nameBn: 'ফার্মগেট মেট্রো স্টেশন', nameEn: 'FARMGATE CENTRAL STATION', sz: -15, hasStairs: true },
-      { nameBn: 'শাহবাগ / টিএসসি স্টেশন', nameEn: 'SHAHBAGH / TSC STATION', sz: 160, hasStairs: true },
-      { nameBn: 'মতিঝিল / কমলাপুর স্টেশন', nameEn: 'MOTIJHEEL BANK PLAZA', sz: 270, hasStairs: true },
-      { nameBn: 'কমলাপুর রেল টার্মিনাল স্টেশন', nameEn: 'KAMALAPUR TERMINAL', sz: 450, hasStairs: true },
-    ];
-
-    line6Stations.forEach((st) => {
-      const routeMapTexL6 = createMetroRouteMapTexture(st.nameEn, 'L6');
-      const routeMapMatL6 = new THREE.MeshBasicMaterial({ map: routeMapTexL6, side: THREE.DoubleSide });
-
-      // 1. Structural Twin-Column Concrete Portal Bents with Flared Hammerhead Capitals
-      [-22, -7, 7, 22].forEach((bz) => {
-        [-17.8, -12.2].forEach((px) => {
-          const col = new THREE.Mesh(this.cylCache(0.72, 0.88, 12.6, 12), concreteMat);
-          col.position.set(px, 6.3, st.sz + bz);
-          this.scene.add(col);
-          const capital = new THREE.Mesh(this.cylCache(1.18, 0.74, 1.1, 12), concreteMat);
-          capital.position.set(px, 7.65, st.sz + bz);
-          this.scene.add(capital);
-          this.circleColliders.push({ x: px, z: st.sz + bz, radius: 0.92, tag: 'metro_station_pier' });
-        });
-        this.scene.add(this.sharedBox(15.2, 0.9, 1.4, concreteMat, -10.5, 8.2, st.sz + bz));
-        if (bz !== -7) {
-          this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
-        } else {
-          // Leave interior stairwell void (-16.8..-14.7) unobstructed
-          this.scene.add(this.sharedBox(11.6, 1.0, 1.6, concreteMat, -8.8, 12.3, st.sz + bz));
-        }
-      });
-
-      // External Architectural Station Envelope U-Frame Cladding Ribs (every 12m along station)
-      for (let exZ = -24; exZ <= 24; exZ += 12) {
-        [-18.0, -3.0].forEach((exX) => {
-          this.scene.add(this.sharedBox(0.38, 11.4, 0.65, trussSteelMat, exX, 14.3, st.sz + exZ));
-        });
-      }
-
-      // Architectural Under-Concourse Soffit Louvers & Lighting Spine
-      for (let sfz = -24; sfz <= 24; sfz += 6) {
-        this.scene.add(this.sharedBox(14.0, 0.16, 0.45, trussSteelMat, -10.5, 8.48, st.sz + sfz));
-      }
-
-      // 2. Hollow Walk-In Lower Ticket Concourse Level (Floor Y = 8.96m, Ceiling Y = 12.7m)
-      this.scene.add(this.sharedBox(14.2, 0.42, 58, concourseMat, -10.5, 8.75, st.sz));
-      this.scene.add(this.sharedBox(2.8, 0.04, 54, graniteTileMat, -10.5, 8.97, st.sz));
-      this.scene.add(this.sharedBox(1.8, 0.14, 54, concourseGlowMat, -10.5, 12.2, st.sz));
-      for (let clz = -24; clz <= 24; clz += 8) {
-        this.scene.add(this.sharedBox(10.5, 0.1, 0.35, concourseGlowMat, -10.5, 12.15, st.sz + clz));
-      }
-      // Illuminated Concourse Baggage Scanner & Overhead Wayfinding Lightbox
-      this.scene.add(this.sharedBox(1.1, 1.35, 2.2, afcGateMat, -8.5, 9.64, st.sz - 12));
-      this.scene.add(this.sharedBox(0.14, 0.45, 1.4, ledGreenMat, -9.08, 9.85, st.sz - 12));
-      this.scene.add(this.sharedBox(4.2, 0.52, 0.18, mrtGreenTrimMat, -12.5, 11.65, st.sz + 3));
-      this.scene.add(this.sharedBox(3.8, 0.32, 0.22, concourseGlowMat, -12.5, 11.65, st.sz + 3));
-      const l6DirSign = st.sz === -175 ? 1 : -1;
-      const l6LandCenterZ = (st.sz === -175 ? st.sz - 22 : st.sz + 22) + l6DirSign * 15.5;
-      // Outer glass concourse walls + mullions + sun-breaker louvers
-      [-3.45, -17.45].forEach((wx) => {
-        if (wx < -10) {
-          const zNorthMin = st.sz - 28.5;
-          const zNorthMax = l6LandCenterZ - 2.0;
-          if (zNorthMax > zNorthMin + 1) {
-            this.scene.add(this.sharedBox(0.18, 2.9, zNorthMax - zNorthMin, glassMat, wx, 10.4, (zNorthMin + zNorthMax) * 0.5));
-          }
-          const zSouthMin = l6LandCenterZ + 2.0;
-          const zSouthMax = st.sz + 28.5;
-          if (zSouthMax > zSouthMin + 1) {
-            this.scene.add(this.sharedBox(0.18, 2.9, zSouthMax - zSouthMin, glassMat, wx, 10.4, (zSouthMin + zSouthMax) * 0.5));
-          }
-        } else {
-          this.scene.add(this.sharedBox(0.18, 2.9, 57, glassMat, wx, 10.4, st.sz));
-        }
-        this.scene.add(this.sharedBox(0.26, 0.52, 58.2, mrtGreenTrimMat, wx, 8.95, st.sz));
-        this.scene.add(this.sharedBox(0.28, 0.44, 58.2, mastSteelMat, wx, 12.05, st.sz));
-        for (let mz = -27; mz <= 27; mz += 4.5) {
-          if (wx < -10 && Math.abs(st.sz + mz - l6LandCenterZ) < 2.2) continue;
-          this.scene.add(this.sharedBox(0.26, 3.1, 0.16, mastSteelMat, wx, 10.4, st.sz + mz));
-        }
-      });
-
-      // Staffed DMTCL Ticket Office & Customer Care Glass Booth (East Concourse X = -6.0)
-      this.scene.add(this.sharedBox(2.2, 2.6, 5.4, mrtGreenTrimMat, -5.8, 10.26, st.sz));
-      this.scene.add(this.sharedBox(2.3, 1.25, 4.4, glassMat, -5.8, 10.4, st.sz));
-      this.scene.add(this.sharedBox(2.4, 0.35, 5.5, trussSteelMat, -5.8, 11.65, st.sz));
-      this.scene.add(this.sharedBox(0.12, 0.55, 1.4, ledCyanMat, -6.92, 10.4, st.sz));
-
-      // Ticket Vending Machines (TVMs) with illuminated touchscreens along East Concourse
-      [-9.5, -6.5, 6.5, 9.5].forEach((tz) => {
-        this.scene.add(this.sharedBox(0.85, 1.95, 1.15, mrtGreenTrimMat, -5.6, 9.94, st.sz + tz));
-        this.scene.add(this.sharedBox(0.08, 0.72, 0.65, ledCyanMat, -6.04, 10.18, st.sz + tz));
-      });
-
-      // Row of 4 AFC Rapid-Pass Smart Turnstiles (clear center lane for walking!)
-      [-5.5, -3.5, 3.5, 5.5].forEach((dz) => {
-        this.scene.add(this.sharedBox(0.22, 1.02, 1.45, afcGateMat, -11.4, 9.48, st.sz + dz));
-        this.scene.add(this.sharedBox(0.06, 0.24, 0.24, ledGreenMat, -11.52, 9.85, st.sz + dz));
-        this.scene.add(this.sharedBox(0.05, 0.65, 0.45, psdGlassMat, -11.4, 9.45, st.sz + dz + 0.85));
-      });
-
-      // Interior Escalator Stairway connecting Concourse Hall (Y=8.96) -> West Side Platform (Y=13.30) cleanly flush!
-      const intZ1 = st.sz - 8.5;
-      const intZ2 = st.sz + 1.5;
-      const intX = -15.75;
-      for (let is = 0; is < 18; is++) {
-        const ft = (is + 0.5) / 18;
-        const stepY = THREE.MathUtils.lerp(8.92, 13.10, ft);
-        const stepZ = THREE.MathUtils.lerp(intZ1, intZ2, ft);
-        const step = new THREE.Mesh(this.boxCache(1.85, 0.38, 0.72), afcGateMat);
-        step.position.set(intX, stepY, stepZ);
-        this.scene.add(step);
-        this.scene.add(this.sharedBox(1.82, 0.035, 0.08, yellowLineMat, intX, stepY + 0.195, stepZ - 0.30));
-      }
-
-      // Guardrails + Colliders around the 3 closed edges of the Platform Stairwell Cutout (X: -16.8..-14.7, Z: st.sz-8.8..+1.7)
-      this.scene.add(this.sharedBox(0.12, 1.05, 10.5, trussSteelMat, -14.7, 13.85, (intZ1 + intZ2) * 0.5));
-      this.scene.add(this.sharedBox(0.12, 1.05, 10.5, trussSteelMat, -16.8, 13.85, (intZ1 + intZ2) * 0.5));
-      this.scene.add(this.sharedBox(2.2, 1.05, 0.12, trussSteelMat, intX, 13.85, st.sz - 8.8));
-      this.buildingColliders.push(
-        { minX: -14.8, maxX: -14.6, minZ: st.sz - 8.9, maxZ: st.sz + 1.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' },
-        { minX: -16.9, maxX: -16.7, minZ: st.sz - 8.9, maxZ: st.sz + 1.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' },
-        { minX: -16.9, maxX: -14.6, minZ: st.sz - 8.9, maxZ: st.sz - 8.7, minY: 12.8, maxY: 15.2, tag: 'metro_stair_rail' }
-      );
-
-      // 3. Open Dual-Side Upper Train Platform Deck with TRUE Stairwell Cutout Void (Walkable Y=13.30)
-      // Sub-deck structural girder split cleanly around stairwell cutout (X: -16.8..-14.7, Z: st.sz-8.8..+1.7)
-      this.scene.add(this.sharedBox(11.8, 0.52, 64, concourseMat, -8.8, 12.6, st.sz));         // Trackbed + East platform
-      this.scene.add(this.sharedBox(1.3, 0.52, 64, concourseMat, -17.45, 12.6, st.sz));        // West outer strip
-      this.scene.add(this.sharedBox(2.1, 0.52, 23.2, concourseMat, intX, 12.6, st.sz - 20.4)); // North of stairwell
-      this.scene.add(this.sharedBox(2.1, 0.52, 30.3, concourseMat, intX, 12.6, st.sz + 16.85));// South of stairwell
-
-      // West boarding platform finish surface (Y=13.30) split cleanly around stairwell cutout
-      this.scene.add(this.sharedBox(0.8, 0.44, 62, concourseMat, -14.3, 13.08, st.sz));        // East boarding aisle by PSD
-      this.scene.add(this.sharedBox(1.1, 0.44, 62, concourseMat, -17.35, 13.08, st.sz));       // West outer aisle
-      this.scene.add(this.sharedBox(2.1, 0.44, 22.2, concourseMat, intX, 13.08, st.sz - 19.9));// North of stairwell
-      this.scene.add(this.sharedBox(2.1, 0.44, 29.3, concourseMat, intX, 13.08, st.sz + 16.35));// South of stairwell
-
-      this.scene.add(this.sharedBox(5.6, 0.44, 62, concourseMat, -6.5, 13.08, st.sz));         // East boarding platform (X: -9.3..-3.7)
-
-      // Symmetric Dual Gull-Wing Architectural Canopy + Central Polycarbonate Skylight & Steel Arch Trusses (Y=18.8m clear above pantographs)
-      [-1, 1].forEach((wingSide) => {
-        const wing = new THREE.Mesh(this.boxCache(7.6, 0.24, 65), roofSilverMat);
-        wing.position.set(-10.5 + wingSide * 5.3, 19.65, st.sz);
-        wing.rotation.z = wingSide * 0.18;
-        this.scene.add(wing);
-        const fasciaTrim = new THREE.Mesh(this.boxCache(0.32, 0.65, 65.2), mrtGreenTrimMat);
-        fasciaTrim.position.set(-10.5 + wingSide * 9.0, 20.1, st.sz);
-        this.scene.add(fasciaTrim);
-      });
-      this.scene.add(this.sharedBox(4.4, 0.18, 64.5, glassMat, -10.5, 19.1, st.sz));
-      for (let rz = -26; rz <= 26; rz += 13) {
-        const rib = new THREE.Mesh(
-          new THREE.TorusGeometry(8.65, 0.18, 6, 18, Math.PI),
-          trussSteelMat
-        );
-        rib.position.set(-10.5, 18.8, st.sz + rz);
-        this.scene.add(rib);
-      }
-      this.scene.add(this.sharedBox(2.2, 0.14, 58, concourseGlowMat, -10.5, 18.85, st.sz));
-      [-15.8, -6.4].forEach((lx) => {
-        this.scene.add(this.sharedBox(0.35, 0.1, 56, concourseGlowMat, lx, 18.4, st.sz));
-      });
-
-      // Glass Curtain Wall Windows + Vertical Perforated Sun-Breaker Louvers along Platform Edges
-      [-17.8, -3.2].forEach((wx) => {
-        this.scene.add(this.sharedBox(0.2, 3.4, 62, glassMat, wx, 15.2, st.sz));
-        this.scene.add(this.sharedBox(0.32, 0.35, 62.2, mrtGreenTrimMat, wx, 13.45, st.sz));
-        this.scene.add(this.sharedBox(0.32, 0.35, 62.2, trussSteelMat, wx, 17.0, st.sz));
-        for (let mz = -28; mz <= 28; mz += 7) {
-          this.scene.add(this.sharedBox(0.28, 3.8, 0.28, mastSteelMat, wx, 15.2, st.sz + mz));
-        }
-        for (let lz = -26; lz <= 26; lz += 1.6) {
-          this.scene.add(this.sharedBox(0.38, 2.9, 0.08, trussSteelMat, wx + (wx < -10 ? -0.22 : 0.22), 15.3, st.sz + lz));
-        }
-      });
-
-      // Framed Platform Screen Doors (PSD) with Route Map Headers, Status LEDs, Tactile Safety Lines & Track Fall Colliders
-      [-14.2, -10.2].forEach((psdX) => {
-        this.scene.add(this.sharedBox(0.12, 1.75, 56, psdGlassMat, psdX, 14.18, st.sz));
-        this.buildingColliders.push({
-          minX: psdX - 0.14,
-          maxX: psdX + 0.14,
-          minZ: st.sz - 28.0,
-          maxZ: st.sz + 28.0,
-          minY: 12.8,
-          maxY: 17.0,
-          tag: 'metro_psd',
-        });
-        // Continuous Stainless + Emerald Overhead PSD Header Fascia
-        this.scene.add(this.sharedBox(0.28, 0.42, 56.2, trussSteelMat, psdX, 15.25, st.sz));
-        this.scene.add(this.sharedBox(0.30, 0.14, 56.2, mrtGreenTrimMat, psdX, 15.5, st.sz));
-        // Route Map Strip facing platform
-        const routeStrip = new THREE.Mesh(new THREE.PlaneGeometry(18, 0.38), routeMapMatL6);
-        routeStrip.position.set(psdX + (psdX < -12 ? -0.16 : 0.16), 15.25, st.sz);
-        routeStrip.rotation.y = psdX < -12 ? -Math.PI / 2 : Math.PI / 2;
-        this.scene.add(routeStrip);
-        for (let dz = -26; dz <= 26; dz += 4) {
-          this.scene.add(this.sharedBox(0.22, 2.05, 0.24, mastSteelMat, psdX, 14.3, st.sz + dz));
-          this.scene.add(this.sharedBox(0.26, 0.12, 0.18, ledGreenMat, psdX, 15.1, st.sz + dz + 2));
-        }
-        this.scene.add(this.sharedBox(0.26, 0.04, 56, yellowLineMat, psdX + (psdX < -12 ? -0.45 : 0.45), 13.32, st.sz));
-      });
-
-      // Stainless Platform Waiting Benches (East Platform X = -5.4)
-      [-18, 0, 18].forEach((bz) => {
-        this.scene.add(this.sharedBox(0.75, 0.48, 3.6, trussSteelMat, -5.2, 13.54, st.sz + bz));
-        this.scene.add(this.sharedBox(0.14, 0.55, 3.6, mrtGreenTrimMat, -4.85, 13.92, st.sz + bz));
-      });
-
-      // Hanging Digital PIDS Train Arrival Displays
-      [-14, 14].forEach((pz) => {
-        this.scene.add(this.sharedBox(3.8, 0.85, 0.28, afcGateMat, -10.5, 16.5, st.sz + pz));
-        this.scene.add(this.sharedBox(3.4, 0.55, 0.32, pidsAmberMat, -10.5, 16.5, st.sz + pz));
-      });
-
-      // Trackbed Railway Sleepers & End-of-Platform Red/Green Block Signal Aspect Masts
-      for (let tz = -28; tz <= 28; tz += 1.4) {
-        [-13.3, -11.1].forEach((trackX) => {
-          this.scene.add(this.sharedBox(1.5, 0.08, 0.24, afcGateMat, trackX, 13.2, st.sz + tz));
-        });
-      }
-      [-29.5, 29.5].forEach((sigZ) => {
-        this.scene.add(this.sharedBox(0.14, 2.6, 0.14, mastSteelMat, -10.1, 14.6, st.sz + sigZ));
-        this.scene.add(this.sharedBox(0.28, 0.72, 0.22, afcGateMat, -10.1, 15.85, st.sz + sigZ));
-        this.scene.add(this.sharedBox(0.16, 0.16, 0.26, ledGreenMat, -10.1, 16.0, st.sz + sigZ));
-      });
-
-      this.metroStationInteriors.push({
-        concourseMinX: -17.6,
-        concourseMaxX: -3.4,
-        concourseMinZ: st.sz - 28.5,
-        concourseMaxZ: st.sz + 28.5,
-        concourseY: 8.96,
-        platMinX: -17.8,
-        platMaxX: -3.3,
-        platMinZ: st.sz - 30.5,
-        platMaxZ: st.sz + 30.5,
-        platY: 13.30,
-        inX1: intX,
-        inZ1: intZ1,
-        inY1: 8.96,
-        inX2: intX,
-        inZ2: intZ2,
-        inY2: 13.30,
-        inHalfW: 1.0,
-      });
-
-      // 4. Ground-Anchored West Sidewalk Entry Pavilion & Covered Escalator Bridge (Y = 0 -> Concourse Y = 9.0m)
-      if (st.hasStairs) {
-        const dirSign = st.sz === -175 ? 1 : -1;
-        const stairBaseZ = st.sz === -175 ? st.sz - 22 : st.sz + 22;
-        const kioskZ = stairBaseZ - dirSign * 3.4;
-        const stairX = -20.2;
-        const topZ = stairBaseZ + dirSign * 14;
-        const startPos = new THREE.Vector3(stairX, 0.04, stairBaseZ - dirSign * 0.9);
-        const endPos = new THREE.Vector3(stairX, 8.95, topZ);
-        const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
-        const spanLen = startPos.distanceTo(endPos);
-
-        // Structural under-belly escalator truss beam (cleanly recessed beneath steps — never pokes through treads!)
-        const stairBridge = new THREE.Mesh(this.boxCache(2.6, 0.42, spanLen), concourseMat);
-        stairBridge.position.copy(midPos).add(new THREE.Vector3(0, -0.32, 0));
-        stairBridge.lookAt(endPos.clone().add(new THREE.Vector3(0, -0.32, 0)));
-        this.scene.add(stairBridge);
-
-        // Flush brushed-steel escalator comb landing plate bridging kiosk floor (Y=0.22) cleanly into step 1
-        this.scene.add(this.sharedBox(2.95, 0.22, 1.9, concourseMat, stairX, 0.11, stairBaseZ - dirSign * 0.65));
-
-        // 26 Seamless Overlapping Escalator Steps + Yellow Safety Front Edges + Glass & Rubber Handrails
-        const escSteps = 26;
-        for (let es = 0; es < escSteps; es++) {
-          const ft = (es + 0.5) / escSteps;
-          const sx = THREE.MathUtils.lerp(startPos.x, endPos.x, ft);
-          const sy = THREE.MathUtils.lerp(0.10, endPos.y - 0.15, ft);
-          const sz = THREE.MathUtils.lerp(startPos.z, endPos.z, ft);
-          const tread = new THREE.Mesh(this.boxCache(2.14, 0.40, 0.78), afcGateMat);
-          tread.position.set(sx, sy, sz);
-          this.scene.add(tread);
-          this.scene.add(this.sharedBox(2.10, 0.035, 0.09, yellowLineMat, sx, sy + 0.21, sz + dirSign * 0.30));
-        }
-        [-1.18, 1.18].forEach((bx) => {
-          const railGlass = new THREE.Mesh(this.boxCache(0.1, 0.85, spanLen), glassMat);
-          railGlass.position.copy(midPos).add(new THREE.Vector3(bx, 0.66, 0));
-          railGlass.lookAt(endPos.clone().add(new THREE.Vector3(bx, 0.66, 0)));
-          this.scene.add(railGlass);
-          const handrail = new THREE.Mesh(this.boxCache(0.18, 0.12, spanLen), rubberHandrailMat);
-          handrail.position.copy(midPos).add(new THREE.Vector3(bx, 1.12, 0));
-          handrail.lookAt(endPos.clone().add(new THREE.Vector3(bx, 1.12, 0)));
-          this.scene.add(handrail);
-        });
-
-        // Upper Walkable Concourse Landing Balcony + Glass Concourse Portal Doorway into Station
-        const landCenterZ = topZ + dirSign * 1.5;
-        this.scene.add(this.sharedBox(5.2, 0.42, 3.8, concourseMat, -19.4, 8.75, landCenterZ));
-        this.scene.add(this.sharedBox(0.12, 1.05, 3.8, trussSteelMat, -21.95, 9.48, landCenterZ));
-        this.scene.add(this.sharedBox(5.2, 1.05, 0.12, trussSteelMat, -19.4, 9.48, landCenterZ + dirSign * 1.85));
-        [-1.55, 1.55].forEach((dz) => {
-          this.scene.add(this.sharedBox(0.28, 2.8, 0.24, afcGateMat, -17.35, 10.35, landCenterZ + dz));
-        });
-        this.scene.add(this.sharedBox(0.36, 0.45, 3.4, mrtGreenTrimMat, -17.32, 11.75, landCenterZ));
-
-        const canopyStart = startPos.clone().lerp(endPos, 0.14);
-        const canopyMid = canopyStart.clone().add(endPos).multiplyScalar(0.5);
-        const canopyLen = canopyStart.distanceTo(endPos);
-        const stairGlassTube = new THREE.Mesh(this.boxCache(3.0, 2.45, canopyLen), glassMat);
-        stairGlassTube.position.copy(canopyMid).add(new THREE.Vector3(0, 1.5, 0));
-        stairGlassTube.lookAt(endPos.clone().add(new THREE.Vector3(0, 1.5, 0)));
-        this.scene.add(stairGlassTube);
-        const stairRoofCap = new THREE.Mesh(this.boxCache(3.25, 0.18, canopyLen), mrtGreenTrimMat);
-        stairRoofCap.position.copy(canopyMid).add(new THREE.Vector3(0, 2.75, 0));
-        stairRoofCap.lookAt(endPos.clone().add(new THREE.Vector3(0, 2.75, 0)));
-        this.scene.add(stairRoofCap);
-
-        // Sleek Glazed Street Entry Kiosk Pavilion with Sloped Apron, Framed Glass Walls & AFC Turnstiles
-        this.scene.add(this.sharedBox(4.5, 0.22, 5.6, concourseMat, stairX, 0.11, kioskZ));
-        this.scene.add(this.sharedBox(2.4, 0.03, 5.2, graniteTileMat, stairX, 0.23, kioskZ));
-        // Sloped approach ramp apron on street entry threshold (zero hard edge!)
-        const entryApron = new THREE.Mesh(this.boxCache(4.5, 0.18, 1.5), graniteTileMat);
-        entryApron.position.set(stairX, 0.06, kioskZ - dirSign * 3.4);
-        entryApron.rotation.x = dirSign * 0.15;
-        this.scene.add(entryApron);
-
-        // Canopy Roof + Illuminated Downlights + Overhead Station Fascia Sign
-        this.scene.add(this.sharedBox(4.8, 0.52, 5.8, mrtGreenTrimMat, stairX, 3.85, kioskZ));
-        this.scene.add(this.sharedBox(5.1, 0.18, 6.1, trussSteelMat, stairX, 4.18, kioskZ));
-        this.scene.add(this.sharedBox(3.4, 0.1, 4.0, concourseGlowMat, stairX, 3.55, kioskZ));
-
-        // Framed Glazed Curtain Side Walls (waist-high dado + large glass panes + steel columns + COLLIDERS!)
-        [-2.05, 2.05].forEach((ox) => {
-          this.scene.add(this.sharedBox(0.24, 0.95, 5.4, graniteTileMat, stairX + ox, 0.6, kioskZ));
-          this.scene.add(this.sharedBox(0.14, 2.55, 5.0, glassMat, stairX + ox, 2.35, kioskZ));
-          [-2.5, 0, 2.5].forEach((cz) => {
-            this.scene.add(this.sharedBox(0.26, 3.65, 0.26, mastSteelMat, stairX + ox, 2.0, kioskZ + cz));
-          });
-          this.buildingColliders.push({
-            minX: stairX + ox - 0.18,
-            maxX: stairX + ox + 0.18,
-            minZ: kioskZ - 2.8,
-            maxZ: kioskZ + 2.8,
-            minY: 0,
-            maxY: 4.3,
-            tag: 'metro_kiosk_wall',
-          });
-        });
-
-        // Stainless Steel AFC Rapid-Pass Smart Turnstile Housings + Flap Gates + Card Scanners + Colliders
-        [-1.08, 1.08].forEach((tx) => {
-          this.scene.add(this.sharedBox(0.28, 0.98, 1.48, trussSteelMat, stairX + tx, 0.71, kioskZ));
-          this.scene.add(this.sharedBox(0.30, 0.16, 1.50, mrtGreenTrimMat, stairX + tx, 1.15, kioskZ));
-          this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledGreenMat, stairX + tx, 1.25, kioskZ - dirSign * 0.55));
-          this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledCyanMat, stairX + tx, 1.25, kioskZ + dirSign * 0.55));
-          this.scene.add(this.sharedBox(0.32, 0.62, 0.06, psdGlassMat, stairX + tx - (tx > 0 ? 0.28 : -0.28), 0.78, kioskZ));
-          this.buildingColliders.push({
-            minX: stairX + tx - 0.16,
-            maxX: stairX + tx + 0.16,
-            minZ: kioskZ - 0.76,
-            maxZ: kioskZ + 0.76,
-            minY: 0,
-            maxY: 1.5,
-            tag: 'metro_turnstile',
-          });
-        });
-        const landCol = new THREE.Mesh(this.cylCache(0.42, 0.52, 8.6, 10), concreteMat);
-        landCol.position.set(-19.5, 4.3, landCenterZ);
-        this.scene.add(landCol);
-
-        this.metroEscalators.push({
-          x1: startPos.x,
-          z1: startPos.z,
-          y1: 0.22,
-          x2: endPos.x,
-          z2: endPos.z,
-          y2: endPos.y + 0.08,
-          halfWidth: 1.45,
-          kioskX: stairX,
-          kioskZ,
-          kioskHalfX: 2.25,
-          kioskHalfZ: 2.75,
-          landMinX: -22.0,
-          landMaxX: -16.8,
-          landMinZ: landCenterZ - 1.9,
-          landMaxZ: landCenterZ + 1.9,
-          landY: 8.96,
-        });
-      }
-
-      // Authentic DMTCL Station Bilingual Fascia Signboards (Both Ends + East/West Facades)
-      const signTex = createMetroStationSignTexture(
-        st.nameBn,
-        st.nameEn,
-        'MRT LINE-6 • ঢাকা মেট্রো',
-        '#059669',
-        'PLATFORM 1: UTTARA NORTH  |  PLATFORM 2: KAMALAPUR'
-      );
-      const signMatL6 = new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide });
-      [-32.2, 32.2].forEach((dz) => {
-        const sb = new THREE.Mesh(new THREE.PlaneGeometry(12.2, 3.0), signMatL6);
-        sb.position.set(-10.5, 17.6, st.sz + dz);
-        this.scene.add(sb);
-      });
-      [-18.15, -2.85].forEach((sx, sIdx) => {
-        const sideSignL6 = new THREE.Mesh(new THREE.PlaneGeometry(15.5, 2.9), signMatL6);
-        sideSignL6.rotation.y = sIdx === 0 ? -Math.PI / 2 : Math.PI / 2;
-        sideSignL6.position.set(sx, 14.2, st.sz);
-        this.scene.add(sideSignL6);
-      });
-    });
-
-    // Line-5 Stations: Complete 2-Tier Concourse, Portal Columns & Ground Access Escalators
-    const line5Stations = [
-      { nameBn: 'মিরপুর পশ্চিম মেট্রো স্টেশন', nameEn: 'MIRPUR WEST METRO (LINE-5)', sx: -380 },
-      { nameBn: 'মহাখালী উত্তর / বনানী স্টেশন', nameEn: 'MOHAKHALI NORTH / BANANI', sx: 95 },
-      { nameBn: 'গুলশান-২ ডিপ্লোম্যাটিক স্টেশন', nameEn: 'GULSHAN-2 DIPLOMATIC CIRCLE', sx: 260 },
-      { nameBn: 'নতুন বাজার / গুলশান লিংক', nameEn: 'NATUN BAZAR / GULSHAN-2 LINK', sx: 430 },
-    ];
-
-    line5Stations.forEach((st) => {
-      const routeMapTexL5 = createMetroRouteMapTexture(st.nameEn, 'L5');
-      const routeMapMatL5 = new THREE.MeshBasicMaterial({ map: routeMapTexL5, side: THREE.DoubleSide });
-
-      // 1. Structural Twin-Column Concrete Portal Bents with Flared Hammerhead Capitals
-      [-22, 0, 22].forEach((bx) => {
-        [line5Z - 7.8, line5Z + 7.8].forEach((pz) => {
-          const col5 = new THREE.Mesh(this.cylCache(0.75, 0.9, 16.5, 12), concreteMat);
-          col5.position.set(st.sx + bx, 8.25, pz);
-          this.scene.add(col5);
-          const cap5Flared = new THREE.Mesh(this.cylCache(1.2, 0.78, 1.1, 12), concreteMat);
-          cap5Flared.position.set(st.sx + bx, 11.65, pz);
-          this.scene.add(cap5Flared);
-          this.circleColliders.push({ x: st.sx + bx, z: pz, radius: 0.92, tag: 'metro_station_pier' });
-        });
-        this.scene.add(this.sharedBox(1.5, 1.0, 16.6, concreteMat, st.sx + bx, 12.2, line5Z));
-        this.scene.add(this.sharedBox(1.6, 1.1, 17.2, concreteMat, st.sx + bx, 16.3, line5Z));
-      });
-
-      // 2. Hollow Walk-In Lower Ticket Concourse Level (Floor Y = 12.86m)
-      this.scene.add(this.sharedBox(58, 0.42, 14.0, concourseMat, st.sx, 12.65, line5Z));
-      this.scene.add(this.sharedBox(54, 0.04, 2.8, graniteTileMat, st.sx, 12.88, line5Z));
-      this.scene.add(this.sharedBox(54, 0.14, 1.8, concourseGlowMat, st.sx, 16.2, line5Z));
-      [line5Z - 6.95, line5Z + 6.95].forEach((wz, wIdx) => {
-        this.scene.add(this.sharedBox(58.2, 0.48, 0.24, mrtRedTrimMat, st.sx, 12.95, wz));
-        if (wIdx === 1) {
-          this.scene.add(this.sharedBox(57, 2.8, 0.18, glassMat, st.sx, 14.3, wz));
-        } else {
-          this.scene.add(this.sharedBox(21, 2.8, 0.18, glassMat, st.sx - 18, 14.3, wz));
-          this.scene.add(this.sharedBox(30, 2.8, 0.18, glassMat, st.sx + 13, 14.3, wz));
-        }
-        for (let mx = -27; mx <= 27; mx += 5.4) {
-          this.scene.add(this.sharedBox(0.16, 3.0, 0.26, mastSteelMat, st.sx + mx, 14.3, wz));
-        }
-      });
-      // Staffed Ticket Booth & AFC Turnstiles on Line-5 Concourse
-      this.scene.add(this.sharedBox(5.2, 2.5, 2.0, mrtRedTrimMat, st.sx - 15, 14.1, line5Z + 4.8));
-      this.scene.add(this.sharedBox(4.2, 1.2, 2.1, glassMat, st.sx - 15, 14.25, line5Z + 4.8));
-      [-10, -8].forEach((ax) => {
-        this.scene.add(this.sharedBox(1.4, 1.0, 0.22, afcGateMat, st.sx + ax, 13.38, line5Z + 1.2));
-        this.scene.add(this.sharedBox(0.24, 0.24, 0.08, ledGreenMat, st.sx + ax, 13.75, line5Z + 1.34));
-      });
-
-      // Interior staircase from Line-5 Concourse (Y=12.86) -> Platform (Y=17.55) with true floor void cutout
-      const int5X1 = st.sx + 4;
-      const int5X2 = st.sx + 14;
-      const int5Z = line5Z - 4.9;
-      for (let is = 0; is < 18; is++) {
-        const ft = (is + 0.5) / 18;
-        const sy5 = THREE.MathUtils.lerp(12.82, 17.36, ft);
-        const sx5 = THREE.MathUtils.lerp(int5X1, int5X2, ft);
-        const step = new THREE.Mesh(this.boxCache(0.76, 0.38, 1.85), afcGateMat);
-        step.position.set(sx5, sy5, int5Z);
-        this.scene.add(step);
-        this.scene.add(this.sharedBox(0.08, 0.035, 1.82, yellowLineMat, sx5 - 0.30, sy5 + 0.195, int5Z));
-      }
-      this.scene.add(this.sharedBox(10.4, 1.05, 0.12, trussSteelMat, (int5X1 + int5X2) * 0.5, 18.08, int5Z + 1.02));
-      this.scene.add(this.sharedBox(10.4, 1.05, 0.12, trussSteelMat, (int5X1 + int5X2) * 0.5, 18.08, int5Z - 1.02));
-      this.scene.add(this.sharedBox(0.12, 1.05, 2.04, trussSteelMat, int5X1 - 0.2, 18.08, int5Z));
-      this.buildingColliders.push(
-        { minX: int5X1 - 0.25, maxX: int5X2 + 0.2, minZ: int5Z + 0.94, maxZ: int5Z + 1.12, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' },
-        { minX: int5X1 - 0.25, maxX: int5X2 + 0.2, minZ: int5Z - 1.12, maxZ: int5Z - 0.94, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' },
-        { minX: int5X1 - 0.3, maxX: int5X1 - 0.1, minZ: int5Z - 1.05, maxZ: int5Z + 1.05, minY: 17.0, maxY: 19.5, tag: 'metro_stair_rail' }
-      );
-
-      // 3. Open Dual-Side Upper Train Platform Deck with TRUE Stairwell Void Cutout (Y=23.0m roof)
-      this.scene.add(this.sharedBox(64, 0.52, 11.4, concourseMat, st.sx, 16.85, line5Z + 1.9));
-      this.scene.add(this.sharedBox(35.8, 0.52, 3.8, concourseMat, st.sx - 14.1, 16.85, line5Z - 5.7));
-      this.scene.add(this.sharedBox(17.5, 0.52, 3.8, concourseMat, st.sx + 23.25, 16.85, line5Z - 5.7));
-      // North boarding platform surface split cleanly around stairwell (X: st.sx+3.8..+14.3, Z: line5Z-5.95..-3.85)
-      this.scene.add(this.sharedBox(62, 0.44, 1.4, concourseMat, st.sx, 17.33, line5Z - 3.2));
-      this.scene.add(this.sharedBox(62, 0.44, 1.35, concourseMat, st.sx, 17.33, line5Z - 6.62));
-      this.scene.add(this.sharedBox(34.8, 0.44, 2.1, concourseMat, st.sx - 13.6, 17.33, int5Z));
-      this.scene.add(this.sharedBox(16.7, 0.44, 2.1, concourseMat, st.sx + 22.65, 17.33, int5Z));
-      this.scene.add(this.sharedBox(62, 0.44, 4.8, concourseMat, st.sx, 17.33, line5Z + 4.9));
-
-      this.metroStationInteriors.push({
-        concourseMinX: st.sx - 28.5,
-        concourseMaxX: st.sx + 28.5,
-        concourseMinZ: line5Z - 7.0,
-        concourseMaxZ: line5Z + 7.0,
-        concourseY: 12.86,
-        platMinX: st.sx - 30.5,
-        platMaxX: st.sx + 30.5,
-        platMinZ: line5Z - 7.4,
-        platMaxZ: line5Z + 7.4,
-        platY: 17.55,
-        inX1: int5X1,
-        inZ1: int5Z,
-        inY1: 12.86,
-        inX2: int5X2,
-        inZ2: int5Z,
-        inY2: 17.55,
-        inHalfW: 1.0,
-      });
-
-      [-1, 1].forEach((wingSide) => {
-        const wing5 = new THREE.Mesh(this.boxCache(65, 0.24, 7.6), roofSilverMat);
-        wing5.position.set(st.sx, 23.8, line5Z + wingSide * 5.3);
-        wing5.rotation.x = -wingSide * 0.18;
-        this.scene.add(wing5);
-        const fascia5 = new THREE.Mesh(this.boxCache(65.2, 0.65, 0.32), mrtRedTrimMat);
-        fascia5.position.set(st.sx, 24.25, line5Z + wingSide * 9.0);
-        this.scene.add(fascia5);
-      });
-      this.scene.add(this.sharedBox(64.5, 0.18, 4.4, glassMat, st.sx, 23.25, line5Z));
-      for (let rx = -26; rx <= 26; rx += 13) {
-        const rib5 = new THREE.Mesh(
-          new THREE.TorusGeometry(8.65, 0.18, 6, 18, Math.PI).rotateY(Math.PI / 2),
-          trussSteelMat
-        );
-        rib5.position.set(st.sx + rx, 22.9, line5Z);
-        this.scene.add(rib5);
-      }
-
-      [line5Z - 7.4, line5Z + 7.4].forEach((wz, wIdx) => {
-        this.scene.add(this.sharedBox(62, 3.4, 0.2, glassMat, st.sx, 19.4, wz));
-        this.scene.add(this.sharedBox(62.2, 0.35, 0.3, mrtRedTrimMat, st.sx, 17.7, wz));
-        for (let lx = -26; lx <= 26; lx += 1.6) {
-          this.scene.add(this.sharedBox(0.08, 2.9, 0.38, trussSteelMat, st.sx + lx, 19.4, wz + (wIdx === 0 ? -0.22 : 0.22)));
-        }
-      });
-      [line5Z - 2.2, line5Z + 2.2].forEach((psdZ) => {
-        this.scene.add(this.sharedBox(56, 1.75, 0.12, psdGlassMat, st.sx, 18.42, psdZ));
-        this.buildingColliders.push({
-          minX: st.sx - 28.0,
-          maxX: st.sx + 28.0,
-          minZ: psdZ - 0.14,
-          maxZ: psdZ + 0.14,
-          minY: 17.0,
-          maxY: 21.5,
-          tag: 'metro_psd',
-        });
-        this.scene.add(this.sharedBox(56.2, 0.42, 0.28, trussSteelMat, st.sx, 19.48, psdZ));
-        this.scene.add(this.sharedBox(56.2, 0.14, 0.30, mrtRedTrimMat, st.sx, 19.72, psdZ));
-        const routeStrip5 = new THREE.Mesh(new THREE.PlaneGeometry(18, 0.38), routeMapMatL5);
-        routeStrip5.position.set(st.sx, 19.48, psdZ + (psdZ < line5Z ? -0.16 : 0.16));
-        if (psdZ < line5Z) routeStrip5.rotation.y = Math.PI;
-        this.scene.add(routeStrip5);
-        for (let dx = -26; dx <= 26; dx += 4) {
-          this.scene.add(this.sharedBox(0.24, 2.05, 0.22, mastSteelMat, st.sx + dx, 18.55, psdZ));
-          this.scene.add(this.sharedBox(0.18, 0.12, 0.26, ledGreenMat, st.sx + dx + 2, 19.34, psdZ));
-        }
-        this.scene.add(this.sharedBox(56, 0.04, 0.26, yellowLineMat, st.sx, 17.56, psdZ + (psdZ < line5Z ? -0.45 : 0.45)));
-      });
-      // Platform Waiting Benches on Line-5 South Platform
-      [-18, 0, 18].forEach((bx) => {
-        this.scene.add(this.sharedBox(3.6, 0.48, 0.75, trussSteelMat, st.sx + bx, 17.78, line5Z + 5.4));
-        this.scene.add(this.sharedBox(3.6, 0.55, 0.14, mrtRedTrimMat, st.sx + bx, 18.16, line5Z + 5.75));
-      });
-
-      // 4. Ground-Anchored Entry Pavilion & Escalator Bridge on South Sidewalk (Z = line5Z - 10.5)
-      const entryZ = line5Z - 10.5;
-      const startP = new THREE.Vector3(st.sx - 17.4, 0.04, entryZ);
-      const endP = new THREE.Vector3(st.sx - 6, 12.85, entryZ);
-      const midP = startP.clone().add(endP).multiplyScalar(0.5);
-      const span5 = startP.distanceTo(endP);
-      const esc5 = new THREE.Mesh(this.boxCache(2.6, 0.42, span5), concourseMat);
-      esc5.position.copy(midP).add(new THREE.Vector3(0, -0.32, 0));
-      esc5.lookAt(endP.clone().add(new THREE.Vector3(0, -0.32, 0)));
-      this.scene.add(esc5);
-
-      this.scene.add(this.sharedBox(1.9, 0.22, 2.95, concourseMat, st.sx - 17.1, 0.11, entryZ));
-      for (let es = 0; es < 28; es++) {
-        const ft = (es + 0.5) / 28;
-        const sx = THREE.MathUtils.lerp(startP.x, endP.x, ft);
-        const sy = THREE.MathUtils.lerp(0.10, endP.y - 0.15, ft);
-        const sz = THREE.MathUtils.lerp(startP.z, endP.z, ft);
-        const tread = new THREE.Mesh(this.boxCache(0.76, 0.44, 2.14), afcGateMat);
-        tread.position.set(sx, sy, sz);
-        this.scene.add(tread);
-        this.scene.add(this.sharedBox(0.09, 0.035, 2.10, yellowLineMat, sx - 0.30, sy + 0.23, sz));
-      }
-
-      // Upper Walkable Concourse Landing Balcony bridging South Sidewalk Escalator into open Line-5 Concourse Doorway
-      const land5Z = (entryZ + (line5Z - 6.8)) * 0.5;
-      this.scene.add(this.sharedBox(3.8, 0.42, 4.4, concourseMat, st.sx - 5.2, 12.65, land5Z));
-      [-1.55, 1.55].forEach((dx) => {
-        this.scene.add(this.sharedBox(0.24, 2.8, 0.28, afcGateMat, st.sx - 5.2 + dx, 14.25, line5Z - 6.85));
-      });
-      this.scene.add(this.sharedBox(3.4, 0.45, 0.36, mrtRedTrimMat, st.sx - 5.2, 15.65, line5Z - 6.82));
-
-      const canopy5Start = startP.clone().lerp(endP, 0.14);
-      const canopy5Mid = canopy5Start.clone().add(endP).multiplyScalar(0.5);
-      const escGlass5 = new THREE.Mesh(this.boxCache(3.0, 2.45, canopy5Start.distanceTo(endP)), glassMat);
-      escGlass5.position.copy(canopy5Mid).add(new THREE.Vector3(0, 1.5, 0));
-      escGlass5.lookAt(endP.clone().add(new THREE.Vector3(0, 1.5, 0)));
-      this.scene.add(escGlass5);
-      const escRoof5 = new THREE.Mesh(this.boxCache(3.25, 0.18, canopy5Start.distanceTo(endP)), mrtRedTrimMat);
-      escRoof5.position.copy(canopy5Mid).add(new THREE.Vector3(0, 2.75, 0));
-      escRoof5.lookAt(endP.clone().add(new THREE.Vector3(0, 2.75, 0)));
-      this.scene.add(escRoof5);
-
-      this.scene.add(this.sharedBox(5.2, 0.22, 4.5, concourseMat, st.sx - 19.6, 0.11, entryZ));
-      this.scene.add(this.sharedBox(4.8, 0.03, 2.4, graniteTileMat, st.sx - 19.6, 0.23, entryZ));
-      this.scene.add(this.sharedBox(5.2, 0.55, 4.6, mrtRedTrimMat, st.sx - 19.6, 3.85, entryZ));
-      this.scene.add(this.sharedBox(5.4, 0.18, 4.8, trussSteelMat, st.sx - 19.6, 4.18, entryZ));
-      this.scene.add(this.sharedBox(3.6, 0.1, 3.0, concourseGlowMat, st.sx - 19.6, 3.55, entryZ));
-      [-2.05, 2.05].forEach((oz) => {
-        this.scene.add(this.sharedBox(4.8, 0.95, 0.24, graniteTileMat, st.sx - 19.6, 0.6, entryZ + oz));
-        this.scene.add(this.sharedBox(4.4, 2.55, 0.14, glassMat, st.sx - 19.6, 2.35, entryZ + oz));
-        [-2.2, 0, 2.2].forEach((cx) => {
-          this.scene.add(this.sharedBox(0.26, 3.65, 0.26, mastSteelMat, st.sx - 19.6 + cx, 2.0, entryZ + oz));
-        });
-        this.buildingColliders.push({
-          minX: st.sx - 22.1,
-          maxX: st.sx - 17.1,
-          minZ: entryZ + oz - 0.18,
-          maxZ: entryZ + oz + 0.18,
-          minY: 0,
-          maxY: 4.3,
-          tag: 'metro_kiosk_wall',
-        });
-      });
-      [-1.08, 1.08].forEach((tz) => {
-        this.scene.add(this.sharedBox(1.48, 0.98, 0.28, trussSteelMat, st.sx - 19.6, 0.71, entryZ + tz));
-        this.scene.add(this.sharedBox(1.50, 0.16, 0.30, mrtRedTrimMat, st.sx - 19.6, 1.15, entryZ + tz));
-        this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledGreenMat, st.sx - 20.15, 1.25, entryZ + tz));
-        this.buildingColliders.push({
-          minX: st.sx - 20.36,
-          maxX: st.sx - 18.84,
-          minZ: entryZ + tz - 0.16,
-          maxZ: entryZ + tz + 0.16,
-          minY: 0,
-          maxY: 1.5,
-          tag: 'metro_turnstile',
-        });
-      });
-
-      this.metroEscalators.push({
-        x1: startP.x,
-        z1: startP.z,
-        y1: 0.22,
-        x2: endP.x,
-        z2: endP.z,
-        y2: endP.y + 0.08,
-        halfWidth: 1.45,
-        kioskX: st.sx - 19.6,
-        kioskZ: entryZ,
-        kioskHalfX: 2.55,
-        kioskHalfZ: 2.15,
-        landMinX: st.sx - 7.1,
-        landMaxX: st.sx - 3.3,
-        landMinZ: entryZ - 1.2,
-        landMaxZ: line5Z - 6.6,
-        landY: 12.86,
-      });
-
-      const signTex5 = createMetroStationSignTexture(
-        st.nameBn,
-        st.nameEn,
-        'MRT LINE-5 • ঢাকা মেট্রো',
-        '#be123c',
-        'NORTHERN ROUTE  •  PLATFORM 1 & 2'
-      );
-      const signMat5 = new THREE.MeshBasicMaterial({ map: signTex5, side: THREE.DoubleSide });
-      [-32.2, 32.2].forEach((dx) => {
-        const sb5 = new THREE.Mesh(new THREE.PlaneGeometry(12.2, 3.0), signMat5);
-        sb5.rotation.y = Math.PI / 2;
-        sb5.position.set(st.sx + dx, 21.8, line5Z);
-        this.scene.add(sb5);
-      });
-      [line5Z - 8.1, line5Z + 8.1].forEach((sz5, sIdx) => {
-        const sideSignL5 = new THREE.Mesh(new THREE.PlaneGeometry(15.5, 2.9), signMat5);
-        sideSignL5.rotation.y = sIdx === 0 ? Math.PI : 0;
-        sideSignL5.position.set(st.sx, 18.6, sz5);
-        this.scene.add(sideSignL5);
-      });
-    });
-
-    // Street-level MRT Station Ticket Gate Kiosks & Glowing Boarding Pads at EVERY METRO_STATIONS stop
-    const metroPortalRingGeo = new THREE.RingGeometry(1.7, 2.3, 28);
-    METRO_STATIONS.forEach((st) => {
-      const accentHex = st.line === 'L5' ? '#e11d48' : '#059669';
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: accentHex,
-        transparent: true,
-        opacity: 0.82,
-        side: THREE.DoubleSide,
-      });
-
-      const kx = st.kioskX ?? st.x;
-      const kz = st.kioskZ ?? st.z;
-
-      const kioskRing = new THREE.Mesh(metroPortalRingGeo, ringMat);
-      kioskRing.rotation.x = -Math.PI / 2;
-      kioskRing.position.set(kx, 0.098, kz);
-      this.scene.add(kioskRing);
-      this.metroPortalRings.push(kioskRing);
-
-      if (Math.hypot(kx - st.x, kz - st.z) > 6 && st.id !== 'mrt_mirpur10') {
-        const ring = new THREE.Mesh(metroPortalRingGeo, ringMat);
-        ring.rotation.x = -Math.PI / 2;
-        ring.position.set(st.x, 0.098, st.z);
-        this.scene.add(ring);
-        this.metroPortalRings.push(ring);
-      }
-
-      // Authentic DMTCL Illuminated Street Totem Pylon + Red/Green Metro "M" Emblem Crown
-      const boothX = st.line === 'L6' ? kx - 2.9 : kx + 3.2;
-      const boothZ = st.line === 'L6' ? kz : kz - 2.6;
-
-      const pylon = new THREE.Mesh(
-        new THREE.BoxGeometry(0.92, 4.6, 0.92),
-        new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.55, roughness: 0.28 })
-      );
-      pylon.position.set(boothX, 2.3, boothZ);
-      this.scene.add(pylon);
-
-      const canopyCap = new THREE.Mesh(
-        new THREE.BoxGeometry(2.7, 0.42, 2.7),
-        new THREE.MeshStandardMaterial({
-          color: accentHex,
-          emissive: new THREE.Color(accentHex),
-          emissiveIntensity: 0.5,
-          roughness: 0.25,
-        })
-      );
-      canopyCap.position.set(boothX, 4.75, boothZ);
-      this.scene.add(canopyCap);
-
-      // Circular Glowing DMTCL Metro Emblem Crown atop Street Totem
-      const mDisc = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.62, 0.62, 0.22, 18).rotateZ(Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: '#dc2626' })
-      );
-      mDisc.position.set(boothX, 5.45, boothZ);
-      if (st.line === 'L5') mDisc.rotation.y = Math.PI / 2;
-      this.scene.add(mDisc);
-
-      const signTex = createMetroStationSignTexture(
-        st.nameBn,
-        st.nameEn,
-        st.line === 'L5' ? 'MRT LINE-5' : 'MRT LINE-6',
-        accentHex,
-        `PRESS [E] OR [F] TO BOARD • FARE ৳${st.fare}`
-      );
-      const portalSign = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, 1.15, 0.22),
-        new THREE.MeshBasicMaterial({ map: signTex })
-      );
-      portalSign.position.set(boothX, 3.55, boothZ + (st.line === 'L5' ? 0.6 : 0));
-      if (st.line === 'L6') portalSign.rotation.y = Math.PI / 2;
-      this.scene.add(portalSign);
-
-      this.circleColliders.push({ x: boothX, z: boothZ, radius: 0.72, tag: 'metro_ticket_pylon' });
-    });
-
-    // =========================================================================
-    // SECTION D: REALISTIC JAPANESE KAWASAKI 6-COACH METRO ROLLING STOCK
-    // =========================================================================
-    const createRealistic6CoachTrain = (lineType: 'line6' | 'line5') => {
-      const trainGroup = new THREE.Group();
-
-      const stainlessMat = new THREE.MeshStandardMaterial({
-        color: '#e2e8f0',
-        metalness: 0.82,
-        roughness: 0.24,
-      });
-      const primaryStripeMat = new THREE.MeshBasicMaterial({
-        color: lineType === 'line6' ? '#10b981' : '#e11d48',
-      });
-      const speedRibbonMat = new THREE.MeshBasicMaterial({
-        color: lineType === 'line6' ? '#dc2626' : '#f59e0b',
-      });
-      const windowGlassMat = new THREE.MeshStandardMaterial({
-        color: '#fef08a',
-        emissive: '#fef08a',
-        emissiveIntensity: 0.45,
-        roughness: 0.1,
-      });
-      const darkGlassMat = new THREE.MeshStandardMaterial({
-        color: '#0f172a',
-        metalness: 0.9,
-        roughness: 0.1,
-      });
-      const bogieMat = new THREE.MeshStandardMaterial({
-        color: '#334155',
-        metalness: 0.8,
-        roughness: 0.4,
-      });
-      const pantographMat = new THREE.MeshStandardMaterial({
-        color: '#dc2626',
-        metalness: 0.9,
-        roughness: 0.2,
-      });
-
-      // 6 Coaches: Length 11.6m each, total trainset length ~72m
-      for (let c = 0; c < 6; c++) {
-        const cz = (c - 2.5) * 12.0;
-        const isLeadCar = c === 0;
-        const isTailCar = c === 5;
-        const hasPantograph = c === 1 || c === 4;
-
-        const coachGroup = new THREE.Group();
-        coachGroup.position.set(0, 0, cz);
-
-        // Main Stainless Steel Car Body
-        const body = new THREE.Mesh(new THREE.BoxGeometry(2.9, 2.9, 11.2), stainlessMat);
-        body.position.set(0, 1.62, 0);
-        body.castShadow = true;
-        coachGroup.add(body);
-
-        // Aerodynamic Sloped Cab Nose on Lead and Tail Cars
-        if (isLeadCar || isTailCar) {
-          const noseZ = isLeadCar ? -6.0 : 6.0;
-          const nose = new THREE.Mesh(new THREE.BoxGeometry(2.7, 2.6, 1.4), stainlessMat);
-          nose.position.set(0, 1.5, noseZ);
-          coachGroup.add(nose);
-
-          // Sloped Cockpit Windshield
-          const windshield = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.2), darkGlassMat);
-          windshield.position.set(0, 1.85, isLeadCar ? -6.72 : 6.72);
-          if (isLeadCar) windshield.rotation.x = -0.32;
-          else {
-            windshield.rotation.y = Math.PI;
-            windshield.rotation.x = -0.32;
-          }
-          coachGroup.add(windshield);
-
-          // Digital LED Destination Display ("MRT LINE-6" / "MRT LINE-5")
-          const destSign = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.6, 0.32),
-            new THREE.MeshBasicMaterial({ color: '#f59e0b' })
-          );
-          destSign.position.set(0, 2.65, isLeadCar ? -6.72 : 6.72);
-          if (isTailCar) destSign.rotation.y = Math.PI;
-          coachGroup.add(destSign);
-
-          // Headlights (Lead Car) or Tail Markers (Tail Car)
-          [-0.85, 0.85].forEach((hx) => {
-            const lightMesh = new THREE.Mesh(
-              new THREE.CircleGeometry(0.14, 12),
-              new THREE.MeshBasicMaterial({ color: isLeadCar ? '#fef08a' : '#ef4444' })
-            );
-            lightMesh.position.set(hx, 1.05, isLeadCar ? -6.72 : 6.72);
-            if (isTailCar) lightMesh.rotation.y = Math.PI;
-            coachGroup.add(lightMesh);
-          });
-        }
-
-        // Primary Color Beltline & Red/Gold Speed Ribbon
-        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.96, 0.42, 11.24), primaryStripeMat);
-        stripe.position.set(0, 1.48, 0);
-        coachGroup.add(stripe);
-
-        const ribbon = new THREE.Mesh(new THREE.BoxGeometry(2.98, 0.12, 11.26), speedRibbonMat);
-        ribbon.position.set(0, 1.22, 0);
-        coachGroup.add(ribbon);
-
-        // Side Passenger Windows with warm interior cabin lighting
-        const winBand = new THREE.Mesh(new THREE.BoxGeometry(2.94, 0.85, 9.8), windowGlassMat);
-        winBand.position.set(0, 2.12, 0);
-        coachGroup.add(winBand);
-
-        // 8 Passenger Entrance Doors (4 pairs per side) with yellow indicators
-        [-3.6, -1.2, 1.2, 3.6].forEach((dz) => {
-          [-1.48, 1.48].forEach((dx) => {
-            const doorInd = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.12), new THREE.MeshBasicMaterial({ color: '#facc15' }));
-            doorInd.position.set(dx, 2.68, dz);
-            doorInd.rotation.y = dx > 0 ? Math.PI / 2 : -Math.PI / 2;
-            coachGroup.add(doorInd);
-          });
-        });
-
-        // Dual Rooftop HVAC / Climate Control Pods
-        [-2.8, 2.8].forEach((hz) => {
-          const hvac = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.42, 2.6), stainlessMat);
-          hvac.position.set(0, 3.25, hz);
-          coachGroup.add(hvac);
-        });
-
-        // Articulated Diamond Pantograph on Cars 1 & 4 (Reaches up to contact wire at 4.2m)
-        if (hasPantograph) {
-          const pantoBase = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 1.8), pantographMat);
-          pantoBase.position.set(0, 3.16, 0);
-          coachGroup.add(pantoBase);
-
-          const armLower = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2), pantographMat);
-          armLower.position.set(0, 3.72, -0.32);
-          armLower.rotation.x = 0.55;
-          coachGroup.add(armLower);
-
-          const armUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2), pantographMat);
-          armUpper.position.set(0, 4.35, 0.32);
-          armUpper.rotation.x = -0.55;
-          coachGroup.add(armUpper);
-
-          // Carbon Contact Collector Shoe Touching Overhead Wire
-          const collectorShoe = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.06, 0.35), stainlessMat);
-          collectorShoe.position.set(0, 4.88, 0);
-          coachGroup.add(collectorShoe);
-        }
-
-        // Dual Bogie Wheel Trucks per Coach (front & rear axles)
-        [-3.6, 3.6].forEach((bz) => {
-          const bogieFrame = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.28, 2.6), bogieMat);
-          bogieFrame.position.set(0, 0.32, bz);
-          coachGroup.add(bogieFrame);
-
-          [-0.8, 0.8].forEach((wz) => {
-            [-1.15, 1.15].forEach((wx) => {
-              const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.16, 14), bogieMat);
-              wheel.position.set(wx, 0.32, bz + wz);
-              wheel.rotation.z = Math.PI / 2;
-              coachGroup.add(wheel);
-            });
-          });
-        });
-
-        // Flexible Inter-Car Gangway Connection between Coaches
-        if (c < 5) {
-          const gangway = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.3, 0.82), new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.9 }));
-          gangway.position.set(0, 1.48, 6.0);
-          coachGroup.add(gangway);
-        }
-
-        trainGroup.add(coachGroup);
-      }
-
-      return trainGroup;
-    };
-
-    // Instantiate Trains:
-    // MRT Line-6 Southbound Train
-    this.metroTrainGroup = createRealistic6CoachTrain('line6');
-    this.metroTrainGroup.position.set(-13.3, 13.2, -25);
-    this.scene.add(this.metroTrainGroup);
-
-    // MRT Line-6 Northbound Train
-    this.metroTrainGroup2 = createRealistic6CoachTrain('line6');
-    this.metroTrainGroup2.position.set(-11.1, 13.2, -550);
-    this.metroTrainGroup2.rotation.y = Math.PI;
-    this.scene.add(this.metroTrainGroup2);
-
-    // MRT Line-5 Eastbound Train (Crossing Mirpur-10 at Y = 17.5m, moving East towards Purbachal)
-    this.metroTrainLine5East = createRealistic6CoachTrain('line5');
-    this.metroTrainLine5East.position.set(40, 17.48, -199.2);
-    this.metroTrainLine5East.rotation.y = -Math.PI / 2; // Faces +X (Eastbound)
-    this.scene.add(this.metroTrainLine5East);
-
-    // MRT Line-5 Westbound Train (Moving West towards Mirpur West)
-    this.metroTrainLine5West = createRealistic6CoachTrain('line5');
-    this.metroTrainLine5West.position.set(280, 17.48, -196.8);
-    this.metroTrainLine5West.rotation.y = Math.PI / 2; // Faces -X (Westbound)
-    this.scene.add(this.metroTrainLine5West);
-
-    // Express 6-Coach Trains reserved for real-time player Metro Rail Rides
-    this.playerMetroTrainL6 = createRealistic6CoachTrain('line6');
-    this.playerMetroTrainL6.visible = false;
-    this.scene.add(this.playerMetroTrainL6);
-
-    this.playerMetroTrainL5 = createRealistic6CoachTrain('line5');
-    this.playerMetroTrainL5.visible = false;
-    this.scene.add(this.playerMetroTrainL5);
+    this.metroTrainGroup = trains.metroTrainGroup;
+    this.metroTrainGroup2 = trains.metroTrainGroup2;
+    this.metroTrainLine5East = trains.metroTrainLine5East;
+    this.metroTrainLine5West = trains.metroTrainLine5West;
+    this.playerMetroTrainL6 = trains.playerMetroTrainL6;
+    this.playerMetroTrainL5 = trains.playerMetroTrainL5;
   }
 
   private buildDistrictHighwaySigns() {
@@ -4364,6 +2713,18 @@ export class DhakaCityEngine {
     m.position.set(x, y, z);
     m.frustumCulled = true;
     return m;
+  }
+
+  private getBuilderContext(): SceneBuilderContext {
+    return {
+      scene: this.scene,
+      sharedBox: (w, h, d, mat, x, y, z) => this.sharedBox(w, h, d, mat, x, y, z),
+      boxCache: (w, h, d) => this.boxCache(w, h, d),
+      cylCache: (rt, rb, h, seg) => this.cylCache(rt, rb, h, seg),
+      buildingColliders: this.buildingColliders,
+      circleColliders: this.circleColliders,
+      streetLampStdMats: this.streetLampStdMats,
+    };
   }
 
   private buildCityDistrictBuildings() {
@@ -6942,266 +5303,7 @@ export class DhakaCityEngine {
    * and steel-framed illuminated commercial advertising billboards with floodlight hoods.
    */
   private buildDhakaFootOverBridges() {
-    const steelMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.68,
-      roughness: 0.32,
-    });
-    const darkSteelMat = new THREE.MeshStandardMaterial({
-      color: '#0f172a',
-      metalness: 0.72,
-      roughness: 0.36,
-    });
-    const chromeRailMat = new THREE.MeshStandardMaterial({
-      color: '#e2e8f0',
-      metalness: 0.88,
-      roughness: 0.16,
-    });
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: '#0369a1',
-      roughness: 0.42,
-      metalness: 0.25,
-    });
-    const stairConcreteMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const plinthMat = new THREE.MeshStandardMaterial({
-      color: '#475569',
-      roughness: 0.88,
-    });
-    const tactileYellowMat = new THREE.MeshStandardMaterial({
-      color: '#facc15',
-      roughness: 0.45,
-    });
-    const ceilingGlowMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
-
-    const createFob = (
-      bridgeX: number,
-      bridgeZ: number,
-      spanWidth: number,
-      northAdBrand: string,
-      northAdBn: string,
-      northAdEn: string,
-      northAdColor: string,
-      southAdBrand: string,
-      southAdBn: string,
-      southAdEn: string,
-      southAdColor: string
-    ) => {
-      const fobGroup = new THREE.Group();
-      fobGroup.position.set(bridgeX, 0, bridgeZ);
-
-      const deckY = 6.2;
-      const walkwayW = 3.4;
-
-      // 1. Non-slip Concrete Walkway Deck + Central Yellow Tactile Strip & Curbs
-      const floor = this.sharedBox(spanWidth + 3.2, 0.4, walkwayW, stairConcreteMat, 0, deckY, 0);
-      floor.receiveShadow = true;
-      const tactileLine = this.sharedBox(spanWidth + 2.4, 0.04, 0.24, tactileYellowMat, 0, deckY + 0.21, 0);
-      fobGroup.add(floor, tactileLine);
-
-      // 2. Arched Steel Canopy Roof + Exposed Structural Rib Arches & Overhead LED Strip
-      const roof = new THREE.Mesh(
-        new THREE.CylinderGeometry(walkwayW / 1.65, walkwayW / 1.65, spanWidth + 3.4, 14, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
-        roofMat
-      );
-      roof.position.set(0, deckY + 2.75, 0);
-      roof.castShadow = true;
-      fobGroup.add(roof);
-
-      const ledStrip = this.sharedBox(spanWidth - 1.0, 0.08, 0.35, ceilingGlowMat, 0, deckY + 2.65, 0);
-      fobGroup.add(ledStrip);
-
-      for (let rx = -spanWidth / 2; rx <= spanWidth / 2 + 0.1; rx += 2.6) {
-        const rib = new THREE.Mesh(
-          new THREE.TorusGeometry(walkwayW / 1.62, 0.065, 6, 14, Math.PI),
-          chromeRailMat
-        );
-        rib.rotation.y = Math.PI / 2;
-        rib.position.set(rx, deckY + 2.75, 0);
-        fobGroup.add(rib);
-      }
-
-      // 3. Full Steel Warren Lattice Trusses (Chords, Vertical Stanchions, Diagonal Braces & Safety Rails)
-      [-walkwayW / 2, walkwayW / 2].forEach((trussZ) => {
-        const bottomChord = this.sharedBox(spanWidth + 3.2, 0.16, 0.16, steelMat, 0, deckY + 0.22, trussZ);
-        const midRail = this.sharedBox(spanWidth + 3.2, 0.07, 0.07, chromeRailMat, 0, deckY + 1.08, trussZ);
-        const topChord = this.sharedBox(spanWidth + 3.2, 0.16, 0.16, steelMat, 0, deckY + 2.72, trussZ);
-        fobGroup.add(bottomChord, midRail, topChord);
-
-        const stepX = 2.6;
-        for (let x = -spanWidth / 2; x <= spanWidth / 2; x += stepX) {
-          const post = new THREE.Mesh(this.boxCache(0.14, 2.65, 0.14), steelMat);
-          post.position.set(x, deckY + 1.46, trussZ);
-          fobGroup.add(post);
-
-          if (x + stepX <= spanWidth / 2 + 0.05) {
-            const diagLen = Math.hypot(stepX, 2.5);
-            const diag1 = new THREE.Mesh(this.boxCache(0.08, diagLen, 0.08), steelMat);
-            diag1.position.set(x + stepX * 0.5, deckY + 1.46, trussZ);
-            diag1.rotation.z = Math.atan2(stepX, 2.5);
-            const diag2 = new THREE.Mesh(this.boxCache(0.08, diagLen, 0.08), steelMat);
-            diag2.position.set(x + stepX * 0.5, deckY + 1.46, trussZ);
-            diag2.rotation.z = -Math.atan2(stepX, 2.5);
-            fobGroup.add(diag1, diag2);
-          }
-        }
-      });
-
-      // 4. Sidewalk Support Piers & Real 18-Step Concrete Staircases at BOTH Ends (Z: +1.7 -> +10.2)
-      const stairSteps = 18;
-      const stairRun = 8.4;
-      const stepRun = stairRun / stairSteps;
-      const stepRise = (deckY - 0.15) / stairSteps;
-      const stairAngle = Math.atan2(deckY, stairRun);
-      const stringerLen = Math.hypot(stairRun, deckY);
-
-      [-spanWidth / 2 - 1.15, spanWidth / 2 + 1.15].forEach((sx) => {
-        // Heavy Concrete Pier Base & Structural Twin Steel Portal Columns + Mid-Stair Support Strut
-        const pierFooting = new THREE.Mesh(this.boxCache(2.4, 0.75, 2.4), plinthMat);
-        pierFooting.position.set(sx, 0.375, 0);
-        const pierCol = new THREE.Mesh(this.cylCache(0.36, 0.42, deckY, 10), steelMat);
-        pierCol.position.set(sx, deckY / 2, 0);
-        pierCol.castShadow = true;
-        const midStrut = new THREE.Mesh(this.cylCache(0.22, 0.28, deckY * 0.5, 8), plinthMat);
-        midStrut.position.set(sx, deckY * 0.25, 1.65 + stairRun * 0.5);
-        fobGroup.add(pierFooting, pierCol, midStrut);
-
-        // Stepped 3D Concrete Stair Treads with Yellow Non-Slip Edge Stripes
-        for (let s = 0; s < stairSteps; s++) {
-          const sy = deckY - (s + 0.5) * stepRise;
-          const sz = 1.65 + (s + 0.5) * stepRun;
-          const tread = new THREE.Mesh(this.boxCache(2.05, stepRise + 0.14, stepRun + 0.06), stairConcreteMat);
-          tread.position.set(sx, sy, sz);
-          tread.castShadow = true;
-          tread.receiveShadow = true;
-          const noseStrip = new THREE.Mesh(this.boxCache(2.02, 0.035, 0.08), tactileYellowMat);
-          noseStrip.position.set(sx, sy + (stepRise + 0.14) * 0.5 + 0.01, sz + stepRun * 0.38);
-          fobGroup.add(tread, noseStrip);
-        }
-
-        // Sloped Steel Stringer Side Beams & Tubular Stainless Handrails
-        [-1.08, 1.08].forEach((hx) => {
-          const stringer = new THREE.Mesh(this.boxCache(0.14, 0.32, stringerLen), steelMat);
-          stringer.position.set(sx + hx, deckY * 0.5 - 0.12, 1.65 + stairRun * 0.5);
-          stringer.rotation.x = stairAngle;
-
-          const handrail = new THREE.Mesh(this.boxCache(0.08, 0.08, stringerLen + 0.4), chromeRailMat);
-          handrail.position.set(sx + hx, deckY * 0.5 + 0.92, 1.65 + stairRun * 0.5);
-          handrail.rotation.x = stairAngle;
-          fobGroup.add(stringer, handrail);
-
-          for (let p = 0; p <= 4; p++) {
-            const frac = p / 4;
-            const bal = new THREE.Mesh(this.cylCache(0.035, 0.035, 1.0, 6), chromeRailMat);
-            bal.position.set(sx + hx, deckY * (1 - frac) + 0.46, 1.65 + stairRun * frac);
-            fobGroup.add(bal);
-          }
-        });
-
-        // Ground Entry Landing Pad & Safety Yellow Sidewalk Bollards
-        const entryPad = this.sharedBox(2.8, 0.18, 2.2, plinthMat, sx, 0.09, 1.65 + stairRun + 0.95);
-        fobGroup.add(entryPad);
-        [-1.0, 1.0].forEach((bx) => {
-          const bollard = new THREE.Mesh(this.cylCache(0.08, 0.09, 0.9, 8), tactileYellowMat);
-          bollard.position.set(sx + bx, 0.45, 1.65 + stairRun + 1.85);
-          fobGroup.add(bollard);
-        });
-      });
-
-      // 5. Steel-Framed Illuminated Commercial Ad Billboards + Gooseneck Floodlights
-      const adW = spanWidth * 0.86;
-      const adH = 2.2;
-      const northTex = createFobBillboardTexture(northAdBrand, northAdBn, northAdEn, northAdColor);
-      const southTex = createFobBillboardTexture(southAdBrand, southAdBn, southAdEn, southAdColor);
-
-      [
-        { z: -walkwayW / 2 - 0.18, rotY: Math.PI, dir: -1, tex: northTex },
-        { z: walkwayW / 2 + 0.18, rotY: 0, dir: 1, tex: southTex },
-      ].forEach((side) => {
-        const frame = new THREE.Mesh(this.boxCache(adW + 0.38, adH + 0.34, 0.18), darkSteelMat);
-        frame.position.set(0, deckY + 1.5, side.z);
-        frame.castShadow = true;
-        const adFace = new THREE.Mesh(
-          new THREE.PlaneGeometry(adW, adH),
-          new THREE.MeshBasicMaterial({ map: side.tex })
-        );
-        adFace.position.set(0, deckY + 1.5, side.z + side.dir * 0.10);
-        if (side.dir < 0) adFace.rotation.y = Math.PI;
-        fobGroup.add(frame, adFace);
-
-        for (let lx = -adW * 0.36; lx <= adW * 0.36 + 0.1; lx += adW * 0.24) {
-          const arm = new THREE.Mesh(this.boxCache(0.06, 0.06, 0.72), darkSteelMat);
-          arm.position.set(lx, deckY + 2.82, side.z + side.dir * 0.38);
-          const lamp = new THREE.Mesh(this.boxCache(0.28, 0.08, 0.18), ceilingGlowMat);
-          lamp.position.set(lx, deckY + 2.74, side.z + side.dir * 0.72);
-          fobGroup.add(arm, lamp);
-        }
-      });
-
-      this.scene.add(fobGroup);
-    };
-
-    // 1. Farmgate Foot Over Bridge across Airport Highway (Z = -55)
-    createFob(
-      0,
-      -55,
-      27,
-      'bKash',
-      'বিকাশ - অ্যাপ দিয়ে ক্যাশ আউট মাত্র ১৪.৯০ টাকা!',
-      'Safe, Fast & Trusted Digital Mobile Money in Bangladesh',
-      '#be185d',
-      'Grameenphone',
-      'গ্রামীণফোন - চলো বহুদূর | শক্তিশালী দেশজুড়ে 4G',
-      'Unstoppable Mobile Internet Coverage Anywhere in Bangladesh',
-      '#0284c7'
-    );
-
-    // 2. Karwan Bazar Central Foot Over Bridge (Z = 48)
-    createFob(
-      0,
-      48,
-      26,
-      'Nagad',
-      'নগদ - সবচেয়ে কম খরচে মুহূর্তেই সেন্ড মানি ও পেমেন্ট!',
-      'Fastest Digital Financial Service Across Every District',
-      '#c2410c',
-      'BRAC Bank',
-      'ব্র্যাক ব্যাংক - আস্থা ও সমৃদ্ধির ২৪ ঘণ্টা ব্যাংকিং সেবা',
-      'Trusted Banking & SME Loans Built for Modern Dhaka',
-      '#0369a1'
-    );
-
-    // 3. Shahbagh & TSC Foot Over Bridge (Z = 166, clear of Expressway Off-Ramp toe at Z = 160)
-    createFob(
-      0,
-      166,
-      25,
-      'Daraz',
-      'দারাজ ১১.১১ - সবচেয়ে বড় আন্তর্জাতিক অনলাইন মেগা সেল!',
-      'Huge Discounts, Free Delivery & Official Brand Guarantees',
-      '#ea580c',
-      'PRAN Frooto',
-      'প্রাণ ফ্রুটো - খাঁটি আমের রিফ্রেশিং পুষ্টি ও স্বাদ!',
-      'Pure Mango Pulp Refreshment for Everyone Everyday',
-      '#15803d'
-    );
-
-    // 4. Mirpur-10 Circle Foot Over Bridge (X = -380, Z = -115)
-    createFob(
-      -380,
-      -115,
-      25,
-      'Aarong',
-      'আড়ং - ঐতিহ্যে অনন্য বাঙালিয়ানা ও উৎসবের পোশাক!',
-      'Authentic Bangladeshi Crafts, Silks, Sarees & Home Decor',
-      '#991b1b',
-      'Walton',
-      'ওয়ালটন - আমাদের পণ্য, দেশের গর্ব | ফ্রিজ, টিভি ও এসি',
-      'Innovative Electronics Built Proudly in Bangladesh',
-      '#1e40af'
-    );
+    buildDhakaFootOverBridgesInScene(this.getBuilderContext());
   }
 
   /**
@@ -11807,6 +9909,29 @@ export class DhakaCityEngine {
     window.removeEventListener('mouseup', this.onMouseUp);
     dhakaAudio.updateMetroSound(false, 0, 0);
     dhakaAudio.setRadioStation('off');
+    dhakaAudio.dispose();
+
+    const disposedGeos = new Set<THREE.BufferGeometry>();
+    const disposedMats = new Set<THREE.Material>();
+    this.scene.traverse((obj) => {
+      const renderObj = obj as THREE.Mesh & THREE.Points & THREE.Line;
+      if (renderObj.geometry && !disposedGeos.has(renderObj.geometry)) {
+        disposedGeos.add(renderObj.geometry);
+        renderObj.geometry.dispose();
+      }
+      const mat = renderObj.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) {
+        mat.forEach((m) => {
+          if (m && !disposedMats.has(m)) {
+            disposedMats.add(m);
+            m.dispose();
+          }
+        });
+      } else if (mat && !disposedMats.has(mat)) {
+        disposedMats.add(mat);
+        mat.dispose();
+      }
+    });
     this.renderer.dispose();
   }
 
@@ -12682,6 +10807,9 @@ export class DhakaCityEngine {
         inVehicleId: closestVeh.id,
         currentVehicleType: closestVeh.type,
       });
+      if (this.lastVehicleRadioStation !== 'off') {
+        useGameStore.getState().setRadioStation(this.lastVehicleRadioStation);
+      }
       return;
     }
 
@@ -13116,6 +11244,9 @@ export class DhakaCityEngine {
         inVehicleId: id,
         currentVehicleType: 'boat',
       });
+      if (this.lastVehicleRadioStation !== 'off') {
+        useGameStore.getState().setRadioStation(this.lastVehicleRadioStation);
+      }
     }
   }
 
@@ -13321,21 +11452,34 @@ export class DhakaCityEngine {
     if (store.customGlbUrlRequest) {
       const url = store.customGlbUrlRequest;
       store.clearEngineRequests();
-      loadCustomGLBFromUrl(url, (model) => {
-        model.position.set(
-          this.playerPos.x + Math.sin(this.playerRotation) * 5,
-          0,
-          this.playerPos.z + Math.cos(this.playerRotation) * 5
-        );
-        this.scene.add(model);
-        store.showBanner({
-          titleEn: 'CUSTOM .GLB 3D MODEL IMPORTED!',
-          titleBn: 'কাস্টম .GLB থ্রিডি মডেল ইমপোর্ট সম্পন্ন!',
-          subtitleEn: 'Placed directly in front of Arif in the 3D scene.',
-          subtitleBn: 'আরিফের সামনে থ্রিডি বিশ্বে স্থাপন করা হয়েছে।',
-          tone: 'gold',
-        });
-      });
+      loadCustomGLBFromUrl(
+        url,
+        (model) => {
+          const dropElev = this.getRoadElevation(
+            this.playerPos.x + Math.sin(this.playerRotation) * 5,
+            this.playerPos.z + Math.cos(this.playerRotation) * 5,
+            this.playerPos.y
+          );
+          model.position.set(
+            this.playerPos.x + Math.sin(this.playerRotation) * 5,
+            dropElev,
+            this.playerPos.z + Math.cos(this.playerRotation) * 5
+          );
+          this.scene.add(model);
+          store.showBanner({
+            titleEn: 'CUSTOM .GLB 3D MODEL IMPORTED!',
+            titleBn: 'কাস্টম .GLB থ্রিডি মডেল ইমপোর্ট সম্পন্ন!',
+            subtitleEn: 'Placed directly in front of Arif in the 3D scene.',
+            subtitleBn: 'আরিফের সামনে থ্রিডি বিশ্বে স্থাপন করা হয়েছে।',
+            tone: 'gold',
+          });
+        },
+        () => {
+          if (url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        }
+      );
     }
     if (store.repairVehicleRequest) {
       const targetVeh =
@@ -16174,9 +14318,42 @@ export class DhakaCityEngine {
       }
 
       if (veh.isPolice && wantedLevel > 0) {
-        const dx = this.playerPos.x - veh.x;
-        const dz = this.playerPos.z - veh.z;
-        const distToPlayer = Math.hypot(dx, dz);
+        const curElev = this.getRoadElevation(veh.x, veh.z, veh.y);
+        let targetX = this.playerPos.x;
+        let targetZ = this.playerPos.z;
+
+        // Deck-aware pursuit steering: if player is elevated above (>4m) and cruiser is on street, head to nearest ramp entry
+        const elevGap = this.playerPos.y - curElev;
+        if (elevGap > 4.0 && curElev < 2.5) {
+          const deckRamps: Array<{ x: number; z: number; matches: boolean }> = [
+            { x: 18, z: -162, matches: this.playerPos.y >= 11.5 && Math.abs(this.playerPos.x - 14) <= 14 },
+            { x: 18, z: 162, matches: this.playerPos.y >= 11.5 && Math.abs(this.playerPos.x - 14) <= 14 },
+            { x: -344, z: -175, matches: Math.abs(this.playerPos.z + 175) <= 14 && this.playerPos.y >= 4.5 && this.playerPos.y < 12.5 },
+            { x: 344, z: -175, matches: Math.abs(this.playerPos.z + 175) <= 14 && this.playerPos.y >= 4.5 && this.playerPos.y < 12.5 },
+            { x: -564, z: 240, matches: Math.abs(this.playerPos.z - 240) <= 14 && this.playerPos.y >= 5.5 && this.playerPos.y < 12.5 },
+            { x: 564, z: 240, matches: Math.abs(this.playerPos.z - 240) <= 14 && this.playerPos.y >= 5.5 && this.playerPos.y < 12.5 },
+            { x: 276, z: -315, matches: Math.abs(this.playerPos.z + 315) <= 14 && this.playerPos.y >= 5.5 },
+            { x: 804, z: -315, matches: Math.abs(this.playerPos.z + 315) <= 14 && this.playerPos.y >= 5.5 },
+          ];
+          let bestRamp: { x: number; z: number } | null = null;
+          let bestRampDist = Infinity;
+          for (const r of deckRamps) {
+            if (!r.matches) continue;
+            const dRamp = Math.hypot(r.x - veh.x, r.z - veh.z);
+            if (dRamp < bestRampDist) {
+              bestRampDist = dRamp;
+              bestRamp = r;
+            }
+          }
+          if (bestRamp && bestRampDist > 6.5) {
+            targetX = bestRamp.x;
+            targetZ = bestRamp.z;
+          }
+        }
+
+        const dx = targetX - veh.x;
+        const dz = targetZ - veh.z;
+        const distToPlayer = Math.hypot(this.playerPos.x - veh.x, this.playerPos.z - veh.z);
 
         if (distToPlayer < 180) {
           const targetAngle = Math.atan2(dx, dz);
@@ -16184,7 +14361,6 @@ export class DhakaCityEngine {
           veh.rotation += diff * Math.min(1, dt * 3.0);
           const chaseSpeed = 17 + wantedLevel * 3.4;
 
-          const curElev = this.getRoadElevation(veh.x, veh.z, veh.y);
           const nx = veh.x + Math.sin(veh.rotation) * chaseSpeed * dt;
           const nz = veh.z + Math.cos(veh.rotation) * chaseSpeed * dt;
           const nextElev = this.getRoadElevation(nx, nz, veh.y);
@@ -16546,13 +14722,18 @@ export class DhakaCityEngine {
         if (npc.deathTimer === undefined) npc.deathTimer = 0;
         npc.deathTimer += dt;
         const tumbleDur = 0.52;
+        const corpseSurfaceY = this.getRoadElevation(
+          npc.x,
+          npc.z,
+          npc.homeY ?? limbs.group.position.y
+        );
 
         if (npc.deathTimer <= tumbleDur) {
           const progress = Math.min(1.0, npc.deathTimer / tumbleDur);
           // Ease in quad for gravity acceleration
           const ease = progress * progress;
-          // Smoothly lower torso from standing (1.0m) to ground level (0.08m)
-          const fallY = 0.08 + (1.0 - ease) * 0.92;
+          // Smoothly lower torso from standing (+1.0m) onto local floor/deck (+0.08m)
+          const fallY = corpseSurfaceY + 0.08 + (1.0 - ease) * 0.92;
           // Momentum slide along impact vector
           const slideSpeed = (1.0 - progress) * 2.8;
           if (npc.deathVx && npc.deathVz) {
@@ -16567,13 +14748,13 @@ export class DhakaCityEngine {
           }
           setDeathRagdollPose(limbs, npc.deathType || 'gunshot', progress);
         } else {
-          // Corpse is settled at ground level with realistic bone ragdoll posture
-          limbs.group.position.set(npc.x, 0.08, npc.z);
+          // Corpse is settled on local floor/deck level with realistic bone ragdoll posture
+          limbs.group.position.set(npc.x, corpseSurfaceY + 0.08, npc.z);
           limbs.group.rotation.x = -Math.PI / 2;
           setDeathRagdollPose(limbs, npc.deathType || 'gunshot', 1.0);
           if (!npc.bloodDecalSpawned) {
             npc.bloodDecalSpawned = true;
-            this.spawnBloodDecal(npc.x, npc.z, 1.45);
+            this.spawnBloodDecal(npc.x, npc.z, 1.45, corpseSurfaceY);
           }
         }
 
@@ -16600,13 +14781,20 @@ export class DhakaCityEngine {
         continue;
       }
 
-      // Handle Ejected Drivers (tumble flat on the pavement, then stand up and flee)
+      // Handle Ejected Drivers (tumble flat on the local surface, then stand up and flee)
       if (npc.isEjectedDriver && (npc.ejectedTumbleTimer ?? 0) > 0) {
         npc.ejectedTumbleTimer = (npc.ejectedTumbleTimer ?? 0) - dt;
-        limbs.group.position.set(npc.x, 0.08, npc.z);
+        const ejectSurfaceY = this.getRoadElevation(
+          npc.x,
+          npc.z,
+          npc.homeY ?? limbs.group.position.y
+        );
+        limbs.group.position.set(npc.x, ejectSurfaceY + 0.08, npc.z);
         limbs.group.rotation.x = -Math.PI / 2;
         if (npc.ejectedTumbleTimer <= 0) {
           limbs.group.rotation.x = 0;
+          limbs.group.position.set(npc.x, ejectSurfaceY, npc.z);
+          npc.homeY = ejectSurfaceY;
           npc.aiState = 'flee';
           npc.walkTargetX = npc.x + (Math.random() - 0.5) * 80;
           npc.walkTargetZ = npc.z + (Math.random() - 0.5) * 80;

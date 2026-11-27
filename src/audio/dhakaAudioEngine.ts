@@ -57,6 +57,7 @@ class DhakaAudioEngine {
   private currentStation: RadioStationId = 'off';
   private radioInterval: number | null = null;
   private radioStep = 0;
+  private preloadRetryTimers = new Set<number>();
 
   public init() {
     if (this.isInitialized && this.ctx) {
@@ -403,12 +404,19 @@ class DhakaAudioEngine {
       trafficNoise.start();
 
       const checkInterval = window.setInterval(() => {
+        if (!this.isInitialized) {
+          window.clearInterval(checkInterval);
+          this.preloadRetryTimers.delete(checkInterval);
+          return;
+        }
         if (this.bufferCache.has(url)) {
           window.clearInterval(checkInterval);
+          this.preloadRetryTimers.delete(checkInterval);
           try { trafficNoise.stop(); } catch {}
           this.startTrafficBufferLoop();
         }
       }, 800);
+      this.preloadRetryTimers.add(checkInterval);
     }
   }
 
@@ -427,11 +435,18 @@ class DhakaAudioEngine {
       this.crowdLoopSource.start();
     } else {
       const checkInterval = window.setInterval(() => {
+        if (!this.isInitialized) {
+          window.clearInterval(checkInterval);
+          this.preloadRetryTimers.delete(checkInterval);
+          return;
+        }
         if (this.bufferCache.has(url)) {
           window.clearInterval(checkInterval);
+          this.preloadRetryTimers.delete(checkInterval);
           this.startCrowdBufferLoop();
         }
       }, 800);
+      this.preloadRetryTimers.add(checkInterval);
     }
   }
 
@@ -1650,6 +1665,58 @@ class DhakaAudioEngine {
           this.ctx.currentTime,
           0.2
         );
+      }
+    }
+  }
+
+  public dispose() {
+    this.setRadioStation('off');
+    if (this.rickshawClickInterval !== null) {
+      window.clearInterval(this.rickshawClickInterval);
+      this.rickshawClickInterval = null;
+    }
+    if (this.trafficHornInterval !== null) {
+      window.clearInterval(this.trafficHornInterval);
+      this.trafficHornInterval = null;
+    }
+    this.preloadRetryTimers.forEach((id) => window.clearInterval(id));
+    this.preloadRetryTimers.clear();
+
+    const stopNode = (node: { stop: () => void } | null) => {
+      if (!node) return;
+      try {
+        node.stop();
+      } catch {
+        // Ignore already-stopped audio source
+      }
+    };
+    stopNode(this.engineIdleSource);
+    stopNode(this.engineRevSource);
+    stopNode(this.trafficLoopSource);
+    stopNode(this.crowdLoopSource);
+    stopNode(this.engineOsc);
+    stopNode(this.engineSubOsc);
+    stopNode(this.metroMotorOsc);
+    stopNode(this.metroHarmonicOsc);
+
+    this.engineIdleSource = null;
+    this.engineRevSource = null;
+    this.trafficLoopSource = null;
+    this.crowdLoopSource = null;
+    this.engineOsc = null;
+    this.engineSubOsc = null;
+    this.metroMotorOsc = null;
+    this.metroHarmonicOsc = null;
+    this.currentActiveVehicleType = null;
+    this.isInitialized = false;
+
+    if (this.ctx) {
+      const closingCtx = this.ctx;
+      this.ctx = null;
+      try {
+        void closingCtx.close();
+      } catch {
+        // Ignore close errors
       }
     }
   }

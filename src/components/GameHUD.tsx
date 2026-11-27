@@ -55,6 +55,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     language,
     toggleLanguage,
     playerX,
+    playerY,
     playerZ,
     taka,
     wantedLevel,
@@ -174,6 +175,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
   const activeTool = tools.find((t) => t.id === equippedToolId) || tools[0];
 
+  const tryPurchase = (price: number, titleEn: string, titleBn: string): boolean => {
+    if (spendTaka(price, titleEn, titleBn)) return true;
+    showBanner({
+      titleEn: `INSUFFICIENT TAKA (NEED ৳${price})`,
+      titleBn: `অপর্যাপ্ত টাকা (প্রয়োজন ৳${price})`,
+      subtitleEn: `Balance: ৳${taka.toLocaleString()} — earn more Taka to purchase ${titleEn}.`,
+      subtitleBn: `আপনার ব্যালেন্স ৳${taka.toLocaleString()} — ${titleBn} কিনতে আরও টাকা প্রয়োজন।`,
+      tone: 'red',
+    });
+    return false;
+  };
+
   const meleeWeapons: Array<{ id: ToolWeaponId; en: string; bn: string }> = [
     { id: 'fists', en: 'Fist', bn: 'ঘুষি' },
     { id: 'ramda', en: 'Ramda', bn: 'রামদা' },
@@ -271,9 +284,27 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                 </span>
 
                 {distToObjective !== null && (
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5 shrink-0 bg-emerald-950/50 px-1.5 py-0.5 rounded-full border border-emerald-500/30">
+                  <span
+                    className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5 shrink-0 bg-emerald-950/50 px-1.5 py-0.5 rounded-full border border-emerald-500/30"
+                    title={
+                      activeStep.targetY !== undefined && Math.abs(activeStep.targetY - playerY) > 2.5
+                        ? activeStep.targetY > playerY
+                          ? language === 'en'
+                            ? `Objective is ${Math.round(activeStep.targetY - playerY)}m above`
+                            : `লক্ষ্যস্থল ${Math.round(activeStep.targetY - playerY)}মি উপরে`
+                          : language === 'en'
+                          ? `Objective is ${Math.round(playerY - activeStep.targetY)}m below`
+                          : `লক্ষ্যস্থল ${Math.round(playerY - activeStep.targetY)}মি নিচে`
+                        : undefined
+                    }
+                  >
                     <MapPin className="w-2.5 h-2.5" />
                     {distToObjective}m
+                    {activeStep.targetY !== undefined && Math.abs(activeStep.targetY - playerY) > 2.5 && (
+                      <span className="text-amber-300 font-black">
+                        {activeStep.targetY > playerY ? '▲' : '▼'}
+                      </span>
+                    )}
                   </span>
                 )}
 
@@ -1207,11 +1238,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                   { nameEn: 'Supreme Pan Pizza', nameBn: 'সুপ্রিম প্যান পিৎজা', hp: 90, arm: 25, price: 220 },
                   { nameEn: 'Iced Caramel Chiller', nameBn: 'আইসড ক্যারামেল কফি', hp: 50, arm: 0, price: 120 },
                   { nameEn: 'Royal Shahi Kacchi', nameBn: 'রয়েল শাহী কাচ্চি ও বোরহানি', hp: 100, arm: 50, price: 250 },
-                ].map((item) => (
+                ].map((item) => {
+                  const canAfford = taka >= item.price;
+                  return (
                   <button
                     key={item.nameEn}
                     onClick={() => {
-                      if (spendTaka(item.price, item.nameEn, item.nameBn)) {
+                      if (tryPurchase(item.price, item.nameEn, item.nameBn)) {
                         healPlayer(item.hp, item.arm);
                         showBanner({
                           titleEn: `${item.nameEn.toUpperCase()} ENJOYED! (+${item.hp} HP)`,
@@ -1223,16 +1256,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         closeShopModal();
                       }
                     }}
-                    className="p-3 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-left flex flex-col gap-1"
+                    className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-colors ${
+                      canAfford
+                        ? 'bg-slate-950/80 hover:bg-slate-800 border-slate-800'
+                        : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                    }`}
                   >
                     <span className="text-xs font-black text-white">
                       {language === 'en' ? item.nameEn : item.nameBn}
                     </span>
-                    <span className="text-[10px] text-emerald-400 font-bold">
+                    <span className={`text-[10px] font-bold ${canAfford ? 'text-emerald-400' : 'text-red-400'}`}>
                       +{item.hp} HP {item.arm > 0 ? `• +${item.arm} Armor` : ''} • ৳{item.price}
                     </span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1247,7 +1285,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       onClick={() => {
-                        if (spendTaka(450, 'Mall Tactical Armor Vest', 'বডি আর্মার ভেস্ট')) {
+                        if (tryPurchase(450, 'Mall Tactical Armor Vest', 'বডি আর্মার ভেস্ট')) {
                           healPlayer(40, 65);
                           showBanner({
                             titleEn: 'TACTICAL ARMOR VEST EQUIPPED (+65 ARMOR)',
@@ -1259,14 +1297,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                           closeShopModal();
                         }
                       }}
-                      className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                      className={`p-3 rounded-xl border text-left transition-colors ${
+                        taka >= 450
+                          ? 'bg-slate-950 hover:bg-slate-800 border-slate-800'
+                          : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                      }`}
                     >
                       <p className="text-xs font-black text-white">🛡️ Tactical Armor Vest</p>
-                      <p className="text-[10px] text-cyan-400 font-bold">+65 Armor & +40 HP • ৳450</p>
+                      <p className={`text-[10px] font-bold ${taka >= 450 ? 'text-cyan-400' : 'text-red-400'}`}>+65 Armor & +40 HP • ৳450</p>
                     </button>
                     <button
                       onClick={() => {
-                        if (spendTaka(300, 'Full Firearm Ammo Refill', 'অস্ত্রের গুলি রিফিল')) {
+                        if (tryPurchase(300, 'Full Firearm Ammo Refill', 'অস্ত্রের গুলি রিফিল')) {
                           (['pistol_9mm', 'bd08_rifle', 'police_shotgun', 'smg_uzi', 'deshi_pipegun'] as ToolWeaponId[]).forEach((id) =>
                             addAmmo(id, 30)
                           );
@@ -1280,10 +1322,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                           closeShopModal();
                         }
                       }}
-                      className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                      className={`p-3 rounded-xl border text-left transition-colors ${
+                        taka >= 300
+                          ? 'bg-slate-950 hover:bg-slate-800 border-slate-800'
+                          : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                      }`}
                     >
                       <p className="text-xs font-black text-white">🔫 Tactical Ammo Pack</p>
-                      <p className="text-[10px] text-amber-400 font-bold">+30 Rounds All Guns • ৳300</p>
+                      <p className={`text-[10px] font-bold ${taka >= 300 ? 'text-amber-400' : 'text-red-400'}`}>+30 Rounds All Guns • ৳300</p>
                     </button>
                   </div>
                 )}
@@ -1291,7 +1337,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                 {activeShopModal.category === 'cinema' && (
                   <button
                     onClick={() => {
-                      if (spendTaka(200, 'Blockbuster Cinemas IMAX Ticket', 'ব্লকবাস্টার সিনেমাস টিকিট')) {
+                      if (tryPurchase(200, 'Blockbuster Cinemas IMAX Ticket', 'ব্লকবাস্টার সিনেমাস টিকিট')) {
                         healPlayer(100, 50);
                         setWantedLevel(0);
                         saveGameToStorage();
@@ -1305,17 +1351,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         closeShopModal();
                       }
                     }}
-                    className="w-full p-3.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/50 text-left"
+                    className={`w-full p-3.5 rounded-xl border text-left transition-colors ${
+                      taka >= 200
+                        ? 'bg-rose-950/70 hover:bg-rose-900 border-rose-500/50'
+                        : 'bg-slate-950/60 border-red-900/60 opacity-75'
+                    }`}
                   >
                     <p className="text-sm font-black text-white">🎬 Watch Dhaka Attack 2 (3D IMAX + Popcorn)</p>
-                    <p className="text-xs text-amber-300 mt-0.5">Full Heal +50 Armor, Clear Wanted ★ & Save Game — ৳200</p>
+                    <p className={`text-xs mt-0.5 ${taka >= 200 ? 'text-amber-300' : 'text-red-400'}`}>Full Heal +50 Armor, Clear Wanted ★ & Save Game — ৳200</p>
                   </button>
                 )}
 
                 {activeShopModal.category === 'arcade' && (
                   <button
                     onClick={() => {
-                      if (spendTaka(50, 'Future World VR & Arcade Tokens', 'গেম জোন টোকেন')) {
+                      if (tryPurchase(50, 'Future World VR & Arcade Tokens', 'গেম জোন টোকেন')) {
                         healPlayer(35, 0);
                         showBanner({
                           titleEn: '🎮 FUTURE WORLD GAME ZONE: HIGH SCORE!',
@@ -1327,17 +1377,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         closeShopModal();
                       }
                     }}
-                    className="w-full p-3.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-500/50 text-left"
+                    className={`w-full p-3.5 rounded-xl border text-left transition-colors ${
+                      taka >= 50
+                        ? 'bg-purple-950/70 hover:bg-purple-900 border-purple-500/50'
+                        : 'bg-slate-950/60 border-red-900/60 opacity-75'
+                    }`}
                   >
                     <p className="text-sm font-black text-white">🎮 Play VR Racing & Bowling Tokens</p>
-                    <p className="text-xs text-purple-200 mt-0.5">Restore Energy & +35 HP — ৳50</p>
+                    <p className={`text-xs mt-0.5 ${taka >= 50 ? 'text-purple-200' : 'text-red-400'}`}>Restore Energy & +35 HP — ৳50</p>
                   </button>
                 )}
 
                 {(activeShopModal.category === 'footwear' || activeShopModal.category === 'books') && (
                   <button
                     onClick={() => {
-                      if (spendTaka(activeShopModal.cost || 150, activeShopModal.titleEn, activeShopModal.titleBn)) {
+                      const cost = activeShopModal.cost || 150;
+                      if (tryPurchase(cost, activeShopModal.titleEn, activeShopModal.titleBn)) {
                         healPlayer(50, 0);
                         setWantedLevel(Math.max(0, wantedLevel - 1));
                         showBanner({
@@ -1350,12 +1405,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         closeShopModal();
                       }
                     }}
-                    className="w-full p-3.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/50 text-left"
+                    className={`w-full p-3.5 rounded-xl border text-left transition-colors ${
+                      taka >= (activeShopModal.cost || 150)
+                        ? 'bg-emerald-950/70 hover:bg-emerald-900 border-emerald-500/50'
+                        : 'bg-slate-950/60 border-red-900/60 opacity-75'
+                    }`}
                   >
                     <p className="text-sm font-black text-white">
                       {activeShopModal.category === 'books' ? '📚 Espresso & Bangla Novel (+50 HP, -1★)' : '👟 Fresh Running Sneakers (+50 HP)'}
                     </p>
-                    <p className="text-xs text-emerald-300 mt-0.5">৳{activeShopModal.cost || 150}</p>
+                    <p className={`text-xs mt-0.5 ${taka >= (activeShopModal.cost || 150) ? 'text-emerald-300' : 'text-red-400'}`}>৳{activeShopModal.cost || 150}</p>
                   </button>
                 )}
 
@@ -1503,7 +1562,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
             <div className="grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => {
-                  if (spendTaka(200, 'Garage Full Vehicle Repair', 'গাড়ি ফুল মেরামত')) {
+                  if (tryPurchase(200, 'Garage Full Vehicle Repair', 'গাড়ি ফুল মেরামত')) {
                     requestRepairVehicle();
                     showBanner({
                       titleEn: '🔧 VEHICLE 100% REPAIRED!',
@@ -1515,15 +1574,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                     closeGarageModal();
                   }
                 }}
-                className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                className={`p-3 rounded-xl border text-left transition-colors ${
+                  taka >= 200
+                    ? 'bg-slate-950 hover:bg-slate-800 border-slate-800'
+                    : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                }`}
               >
                 <p className="text-xs font-black text-white">🔧 Full Body Repair</p>
-                <p className="text-[10px] text-emerald-400 font-bold">100% Vehicle HP • ৳200</p>
+                <p className={`text-[10px] font-bold ${taka >= 200 ? 'text-emerald-400' : 'text-red-400'}`}>100% Vehicle HP • ৳200</p>
               </button>
 
               <button
                 onClick={() => {
-                  if (spendTaka(500, 'Garage Turbo & Armor Tune', 'টার্বো ও বডি আর্মার টিউনিং')) {
+                  if (tryPurchase(500, 'Garage Turbo & Armor Tune', 'টার্বো ও বডি আর্মার টিউনিং')) {
                     requestUpgradeVehicle();
                     showBanner({
                       titleEn: '⚡ TURBO +25% SPEED & +35% ARMOR APPLIED!',
@@ -1535,10 +1598,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                     closeGarageModal();
                   }
                 }}
-                className="p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left"
+                className={`p-3 rounded-xl border text-left transition-colors ${
+                  taka >= 500
+                    ? 'bg-slate-950 hover:bg-slate-800 border-slate-800'
+                    : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                }`}
               >
                 <p className="text-xs font-black text-white">⚡ Turbo & Armor Tune</p>
-                <p className="text-[10px] text-amber-400 font-bold">+25% Speed & +35% HP • ৳500</p>
+                <p className={`text-[10px] font-bold ${taka >= 500 ? 'text-amber-400' : 'text-red-400'}`}>+25% Speed & +35% HP • ৳500</p>
               </button>
             </div>
 
@@ -1558,7 +1625,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                   <button
                     key={c.hex}
                     onClick={() => {
-                      if (spendTaka(150, `Respray Paint: ${c.name}`, `গাড়ির রঙ: ${c.name}`)) {
+                      if (tryPurchase(150, `Respray Paint: ${c.name}`, `গাড়ির রঙ: ${c.name}`)) {
                         requestResprayVehicle(c.hex);
                         showBanner({
                           titleEn: `🎨 PAINT JOB COMPLETE (${c.name.toUpperCase()})`,
@@ -1570,7 +1637,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                         closeGarageModal();
                       }
                     }}
-                    className="px-2.5 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-700 flex items-center gap-1.5 text-[11px] font-bold text-white"
+                    className={`px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 text-[11px] font-bold text-white transition-colors ${
+                      taka >= 150
+                        ? 'bg-slate-950 hover:bg-slate-800 border-slate-700'
+                        : 'bg-slate-950/50 border-red-900/50 opacity-75'
+                    }`}
                   >
                     <span className="w-3.5 h-3.5 rounded-full border border-white/40" style={{ backgroundColor: c.hex }} />
                     <span>{c.name}</span>
@@ -1581,12 +1652,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
             <button
               onClick={() => {
-                if (spendTaka(300, 'Workshop Tuned CNG Delivery', 'গ্যারেজ সিএনজি ডেলিভারি')) {
+                if (tryPurchase(300, 'Workshop Tuned CNG Delivery', 'গ্যারেজ সিএনজি ডেলিভারি')) {
                   requestSpawnVehicle('cng');
                   closeGarageModal();
                 }
               }}
-              className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black"
+              className={`w-full py-2 rounded-xl text-white text-xs font-black transition-colors ${
+                taka >= 300
+                  ? 'bg-emerald-600 hover:bg-emerald-500'
+                  : 'bg-slate-800 border border-red-900/60 text-red-300'
+              }`}
             >
               🛺 Deliver Fresh CNG Outside Garage (৳300)
             </button>

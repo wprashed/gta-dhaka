@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import {
   CNG_STATIONS,
@@ -10,10 +10,11 @@ import {
   STORY_MISSIONS,
   STREET_ATMS,
 } from '../data/dhakaWorldData';
-import { Compass, Map as MapIcon } from 'lucide-react';
+import { Compass, Map as MapIcon, ZoomIn, ZoomOut } from 'lucide-react';
 
 export const MinimapHUD: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [radarZoomedOut, setRadarZoomedOut] = useState(false);
   const {
     playerX,
     playerZ,
@@ -165,7 +166,7 @@ export const MinimapHUD: React.FC = () => {
       return;
     }
 
-    const scale = 0.62; // World meters to radar pixels
+    const scale = radarZoomedOut ? 0.34 : 0.62; // World meters to radar pixels (0.55x vs 1x zoom)
 
     // Radar dark background
     ctx.fillStyle = '#0f172a';
@@ -436,6 +437,7 @@ export const MinimapHUD: React.FC = () => {
     mallFloor,
     activeFareJob,
     language,
+    radarZoomedOut,
   ]);
 
   const districtObj =
@@ -459,9 +461,25 @@ export const MinimapHUD: React.FC = () => {
           className="w-full h-full block"
         />
 
-        {/* North Badge */}
-        <div className="absolute top-2 left-2 bg-slate-950/85 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-500/40 flex items-center gap-1">
-          <Compass className="w-3 h-3" /> N
+        {/* North & Zoom Toggle Badges */}
+        <div className="absolute top-2 left-2 flex items-center gap-1">
+          <div className="bg-slate-950/85 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-500/40 flex items-center gap-1">
+            <Compass className="w-3 h-3" /> N
+          </div>
+          {!isInsideMall && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRadarZoomedOut((prev) => !prev);
+              }}
+              title={language === 'en' ? 'Toggle radar zoom (1x / 0.55x)' : 'রাডার জুম পরিবর্তন (১x / ০.৫৫x)'}
+              className="bg-slate-950/85 hover:bg-slate-800 text-cyan-300 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-cyan-500/40 flex items-center gap-0.5 transition-colors"
+            >
+              {radarZoomedOut ? <ZoomIn className="w-2.5 h-2.5" /> : <ZoomOut className="w-2.5 h-2.5" />}
+              {radarZoomedOut ? '0.55x' : '1x'}
+            </button>
+          )}
         </div>
 
         {/* Shortcuts: [M] Missions & [Tab] Map */}

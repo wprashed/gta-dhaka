@@ -116,9 +116,26 @@ export function evaluateRoadElevation(
   }
 
   // 0. High Elevated Structures (Y >= 12.0m) - Priority for top-level Expressway
+  //    Wait: yield cleanly when the vehicle/player is actively tracking the parallel East-side on/off ramp slope!
   if (currentY !== undefined && currentY >= 12.0) {
     if (Math.abs(x - 14) <= 7.1 && z >= -340 && z <= 240) {
-      return expDeckElev;
+      let onActiveRampSlope = false;
+      if (x >= 13.8 && x <= 22.8) {
+        if (z >= -160 && z <= -40) {
+          const rY = expDeckElev * ((z + 160) / 120);
+          if (Math.abs(currentY - rY) <= 2.2 && rY < 16.15) {
+            onActiveRampSlope = true;
+          }
+        } else if (z >= 40 && z <= 160) {
+          const rY = expDeckElev * (1 - (z - 40) / 120);
+          if (Math.abs(currentY - rY) <= 2.2) {
+            onActiveRampSlope = true;
+          }
+        }
+      }
+      if (!onActiveRampSlope) {
+        return expDeckElev;
+      }
     }
   }
 

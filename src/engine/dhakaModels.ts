@@ -78,26 +78,35 @@ export function ensureModelLoaded(key: ModelKey, cb: (gltf: GLTF) => void) {
 
 export function loadCustomGLBFromUrl(
   url: string,
-  onLoaded: (group: THREE.Group) => void
+  onLoaded: (group: THREE.Group) => void,
+  onSettled?: () => void
 ) {
-  gltfLoader.load(resolveAssetUrl(url), (gltf) => {
-    const model = gltf.scene;
-    const box = new THREE.Box3().setFromObject(model);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z, 0.01);
-    if (maxDim > 18 || maxDim < 0.8) {
-      const scale = 4.5 / maxDim;
-      model.scale.setScalar(scale);
-    }
-    model.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+  gltfLoader.load(
+    resolveAssetUrl(url),
+    (gltf) => {
+      const model = gltf.scene;
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+      if (maxDim > 18 || maxDim < 0.8) {
+        const scale = 4.5 / maxDim;
+        model.scale.setScalar(scale);
       }
-    });
-    onLoaded(model);
-  });
+      model.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      onLoaded(model);
+      onSettled?.();
+    },
+    undefined,
+    () => {
+      onSettled?.();
+    }
+  );
 }
 
 /**

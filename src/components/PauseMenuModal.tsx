@@ -176,6 +176,7 @@ export const PauseMenuModal: React.FC = () => {
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
     requestCustomGlbUrl(objectUrl);
+    e.target.value = '';
   };
 
   const filteredSketchfab = SKETCHFAB_GTA_CATALOG.filter(
@@ -1294,6 +1295,14 @@ export const PauseMenuModal: React.FC = () => {
                         )
                       ) {
                         healPlayer(100, 100);
+                      } else {
+                        showBanner({
+                          titleEn: 'INSUFFICIENT TAKA (NEED ৳150)',
+                          titleBn: 'অপর্যাপ্ত টাকা (প্রয়োজন ৳150)',
+                          subtitleEn: `Balance: ৳${taka.toLocaleString()} — earn more Taka for Field Medkit.`,
+                          subtitleBn: `ব্যালেন্স: ৳${taka.toLocaleString()} — মেডকিট কিনতে আরও টাকা প্রয়োজন।`,
+                          tone: 'red',
+                        });
                       }
                     }}
                     className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all"
@@ -1324,6 +1333,14 @@ export const PauseMenuModal: React.FC = () => {
                           subtitleEn: 'All firearm reserves restocked to maximum capacity.',
                           subtitleBn: 'সকল অস্ত্রের গুলি সম্পূর্ণ ভর্তি করা হয়েছে।',
                           tone: 'gold',
+                        });
+                      } else {
+                        showBanner({
+                          titleEn: 'INSUFFICIENT TAKA (NEED ৳250)',
+                          titleBn: 'অপর্যাপ্ত টাকা (প্রয়োজন ৳250)',
+                          subtitleEn: `Balance: ৳${taka.toLocaleString()} — earn more Taka for Ammo Supply Crate.`,
+                          subtitleBn: `ব্যালেন্স: ৳${taka.toLocaleString()} — অ্যামো বক্স কিনতে আরও টাকা প্রয়োজন।`,
+                          tone: 'red',
                         });
                       }
                     }}
