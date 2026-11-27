@@ -5536,7 +5536,7 @@ export class DhakaCityEngine {
     // 4.2 West Ramp Sloped Barriers (X: -340 to -240) Following Incline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(100.5, 1.15, 0.45), barrierMat);
-      bMesh.position.set(-290, deckElev * 0.5 - 0.02, flyoverZ + oz);
+      bMesh.position.set(-290, deckElev * 0.5 + 0.55, flyoverZ + oz);
       bMesh.rotation.z = rampSlopeAngle;
       this.scene.add(bMesh);
 
@@ -5563,7 +5563,7 @@ export class DhakaCityEngine {
     // 4.3 East Ramp Sloped Barriers (X: 240 to 340) Following Decline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(100.5, 1.15, 0.45), barrierMat);
-      bMesh.position.set(290, deckElev * 0.5 - 0.02, flyoverZ + oz);
+      bMesh.position.set(290, deckElev * 0.5 + 0.55, flyoverZ + oz);
       bMesh.rotation.z = -rampSlopeAngle;
       this.scene.add(bMesh);
 
@@ -5867,7 +5867,7 @@ export class DhakaCityEngine {
 
     // 4.3 Outer Guardrails for Farmgate On-Ramp & Off-Ramp
     const onRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 120.5), barrierMat);
-    onRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.02, -100);
+    onRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, -100);
     onRampOuterGuard.rotation.x = -onRampSlopeAngle;
     this.scene.add(onRampOuterGuard);
 
@@ -5890,7 +5890,7 @@ export class DhakaCityEngine {
     }
 
     const offRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 120.5), barrierMat);
-    offRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.02, 100);
+    offRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, 100);
     offRampOuterGuard.rotation.x = onRampSlopeAngle;
     this.scene.add(offRampOuterGuard);
 
@@ -6108,7 +6108,7 @@ export class DhakaCityEngine {
     // 4.2 West Ramp Sloped Barriers (X: -560 to -440) Following Incline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(120.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(-500, deckElev * 0.5 + 0.02, flyoverZ + oz);
+      bMesh.position.set(-500, deckElev * 0.5 + 0.62, flyoverZ + oz);
       bMesh.rotation.z = westSlopeAngle;
       this.scene.add(bMesh);
 
@@ -6122,8 +6122,8 @@ export class DhakaCityEngine {
         this.buildingColliders.push({
           minX: seg.minX,
           maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
+          minZ: flyoverZ + oz - 0.42,
+          maxZ: flyoverZ + oz + 0.42,
           minY: seg.minY,
           maxY: seg.maxY,
           tag: 'flyover_barrier',
@@ -6134,7 +6134,7 @@ export class DhakaCityEngine {
     // 4.3 East Ramp Sloped Barriers (X: 440 to 560) Following Decline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(120.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(500, deckElev * 0.5 + 0.02, flyoverZ + oz);
+      bMesh.position.set(500, deckElev * 0.5 + 0.62, flyoverZ + oz);
       bMesh.rotation.z = -westSlopeAngle;
       this.scene.add(bMesh);
 
@@ -6148,8 +6148,8 @@ export class DhakaCityEngine {
         this.buildingColliders.push({
           minX: seg.minX,
           maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
+          minZ: flyoverZ + oz - 0.42,
+          maxZ: flyoverZ + oz + 0.42,
           minY: seg.minY,
           maxY: seg.maxY,
           tag: 'flyover_barrier',
@@ -6331,7 +6331,7 @@ export class DhakaCityEngine {
     // 4.2 West Ramp Sloped Barriers (X: 280 to 360) Following Incline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(320, deckElev * 0.5 + 0.02, flyoverZ + oz);
+      bMesh.position.set(320, deckElev * 0.5 + 0.62, flyoverZ + oz);
       bMesh.rotation.z = slopeAngle;
       this.scene.add(bMesh);
 
@@ -6345,8 +6345,8 @@ export class DhakaCityEngine {
         this.buildingColliders.push({
           minX: seg.minX,
           maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
+          minZ: flyoverZ + oz - 0.42,
+          maxZ: flyoverZ + oz + 0.42,
           minY: seg.minY,
           maxY: seg.maxY,
           tag: 'flyover_barrier',
@@ -6357,7 +6357,7 @@ export class DhakaCityEngine {
     // 4.3 East Ramp Sloped Barriers (X: 720 to 800) Following Decline
     [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
       const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(760, deckElev * 0.5 + 0.02, flyoverZ + oz);
+      bMesh.position.set(760, deckElev * 0.5 + 0.62, flyoverZ + oz);
       bMesh.rotation.z = -slopeAngle;
       this.scene.add(bMesh);
 
@@ -14857,16 +14857,40 @@ export class DhakaCityEngine {
         }
       } else {
         // 2. Static obstacle hit (railing, median, metro pillar, pole, wall)
-        // Check if vehicle can slide along X or Z axis (scraping against railing or curb)
+        // If already overlapping a collider corner/barrier, gently push vehicle back into clear space so it can never wedge
+        if (this.checkWorldObstacle(veh.x, veh.z, radius, veh.id, veh.y)) {
+          const escapeSteps = [0.35, 0.75, 1.35];
+          const dirs = [
+            [1, 0], [-1, 0], [0, 1], [0, -1],
+            [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7],
+          ];
+          let freed = false;
+          for (const st of escapeSteps) {
+            for (const [dx, dz] of dirs) {
+              const ex = veh.x + dx * st;
+              const ez = veh.z + dz * st;
+              const eElev = this.getRoadElevation(ex, ez, veh.y);
+              if (!this.checkWorldObstacle(ex, ez, radius, veh.id, eElev)) {
+                veh.x = clampWorldCoord(ex);
+                veh.z = clampWorldCoord(ez);
+                freed = true;
+                break;
+              }
+            }
+            if (freed) break;
+          }
+        }
+
+        // Check if vehicle can slide cleanly along X or Z axis even at low startup speed (scraping railing/curb)
         const canSlideX = !this.checkWorldObstacle(nextX, veh.z, radius, veh.id, nextElev);
         const canSlideZ = !this.checkWorldObstacle(veh.x, nextZ, radius, veh.id, nextElev);
 
-        if (canSlideX && Math.abs(vx) > 0.05) {
+        if (canSlideX && Math.abs(vx) > 0.0005) {
           veh.x = clampWorldCoord(nextX);
-          veh.speed *= Math.pow(0.68, dt);
-        } else if (canSlideZ && Math.abs(vz) > 0.05) {
+          veh.speed *= Math.pow(0.75, dt);
+        } else if (canSlideZ && Math.abs(vz) > 0.0005) {
           veh.z = clampWorldCoord(nextZ);
-          veh.speed *= Math.pow(0.68, dt);
+          veh.speed *= Math.pow(0.75, dt);
         } else {
           // Direct head-on impact into railing, wall or concrete post
           if (Math.abs(veh.speed) > 4.5) {
@@ -14895,7 +14919,6 @@ export class DhakaCityEngine {
           } else {
             dhakaAudio.playSfx('hit');
           }
-          // Stop forward momentum cleanly instead of vibrating back and forth
           veh.speed = 0;
         }
       }
@@ -16972,9 +16995,16 @@ export class DhakaCityEngine {
     for (const b of this.buildingColliders) {
       if (b.minY !== undefined && elev < b.minY) continue;
       if (b.maxY !== undefined && elev > b.maxY) continue;
-      // Road medians should only block if the center of entity is directly straddling the median,
-      // not when driving in the lane with a large bounding sphere!
-      const effectiveRadius = b.tag === 'road_median' ? Math.min(radius, 0.25) : radius;
+      // Road medians & slim guardrails/flyover barriers use lateral half-width so long vehicles don't snare prematurely
+      const effectiveRadius =
+        b.tag === 'road_median'
+          ? Math.min(radius, 0.25)
+          : b.tag === 'flyover_barrier' ||
+            b.tag === 'buriganga_bridge_guardrail' ||
+            b.tag === 'balu_bridge_guardrail' ||
+            b.tag === 'jfp_railing'
+          ? Math.min(radius, 0.95)
+          : radius;
       if (
         x + effectiveRadius > b.minX &&
         x - effectiveRadius < b.maxX &&
