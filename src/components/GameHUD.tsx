@@ -1393,18 +1393,24 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
 
       {/* IN-GAME MODAL 2: DHAKA METRO RAIL (MRT) FAST TRAVEL */}
       {activeMetroModal && (
-        <div className="pointer-events-auto fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3">
+        <div
+          className="pointer-events-auto fixed inset-0 z-[70] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={closeMetroModal}
+        >
+          <div
+            className="bg-slate-900 border-2 border-emerald-500/60 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
                   🚆 Dhaka Mass Rapid Transit (MRT Line 5 & 6)
                 </span>
                 <h3 className="text-base font-black text-white">
-                  {language === 'en' ? 'Select Destination Station' : 'গন্তব্য মেট্রোরেল স্টেশন বাছুন'}
+                  {language === 'en' ? 'Select Destination Station to Board' : 'যাত্রা শুরু করতে গন্তব্য স্টেশন বাছুন'}
                 </h3>
               </div>
-              <button onClick={closeMetroModal} className="p-1.5 rounded-lg bg-slate-800 text-slate-300">
+              <button onClick={closeMetroModal} className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
                 <X className="w-4 h-4" />
               </button>
             </div>

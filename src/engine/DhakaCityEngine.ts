@@ -262,6 +262,25 @@ export class DhakaCityEngine {
     landMaxZ: number;
     landY: number;
   }> = [];
+  private metroStationInteriors: Array<{
+    concourseMinX: number;
+    concourseMaxX: number;
+    concourseMinZ: number;
+    concourseMaxZ: number;
+    concourseY: number;
+    platMinX: number;
+    platMaxX: number;
+    platMinZ: number;
+    platMaxZ: number;
+    platY: number;
+    inX1: number;
+    inZ1: number;
+    inY1: number;
+    inX2: number;
+    inZ2: number;
+    inY2: number;
+    inHalfW: number;
+  }> = [];
   private metroRide: {
     segments: Array<{
       line: 'L6' | 'L5';
@@ -2843,19 +2862,51 @@ export class DhakaCityEngine {
         this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
       });
 
-      // 2. Lower Ticket Concourse Level (Y: 8.6..12.2m) with illuminated AFC window strip & DMTCL green band
-      const concourseHall = this.sharedBox(13.8, 3.2, 58, concourseMat, -10.5, 10.3, st.sz);
-      concourseHall.castShadow = true;
-      this.scene.add(concourseHall);
-      [-17.45, -3.55].forEach((wx) => {
-        this.scene.add(this.sharedBox(0.18, 1.45, 54, concourseGlowMat, wx, 10.5, st.sz));
-        this.scene.add(this.sharedBox(0.24, 0.55, 58.2, mrtGreenTrimMat, wx, 9.1, st.sz));
+      // 2. Hollow Walk-In Lower Ticket Concourse Level (Floor Y = 8.96m, Ceiling Y = 12.7m)
+      // Floor slab + outer illuminated side bands + glazed curtain wall with doorway opening on West escalator side
+      this.scene.add(this.sharedBox(14.2, 0.42, 58, concourseMat, -10.5, 8.75, st.sz));
+      this.scene.add(this.sharedBox(1.8, 0.14, 54, concourseGlowMat, -10.5, 12.2, st.sz));
+      const l6DirSign = st.sz === -175 ? 1 : -1;
+      const l6LandCenterZ = (st.sz === -175 ? st.sz - 22 : st.sz + 22) + l6DirSign * 15.5;
+      // Outer glass concourse walls (splitting around the open escalator entrance at l6LandCenterZ)
+      [-3.45, -17.45].forEach((wx) => {
+        if (wx < -10) {
+          const zNorthMin = st.sz - 28.5;
+          const zNorthMax = l6LandCenterZ - 2.0;
+          if (zNorthMax > zNorthMin + 1) {
+            this.scene.add(this.sharedBox(0.18, 2.9, zNorthMax - zNorthMin, glassMat, wx, 10.4, (zNorthMin + zNorthMax) * 0.5));
+          }
+          const zSouthMin = l6LandCenterZ + 2.0;
+          const zSouthMax = st.sz + 28.5;
+          if (zSouthMax > zSouthMin + 1) {
+            this.scene.add(this.sharedBox(0.18, 2.9, zSouthMax - zSouthMin, glassMat, wx, 10.4, (zSouthMin + zSouthMax) * 0.5));
+          }
+        } else {
+          this.scene.add(this.sharedBox(0.18, 2.9, 57, glassMat, wx, 10.4, st.sz));
+        }
+        this.scene.add(this.sharedBox(0.24, 0.48, 58.2, mrtGreenTrimMat, wx, 8.95, st.sz));
+      });
+      // Interior Ticket Vending Kiosks & AFC Smart Turnstiles inside Concourse Hall
+      this.scene.add(this.sharedBox(1.2, 2.2, 3.6, mrtGreenTrimMat, -7.2, 10.05, st.sz));
+      [-11.8, -11.8].forEach((tx, idx) => {
+        this.scene.add(this.sharedBox(0.22, 1.05, 1.4, afcGateMat, tx, 9.48, st.sz + (idx === 0 ? -4 : 4)));
       });
 
-      // 3. Upper Train Platform Deck (Y: 12.6..16.8m)
-      const platform = this.sharedBox(15.0, 4.0, 64, concourseMat, -10.5, 14.6, st.sz);
-      platform.castShadow = true;
-      this.scene.add(platform);
+      // Interior Concrete Escalator Stairway connecting Concourse Hall (Y=8.96) -> West Side Platform (Y=13.30)
+      const intZ1 = st.sz - 8.5;
+      const intZ2 = st.sz + 1.5;
+      const intX = -15.4;
+      for (let is = 0; is < 14; is++) {
+        const ft = (is + 0.5) / 14;
+        const step = new THREE.Mesh(this.boxCache(2.0, 0.24, 0.8), afcGateMat);
+        step.position.set(intX, THREE.MathUtils.lerp(8.96, 13.28, ft) + 0.08, THREE.MathUtils.lerp(intZ1, intZ2, ft));
+        this.scene.add(step);
+      }
+
+      // 3. Open Dual-Side Upper Train Platform Deck (Tracks open in center at X=-14.2..-10.2, Walkable West/East Platforms Y=13.30)
+      this.scene.add(this.sharedBox(15.2, 0.52, 64, concourseMat, -10.5, 12.6, st.sz));
+      this.scene.add(this.sharedBox(4.0, 0.44, 62, concourseMat, -15.9, 13.08, st.sz)); // West boarding platform (X: -17.9..-13.9)
+      this.scene.add(this.sharedBox(5.6, 0.44, 62, concourseMat, -6.5, 13.08, st.sz));  // East boarding platform (X: -9.3..-3.7)
 
       // Curved Teal Vaulted Roof Canopy + 5 Steel Arch Trusses & Warm Ceiling LED Strips
       const canopy = new THREE.Mesh(
@@ -2889,6 +2940,26 @@ export class DhakaCityEngine {
       });
       this.scene.add(this.sharedBox(3.6, 0.7, 0.25, new THREE.MeshBasicMaterial({ color: '#10b981' }), -10.5, 16.5, st.sz + 14));
       this.scene.add(this.sharedBox(3.6, 0.7, 0.25, new THREE.MeshBasicMaterial({ color: '#10b981' }), -10.5, 16.5, st.sz - 14));
+
+      this.metroStationInteriors.push({
+        concourseMinX: -17.6,
+        concourseMaxX: -3.4,
+        concourseMinZ: st.sz - 28.5,
+        concourseMaxZ: st.sz + 28.5,
+        concourseY: 8.96,
+        platMinX: -17.8,
+        platMaxX: -3.3,
+        platMinZ: st.sz - 30.5,
+        platMaxZ: st.sz + 30.5,
+        platY: 13.30,
+        inX1: intX,
+        inZ1: intZ1,
+        inY1: 8.96,
+        inX2: intX,
+        inZ2: intZ2,
+        inY2: 13.30,
+        inHalfW: 1.25,
+      });
 
       // 4. Ground-Anchored West Sidewalk Entry Pavilion & Covered Escalator Bridge (Y = 0 -> Concourse Y = 9.0m)
       if (st.hasStairs) {
@@ -2936,9 +3007,10 @@ export class DhakaCityEngine {
         // Outer guardrail along outer & end edges of landing balcony
         this.scene.add(this.sharedBox(0.12, 1.05, 3.8, trussSteelMat, -21.95, 9.48, landCenterZ));
         this.scene.add(this.sharedBox(5.2, 1.05, 0.12, trussSteelMat, -19.4, 9.48, landCenterZ + dirSign * 1.85));
-        // Dark-framed Open Concourse Entrance Doorway Portal on station wall (X = -17.3)
-        this.scene.add(this.sharedBox(0.26, 2.8, 3.2, afcGateMat, -17.35, 10.35, landCenterZ));
-        this.scene.add(this.sharedBox(0.32, 2.4, 2.5, glassMat, -17.33, 10.2, landCenterZ));
+        // Open Wide Walk-In Concourse Entrance Doorway Jambs + Overhead Header (clear walk-in opening!)
+        [-1.55, 1.55].forEach((dz) => {
+          this.scene.add(this.sharedBox(0.28, 2.8, 0.24, afcGateMat, -17.35, 10.35, landCenterZ + dz));
+        });
         this.scene.add(this.sharedBox(0.36, 0.45, 3.4, mrtGreenTrimMat, -17.32, 11.75, landCenterZ));
 
         // Glass canopy starting past the kiosk roof lip up over the landing balcony
@@ -3021,17 +3093,47 @@ export class DhakaCityEngine {
         this.scene.add(this.sharedBox(1.6, 1.1, 17.2, concreteMat, st.sx + bx, 16.3, line5Z));
       });
 
-      // 2. Lower Ticket Concourse Level (Y: 12.6..16.2m)
-      this.scene.add(this.sharedBox(58, 3.2, 13.8, concourseMat, st.sx, 14.3, line5Z));
+      // 2. Hollow Walk-In Lower Ticket Concourse Level (Floor Y = 12.86m)
+      this.scene.add(this.sharedBox(58, 0.42, 14.0, concourseMat, st.sx, 12.65, line5Z));
+      this.scene.add(this.sharedBox(54, 0.14, 1.8, concourseGlowMat, st.sx, 16.2, line5Z));
       [line5Z - 6.95, line5Z + 6.95].forEach((wz) => {
-        this.scene.add(this.sharedBox(54, 1.45, 0.18, concourseGlowMat, st.sx, 14.5, wz));
-        this.scene.add(this.sharedBox(58.2, 0.55, 0.24, mrtRedTrimMat, st.sx, 13.1, wz));
+        this.scene.add(this.sharedBox(58.2, 0.48, 0.24, mrtRedTrimMat, st.sx, 12.95, wz));
       });
+      // Interior staircase from Line-5 Concourse (Y=12.86) -> Platform (Y=17.55)
+      const int5X1 = st.sx + 4;
+      const int5X2 = st.sx + 14;
+      const int5Z = line5Z - 4.4;
+      for (let is = 0; is < 15; is++) {
+        const ft = (is + 0.5) / 15;
+        const step = new THREE.Mesh(this.boxCache(0.8, 0.24, 2.0), afcGateMat);
+        step.position.set(THREE.MathUtils.lerp(int5X1, int5X2, ft), THREE.MathUtils.lerp(12.86, 17.55, ft) + 0.08, int5Z);
+        this.scene.add(step);
+      }
 
-      // 3. Upper Train Platform Deck + Crimson Vaulted Canopy & Trusses
-      const platform5 = this.sharedBox(64, 4.0, 15.0, concourseMat, st.sx, 18.6, line5Z);
-      platform5.castShadow = true;
-      this.scene.add(platform5);
+      // 3. Open Dual-Side Upper Train Platform Deck + Crimson Vaulted Canopy & Trusses
+      this.scene.add(this.sharedBox(64, 0.52, 15.2, concourseMat, st.sx, 16.85, line5Z));
+      this.scene.add(this.sharedBox(62, 0.44, 4.8, concourseMat, st.sx, 17.33, line5Z - 4.9));
+      this.scene.add(this.sharedBox(62, 0.44, 4.8, concourseMat, st.sx, 17.33, line5Z + 4.9));
+
+      this.metroStationInteriors.push({
+        concourseMinX: st.sx - 28.5,
+        concourseMaxX: st.sx + 28.5,
+        concourseMinZ: line5Z - 7.0,
+        concourseMaxZ: line5Z + 7.0,
+        concourseY: 12.86,
+        platMinX: st.sx - 30.5,
+        platMaxX: st.sx + 30.5,
+        platMinZ: line5Z - 7.4,
+        platMaxZ: line5Z + 7.4,
+        platY: 17.55,
+        inX1: int5X1,
+        inZ1: int5Z,
+        inY1: 12.86,
+        inX2: int5X2,
+        inZ2: int5Z,
+        inY2: 17.55,
+        inHalfW: 1.25,
+      });
 
       const canopy5 = new THREE.Mesh(
         new THREE.CylinderGeometry(8.6, 8.6, 65, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
@@ -3078,11 +3180,12 @@ export class DhakaCityEngine {
         this.scene.add(tread);
       }
 
-      // Upper Walkable Concourse Landing Balcony bridging South Sidewalk Escalator into Line-5 Concourse Wall
+      // Upper Walkable Concourse Landing Balcony bridging South Sidewalk Escalator into open Line-5 Concourse Doorway
       const land5Z = (entryZ + (line5Z - 6.8)) * 0.5;
       this.scene.add(this.sharedBox(3.8, 0.42, 4.4, concourseMat, st.sx - 5.2, 12.65, land5Z));
-      this.scene.add(this.sharedBox(3.2, 2.8, 0.28, afcGateMat, st.sx - 5.2, 14.25, line5Z - 6.85));
-      this.scene.add(this.sharedBox(2.5, 2.4, 0.32, glassMat, st.sx - 5.2, 14.1, line5Z - 6.83));
+      [-1.55, 1.55].forEach((dx) => {
+        this.scene.add(this.sharedBox(0.24, 2.8, 0.28, afcGateMat, st.sx - 5.2 + dx, 14.25, line5Z - 6.85));
+      });
       this.scene.add(this.sharedBox(3.4, 0.45, 0.36, mrtRedTrimMat, st.sx - 5.2, 15.65, line5Z - 6.82));
 
       const canopy5Start = startP.clone().lerp(endP, 0.14);
@@ -10987,7 +11090,7 @@ export class DhakaCityEngine {
 
   private onMouseDown = (e: MouseEvent) => {
     const store = useGameStore.getState();
-    if (store.gamePhase !== 'playing') return;
+    if (store.gamePhase !== 'playing' || store.activeMetroModal) return;
     dhakaAudio.init();
 
     if (e.button === 2 && !this.activeVehicleId && !this.isSwimming) {
@@ -11088,7 +11191,7 @@ export class DhakaCityEngine {
       return;
     }
 
-    if (store.gamePhase !== 'playing') return;
+    if (store.gamePhase !== 'playing' || store.activeMetroModal) return;
 
     dhakaAudio.init();
 
@@ -13760,10 +13863,10 @@ export class DhakaCityEngine {
     for (const st of METRO_STATIONS) {
       const kx = st.kioskX ?? st.x;
       const kz = st.kioskZ ?? st.z;
-      if (Math.hypot(kx - px, kz - pz) < 11.5) return st;
-      if (Math.hypot(st.x - px, st.z - pz) < 13.5) return st;
-      if (st.line === 'L6' && Math.abs(px - (-17.5)) < 8.5 && Math.abs(pz - st.z) < 31) return st;
-      if (st.line === 'L5' && Math.abs(pz - (-203)) < 11.5 && Math.abs(px - st.x) < 28) return st;
+      if (Math.hypot(kx - px, kz - pz) < 12.5) return st;
+      if (Math.hypot(st.x - px, st.z - pz) < 14.5) return st;
+      if (st.line === 'L6' && px >= -25.5 && px <= -2.5 && Math.abs(pz - st.z) <= 34) return st;
+      if (st.line === 'L5' && pz >= -214 && pz <= -189 && Math.abs(px - st.x) <= 34) return st;
     }
     return null;
   }
@@ -16596,7 +16699,51 @@ export class DhakaCityEngine {
       }
     }
 
-    // 2.6 Walkable Metro Rail Entry Kiosks, Escalators & Upper Concourse Balconies (L6 & L5)
+    // 2.6 Walkable Metro Rail Entry Kiosks, Escalators, Upper Concourse Halls & Train Platforms (L6 & L5)
+    for (const stInt of this.metroStationInteriors) {
+      // Interior Concourse -> Platform staircase
+      const idx = stInt.inX2 - stInt.inX1;
+      const idz = stInt.inZ2 - stInt.inZ1;
+      const iLenSq = idx * idx + idz * idz;
+      if (iLenSq > 0.1) {
+        const rawT = ((x - stInt.inX1) * idx + (z - stInt.inZ1) * idz) / iLenSq;
+        if (rawT >= -0.05 && rawT <= 1.05) {
+          const t = Math.max(0, Math.min(1, rawT));
+          const ipx = stInt.inX1 + idx * t;
+          const ipz = stInt.inZ1 + idz * t;
+          if (Math.hypot(x - ipx, z - ipz) <= stInt.inHalfW) {
+            const stairY = stInt.inY1 + (stInt.inY2 - stInt.inY1) * t;
+            if (currentY !== undefined && Math.abs(currentY - stairY) <= 2.4 && currentY >= stInt.inY1 - 1.5) {
+              return stairY;
+            }
+          }
+        }
+      }
+      // Upper Train Platform Level
+      if (
+        x >= stInt.platMinX &&
+        x <= stInt.platMaxX &&
+        z >= stInt.platMinZ &&
+        z <= stInt.platMaxZ &&
+        currentY !== undefined &&
+        currentY >= stInt.platY - 1.6 &&
+        currentY <= stInt.platY + 3.0
+      ) {
+        return stInt.platY;
+      }
+      // Lower Ticket Concourse Hall Level
+      if (
+        x >= stInt.concourseMinX &&
+        x <= stInt.concourseMaxX &&
+        z >= stInt.concourseMinZ &&
+        z <= stInt.concourseMaxZ &&
+        currentY !== undefined &&
+        currentY >= stInt.concourseY - 2.0 &&
+        currentY <= stInt.concourseY + 2.5
+      ) {
+        return stInt.concourseY;
+      }
+    }
     for (const esc of this.metroEscalators) {
       if (
         x >= esc.landMinX &&
