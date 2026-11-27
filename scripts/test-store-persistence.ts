@@ -82,3 +82,26 @@ test('saveGameToStorage and continueGame preserve playerY, weather, timeOfDay, a
   // Loaded on foot -> radio HUD stays 'off' until entering a vehicle
   assert.equal(restored.radioStation, 'off');
 });
+
+test('triggerWasted and triggerBusted timers cancel on startNewGame and block repeated damage', async () => {
+  const s = useGameStore.getState();
+  s.startNewGame();
+  s.triggerWasted();
+  assert.equal(useGameStore.getState().isWasted, true);
+
+  // Calling damagePlayer while wasted should not corrupt state or lower taka prematurely
+  useGameStore.getState().damagePlayer(50);
+  assert.equal(useGameStore.getState().isWasted, true);
+
+  // Starting a New Game cancels pending DMCH discharge timer cleanly
+  useGameStore.getState().startNewGame();
+  assert.equal(useGameStore.getState().isWasted, false);
+  assert.equal(useGameStore.getState().taka, 1850);
+
+  // Same guarantee for triggerBusted
+  useGameStore.getState().triggerBusted();
+  assert.equal(useGameStore.getState().isBusted, true);
+  useGameStore.getState().startNewGame();
+  assert.equal(useGameStore.getState().isBusted, false);
+  assert.equal(useGameStore.getState().taka, 1850);
+});

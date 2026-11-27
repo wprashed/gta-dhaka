@@ -65,6 +65,12 @@ import {
   buildDhakaFootOverBridgesInScene,
   buildHatirjheelBridgeInScene,
 } from './builders/buildBridges';
+import {
+  buildFarmgateElevatedExpresswayInScene,
+  buildKurilFlyoverInterchangeInScene,
+  buildMayorHanifFlyoverInScene,
+  buildMohakhaliFlyoverInScene,
+} from './builders/buildFlyovers';
 import { buildMetroNetworkInScene } from './builders/buildMetroNetwork';
 import type {
   BuildingCollider,
@@ -399,6 +405,7 @@ export class DhakaCityEngine {
     vz: number;
     life: number;
     damage: number;
+    isVisualOnly?: boolean;
   }> = [];
   private shellCasings: Array<{
     mesh: THREE.Mesh;
@@ -2724,6 +2731,7 @@ export class DhakaCityEngine {
       buildingColliders: this.buildingColliders,
       circleColliders: this.circleColliders,
       streetLampStdMats: this.streetLampStdMats,
+      streetLampBasicMats: this.streetLampBasicMats,
     };
   }
 
@@ -4252,1048 +4260,19 @@ export class DhakaCityEngine {
    * Dual concrete support piers, side crash safety barriers, overhead highway gantry signs.
    */
   private buildMohakhaliFlyover() {
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.88,
-    });
-    const pierMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: '#f1f5f9',
-      roughness: 0.65,
-    });
-    const barrierYellowMat = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.6,
-    });
-    const gantryFrameMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.75,
-      roughness: 0.35,
-    });
-    const stripeWhiteMat = new THREE.MeshBasicMaterial({
-      color: '#ffffff',
-    });
-
-    const flyoverZ = -175;
-    const flyoverW = 13.6;
-    const deckElev = 9.6;
-
-    // 1. Main Elevated Span Deck (X: -240 to +240) at Y = 9.6m
-    const mainDeck = this.sharedBox(480, 1.2, flyoverW, deckMat, 0, deckElev - 0.6, flyoverZ);
-    mainDeck.receiveShadow = true;
-    this.scene.add(mainDeck);
-
-    // Elevated Deck Center Striping
-    for (let x = -230; x <= 230; x += 12) {
-      const stripe = this.sharedBox(6.5, 0.04, 0.28, stripeWhiteMat, x, deckElev + 0.03, flyoverZ);
-      this.scene.add(stripe);
-    }
-
-    // 2. West Approach Ramp (Ascending from X = -340 to -240, top surface Y: 0 -> 9.6)
-    const rampLen = 100;
-    const rampSlopeAngle = Math.atan2(deckElev, rampLen);
-    const westRamp = new THREE.Mesh(this.boxCache(100.5, 1.2, flyoverW), deckMat);
-    westRamp.position.set(-290, deckElev * 0.5 - 0.6, flyoverZ);
-    westRamp.rotation.z = rampSlopeAngle;
-    westRamp.receiveShadow = true;
-    this.scene.add(westRamp);
-
-    // 3. East Approach Ramp (Descending from X = 240 to 340, top surface Y: 9.6 -> 0)
-    const eastRamp = new THREE.Mesh(this.boxCache(100.5, 1.2, flyoverW), deckMat);
-    eastRamp.position.set(290, deckElev * 0.5 - 0.6, flyoverZ);
-    eastRamp.rotation.z = -rampSlopeAngle;
-    eastRamp.receiveShadow = true;
-    this.scene.add(eastRamp);
-
-    // Solid Concrete Abutments under low-clearance ramp wedges (blocks ground traffic from entering low clearance underside)
-    const mWestHead = this.sharedBox(1.6, 4.2, flyoverW, pierMat, -289, 2.1, flyoverZ);
-    const mWestStep1 = this.sharedBox(16, 2.8, flyoverW - 0.2, pierMat, -298, 1.4, flyoverZ);
-    const mWestStep2 = this.sharedBox(18, 1.4, flyoverW - 0.2, pierMat, -315, 0.7, flyoverZ);
-    const mWestStep3 = this.sharedBox(14, 0.5, flyoverW - 0.2, pierMat, -331, 0.25, flyoverZ);
-    this.scene.add(mWestHead, mWestStep1, mWestStep2, mWestStep3);
-    this.buildingColliders.push({
-      minX: -290.5,
-      maxX: -288.5,
-      minZ: flyoverZ - flyoverW / 2,
-      maxZ: flyoverZ + flyoverW / 2,
-      minY: 0,
-      maxY: 4.5,
-      tag: 'mohakhali_ramp_abutment_head',
-    });
-
-    const mEastHead = this.sharedBox(1.6, 4.2, flyoverW, pierMat, 289, 2.1, flyoverZ);
-    const mEastStep1 = this.sharedBox(16, 2.8, flyoverW - 0.2, pierMat, 298, 1.4, flyoverZ);
-    const mEastStep2 = this.sharedBox(18, 1.4, flyoverW - 0.2, pierMat, 315, 0.7, flyoverZ);
-    const mEastStep3 = this.sharedBox(14, 0.5, flyoverW - 0.2, pierMat, 331, 0.25, flyoverZ);
-    this.scene.add(mEastHead, mEastStep1, mEastStep2, mEastStep3);
-    this.buildingColliders.push({
-      minX: 288.5,
-      maxX: 290.5,
-      minZ: flyoverZ - flyoverW / 2,
-      maxZ: flyoverZ + flyoverW / 2,
-      minY: 0,
-      maxY: 4.5,
-      tag: 'mohakhali_ramp_abutment_head',
-    });
-
-    // 4. Solid Concrete Crash Barriers & Physics Colliders
-    // 4.1 Main Elevated Span Crash Barriers (X: -240 to 240) at Y = 10.15
-    const northBarrier = this.sharedBox(480, 1.15, 0.45, barrierMat, 0, deckElev + 0.55, flyoverZ - flyoverW / 2 + 0.22);
-    this.scene.add(northBarrier);
-    this.buildingColliders.push({
-      minX: -240,
-      maxX: 240,
-      minZ: flyoverZ - flyoverW / 2 - 0.65,
-      maxZ: flyoverZ - flyoverW / 2 + 0.65,
-      minY: 8.5,
-      maxY: 12.0,
-      tag: 'flyover_barrier',
-    });
-
-    const southBarrier = this.sharedBox(480, 1.15, 0.45, barrierMat, 0, deckElev + 0.55, flyoverZ + flyoverW / 2 - 0.22);
-    this.scene.add(southBarrier);
-    this.buildingColliders.push({
-      minX: -240,
-      maxX: 240,
-      minZ: flyoverZ + flyoverW / 2 - 0.65,
-      maxZ: flyoverZ + flyoverW / 2 + 0.65,
-      minY: 8.5,
-      maxY: 12.0,
-      tag: 'flyover_barrier',
-    });
-
-    // 4.2 West Ramp Sloped Barriers (X: -340 to -240) Following Incline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(100.5, 1.15, 0.45), barrierMat);
-      bMesh.position.set(-290, deckElev * 0.5 + 0.55, flyoverZ + oz);
-      bMesh.rotation.z = rampSlopeAngle;
-      this.scene.add(bMesh);
-
-      // Segmented height bounds so ground street beneath elevated sections is completely free
-      const westRampSegs = [
-        { minX: -340, maxX: -315, minY: 0.0, maxY: 3.2 },
-        { minX: -315, maxX: -290, minY: 1.8, maxY: 5.6 },
-        { minX: -290, maxX: -265, minY: 4.2, maxY: 8.0 },
-        { minX: -265, maxX: -240, minY: 6.8, maxY: 10.8 },
-      ];
-      for (const seg of westRampSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // 4.3 East Ramp Sloped Barriers (X: 240 to 340) Following Decline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(100.5, 1.15, 0.45), barrierMat);
-      bMesh.position.set(290, deckElev * 0.5 + 0.55, flyoverZ + oz);
-      bMesh.rotation.z = -rampSlopeAngle;
-      this.scene.add(bMesh);
-
-      const eastRampSegs = [
-        { minX: 240, maxX: 265, minY: 6.8, maxY: 10.8 },
-        { minX: 265, maxX: 290, minY: 4.2, maxY: 8.0 },
-        { minX: 290, maxX: 315, minY: 1.8, maxY: 5.6 },
-        { minX: 315, maxX: 340, minY: 0.0, maxY: 3.2 },
-      ];
-      for (const seg of eastRampSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // Yellow hazard curb trims along main elevated deck barriers (stay within flat X: -232 to +232)
-    for (let x = -232; x <= 232; x += 18) {
-      const curbTrimN = this.sharedBox(8, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
-      const curbTrimS = this.sharedBox(8, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ + flyoverW / 2 - 0.45);
-      this.scene.add(curbTrimN);
-      this.scene.add(curbTrimS);
-    }
-
-    // 5. Dual Support Piers & Crossbeams along the ground (High clearance > 8.0m)
-    for (let px = -228; px <= 228; px += 38) {
-      if (Math.abs(px) < 18 || Math.abs(px - 220) < 18 || Math.abs(px + 170) < 18) continue;
-
-      [-4.6, 4.6].forEach((pzOffset) => {
-        const pier = new THREE.Mesh(this.cylCache(1.05, 1.25, deckElev - 0.6, 12), pierMat);
-        pier.position.set(px, (deckElev - 0.6) / 2, flyoverZ + pzOffset);
-        pier.castShadow = true;
-        this.scene.add(pier);
-
-        this.circleColliders.push({
-          x: px,
-          z: flyoverZ + pzOffset,
-          radius: 1.35,
-          tag: 'flyover_pier',
-        });
-      });
-
-      const pierCap = this.sharedBox(2.6, 1.1, flyoverW + 0.8, pierMat, px, deckElev - 1.1, flyoverZ);
-      pierCap.castShadow = true;
-      this.scene.add(pierCap);
-    }
-
-    // 6. Overhead Directional Highway Sign Gantries
-    // Gantry 1: Near West Approach (X = -110)
-    const gantry1Group = new THREE.Group();
-    gantry1Group.position.set(-110, deckElev, flyoverZ);
-    [-flyoverW / 2 + 0.3, flyoverW / 2 - 0.3].forEach((gz) => {
-      const leg = new THREE.Mesh(this.boxCache(0.35, 5.8, 0.35), gantryFrameMat);
-      leg.position.set(0, 2.9, gz);
-      gantry1Group.add(leg);
-    });
-    const gantry1Beam = new THREE.Mesh(this.boxCache(0.4, 0.5, flyoverW), gantryFrameMat);
-    gantry1Beam.position.set(0, 5.8, 0);
-    gantry1Group.add(gantry1Beam);
-
-    const sign1Tex = createFlyoverGantryTexture(
-      'বিমানবন্দর / উত্তরা / বনানী',
-      'AIRPORT / UTTARA / BANANI',
-      'মহাখালী বাস টার্মিনাল প্রস্থান',
-      'MOHAKHALI BUS TERMINAL EXIT'
-    );
-    const sign1Board = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 2.4, 9.2),
-      new THREE.MeshBasicMaterial({ map: sign1Tex })
-    );
-    sign1Board.position.set(-0.25, 4.2, 0);
-    gantry1Group.add(sign1Board);
-    this.scene.add(gantry1Group);
-
-    // Gantry 2: Near East Approach (X = 110)
-    const gantry2Group = new THREE.Group();
-    gantry2Group.position.set(110, deckElev, flyoverZ);
-    [-flyoverW / 2 + 0.3, flyoverW / 2 - 0.3].forEach((gz) => {
-      const leg = new THREE.Mesh(this.boxCache(0.35, 5.8, 0.35), gantryFrameMat);
-      leg.position.set(0, 2.9, gz);
-      gantry2Group.add(leg);
-    });
-    const gantry2Beam = new THREE.Mesh(this.boxCache(0.4, 0.5, flyoverW), gantryFrameMat);
-    gantry2Beam.position.set(0, 5.8, 0);
-    gantry2Group.add(gantry2Beam);
-
-    const sign2Tex = createFlyoverGantryTexture(
-      'মিরপুর-১০ / ফার্মগেট',
-      'MIRPUR-10 / FARMGATE',
-      'গুলশান-২ বাণিজ্যিক এলাকা',
-      'GULSHAN-2 COMMERCIAL EXIT'
-    );
-    const sign2Board = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 2.4, 9.2),
-      new THREE.MeshBasicMaterial({ map: sign2Tex })
-    );
-    sign2Board.position.set(0.25, 4.2, 0);
-    gantry2Group.add(sign2Board);
-    this.scene.add(gantry2Group);
+    buildMohakhaliFlyoverInScene(this.getBuilderContext());
   }
 
-  /**
-   * Dhaka Elevated Expressway (ঢাকা এলিভেটেড এক্সপ্রেসওয়ে) at Farmgate & Central Spine
-   * 4-lane elevated concrete expressway spanning 580m north-south along X = 14.
-   * Elevation: Y = 9.2m (clearance 8.0m over ground streets & traffic)
-   * On-ramp at Farmgate (Z: -120 to -40, X: 22 to 14)
-   * Off-ramp at Farmgate (Z: 40 to 120, X: 14 to 22)
-   * Supported by massive hammerhead piers, solid concrete Jersey crash safety barriers,
-   * overhead highway gantry signboards, and high-mast LED street lamps.
-   */
   private buildFarmgateElevatedExpressway() {
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.88,
-    });
-    const pierMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.65,
-    });
-    const barrierYellowMat = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.6,
-    });
-    const gantryFrameMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.75,
-      roughness: 0.35,
-    });
-    const stripeWhiteMat = new THREE.MeshBasicMaterial({
-      color: '#ffffff',
-    });
-    const lampLightMat = new THREE.MeshBasicMaterial({
-      color: '#fef08a',
-    });
-    this.streetLampBasicMats.push(lampLightMat);
-
-    const flyoverX = 14;
-    const flyoverW = 14.2;
-    const deckLen = 580; // Z: -340 to +240
-    const deckElev = 16.2;
-
-    // 1. Main Elevated Span Deck (Z: -340 to +240) at Y = 16.2 (Flying high above Mohakhali Flyover & Ground traffic)
-    const mainDeck = this.sharedBox(flyoverW, 1.2, deckLen, deckMat, flyoverX, deckElev - 0.6, -50);
-    mainDeck.receiveShadow = true;
-    this.scene.add(mainDeck);
-
-    // Elevated Deck Center Striping (dashed white lane lines)
-    for (let z = -330; z <= 230; z += 14) {
-      [-3.2, 0, 3.2].forEach((ox) => {
-        const stripe = this.sharedBox(0.28, 0.04, 7.5, stripeWhiteMat, flyoverX + ox, deckElev + 0.03, z);
-        this.scene.add(stripe);
-      });
-    }
-
-    // 2. Farmgate Southbound On-Ramp (Z: -160 to -40, top surface Y: 0 -> 16.2)
-    const rampLen = 120;
-    const onRampSlopeAngle = Math.atan2(deckElev, rampLen);
-    const onRampMesh = new THREE.Mesh(this.boxCache(8.4, 1.2, 120.5), deckMat);
-    onRampMesh.position.set(18, deckElev * 0.5 - 0.6, -100);
-    onRampMesh.rotation.x = -onRampSlopeAngle;
-    onRampMesh.receiveShadow = true;
-    this.scene.add(onRampMesh);
-
-    // 3. Farmgate Northbound Exit Off-Ramp (Z: 40 to 160, top surface Y: 16.2 -> 0)
-    const offRampMesh = new THREE.Mesh(this.boxCache(8.4, 1.2, 120.5), deckMat);
-    offRampMesh.position.set(18, deckElev * 0.5 - 0.6, 100);
-    offRampMesh.rotation.x = onRampSlopeAngle;
-    offRampMesh.receiveShadow = true;
-    this.scene.add(offRampMesh);
-
-    // Solid Concrete Abutments under low-clearance ramp wedges (blocks ground traffic from wedging under descending decks)
-    const offAbutHead = this.sharedBox(8.4, 4.8, 1.6, pierMat, 18, 2.4, 119);
-    const offAbutStep1 = this.sharedBox(8.2, 3.2, 13, pierMat, 18, 1.6, 126);
-    const offAbutStep2 = this.sharedBox(8.2, 1.8, 14, pierMat, 18, 0.9, 139);
-    const offAbutStep3 = this.sharedBox(8.2, 0.6, 12, pierMat, 18, 0.3, 152);
-    this.scene.add(offAbutHead, offAbutStep1, offAbutStep2, offAbutStep3);
-    this.buildingColliders.push({
-      minX: 13.8,
-      maxX: 22.2,
-      minZ: 118.0,
-      maxZ: 120.0,
-      minY: 0,
-      maxY: 5.2,
-      tag: 'farmgate_offramp_abutment_head',
-    });
-    this.buildingColliders.push({
-      minX: 13.5,
-      maxX: 14.3,
-      minZ: 120.0,
-      maxZ: 158.0,
-      minY: 0,
-      maxY: 2.2,
-      tag: 'farmgate_offramp_abutment_side',
-    });
-    this.buildingColliders.push({
-      minX: 21.7,
-      maxX: 22.5,
-      minZ: 120.0,
-      maxZ: 158.0,
-      minY: 0,
-      maxY: 2.2,
-      tag: 'farmgate_offramp_abutment_side',
-    });
-
-    const onAbutHead = this.sharedBox(8.4, 4.8, 1.6, pierMat, 18, 2.4, -119);
-    const onAbutStep1 = this.sharedBox(8.2, 3.2, 13, pierMat, 18, 1.6, -126);
-    const onAbutStep2 = this.sharedBox(8.2, 1.8, 14, pierMat, 18, 0.9, -139);
-    const onAbutStep3 = this.sharedBox(8.2, 0.6, 12, pierMat, 18, 0.3, -152);
-    this.scene.add(onAbutHead, onAbutStep1, onAbutStep2, onAbutStep3);
-    this.buildingColliders.push({
-      minX: 13.8,
-      maxX: 22.2,
-      minZ: -120.0,
-      maxZ: -118.0,
-      minY: 0,
-      maxY: 5.2,
-      tag: 'farmgate_onramp_abutment_head',
-    });
-    this.buildingColliders.push({
-      minX: 13.5,
-      maxX: 14.3,
-      minZ: -158.0,
-      maxZ: -120.0,
-      minY: 0,
-      maxY: 2.2,
-      tag: 'farmgate_onramp_abutment_side',
-    });
-    this.buildingColliders.push({
-      minX: 21.7,
-      maxX: 22.5,
-      minZ: -158.0,
-      maxZ: -120.0,
-      minY: 0,
-      maxY: 2.2,
-      tag: 'farmgate_onramp_abutment_side',
-    });
-
-    // 4. Solid Concrete Crash Barriers & Physics Colliders
-    // 4.1 Continuous West Edge Crash Barrier (X = 7.12, Z: -340 to +240)
-    const westBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX - flyoverW / 2 + 0.22, deckElev + 0.62, -50);
-    this.scene.add(westBarrier);
-    this.buildingColliders.push({
-      minX: 6.75,
-      maxX: 7.55,
-      minZ: -340,
-      maxZ: 240,
-      minY: 14.5,
-      maxY: 19.5,
-      tag: 'flyover_barrier',
-    });
-
-    // 4.2 East Edge Crash Barriers with Dedicated Openings for On-Ramp and Off-Ramp Merges
-    // North Segment: Z: -340 to -160 (ahead of Farmgate on-ramp)
-    const eastBarrierN = this.sharedBox(0.45, 1.25, 180, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -250);
-    this.scene.add(eastBarrierN);
-    this.buildingColliders.push({
-      minX: 20.55,
-      maxX: 21.35,
-      minZ: -340,
-      maxZ: -160,
-      minY: 14.5,
-      maxY: 19.5,
-      tag: 'flyover_barrier',
-    });
-
-    // Middle Segment: Z: -40 to +40 (between on-ramp merge end and off-ramp diverge start)
-    const eastBarrierM = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
-    this.scene.add(eastBarrierM);
-    this.buildingColliders.push({
-      minX: 20.55,
-      maxX: 21.35,
-      minZ: -40,
-      maxZ: 40,
-      minY: 14.5,
-      maxY: 19.5,
-      tag: 'flyover_barrier',
-    });
-
-    // South Segment: Z: 160 to 240 (past Farmgate off-ramp)
-    const eastBarrierS = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 200);
-    this.scene.add(eastBarrierS);
-    this.buildingColliders.push({
-      minX: 20.55,
-      maxX: 21.35,
-      minZ: 160,
-      maxZ: 240,
-      minY: 14.5,
-      maxY: 19.5,
-      tag: 'flyover_barrier',
-    });
-
-    // 4.3 Outer Guardrails for Farmgate On-Ramp & Off-Ramp
-    const onRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 120.5), barrierMat);
-    onRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, -100);
-    onRampOuterGuard.rotation.x = -onRampSlopeAngle;
-    this.scene.add(onRampOuterGuard);
-
-    const onRampSegs = [
-      { minZ: -160, maxZ: -130, minY: 0.0, maxY: 5.0 },
-      { minZ: -130, maxZ: -100, minY: 3.5, maxY: 9.0 },
-      { minZ: -100, maxZ: -70, minY: 7.5, maxY: 13.0 },
-      { minZ: -70, maxZ: -40, minY: 11.5, maxY: 17.5 },
-    ];
-    for (const seg of onRampSegs) {
-      this.buildingColliders.push({
-        minX: 21.6,
-        maxX: 22.45,
-        minZ: seg.minZ,
-        maxZ: seg.maxZ,
-        minY: seg.minY,
-        maxY: seg.maxY,
-        tag: 'flyover_barrier',
-      });
-    }
-
-    const offRampOuterGuard = new THREE.Mesh(this.boxCache(0.45, 1.25, 120.5), barrierMat);
-    offRampOuterGuard.position.set(22.0, deckElev * 0.5 + 0.62, 100);
-    offRampOuterGuard.rotation.x = onRampSlopeAngle;
-    this.scene.add(offRampOuterGuard);
-
-    const offRampSegs = [
-      { minZ: 40, maxZ: 70, minY: 11.5, maxY: 17.5 },
-      { minZ: 70, maxZ: 100, minY: 7.5, maxY: 13.0 },
-      { minZ: 100, maxZ: 130, minY: 3.5, maxY: 9.0 },
-      { minZ: 130, maxZ: 160, minY: 0.0, maxY: 5.0 },
-    ];
-    for (const seg of offRampSegs) {
-      this.buildingColliders.push({
-        minX: 21.6,
-        maxX: 22.45,
-        minZ: seg.minZ,
-        maxZ: seg.maxZ,
-        minY: seg.minY,
-        maxY: seg.maxY,
-        tag: 'flyover_barrier',
-      });
-    }
-
-    // 4.4 Terminal End Crash Barriers with Warning Reflectors
-    const termNorth = this.sharedBox(flyoverW, 1.25, 0.45, barrierMat, flyoverX, deckElev + 0.62, -340);
-    this.scene.add(termNorth);
-    this.buildingColliders.push({
-      minX: flyoverX - flyoverW / 2,
-      maxX: flyoverX + flyoverW / 2,
-      minZ: -341.0,
-      maxZ: -339.0,
-      minY: 14.5,
-      maxY: 18.5,
-      tag: 'flyover_barrier',
-    });
-
-    const termSouth = this.sharedBox(flyoverW, 1.25, 0.45, barrierMat, flyoverX, deckElev + 0.62, 240);
-    this.scene.add(termSouth);
-    this.buildingColliders.push({
-      minX: flyoverX - flyoverW / 2,
-      maxX: flyoverX + flyoverW / 2,
-      minZ: 239.0,
-      maxZ: 241.0,
-      minY: 14.5,
-      maxY: 18.5,
-      tag: 'flyover_barrier',
-    });
-
-    // Yellow/Black Hazard Curb Trims along highway barriers
-    for (let z = -330; z <= 230; z += 20) {
-      const curbTrimW = this.sharedBox(0.25, 0.25, 9.5, barrierYellowMat, flyoverX - flyoverW / 2 + 0.45, deckElev + 0.15, z);
-      const curbTrimE = this.sharedBox(0.25, 0.25, 9.5, barrierYellowMat, flyoverX + flyoverW / 2 - 0.45, deckElev + 0.15, z);
-      this.scene.add(curbTrimW);
-      this.scene.add(curbTrimE);
-    }
-
-    // 5. Heavy Concrete Hammerhead Piers with Cantilever Arms Spaced Every 36m
-    for (let pz = -324; pz <= 228; pz += 36) {
-      // Keep crossing corridors completely clear of piers!
-      if (Math.abs(pz - (-175)) < 24) continue; // Mohakhali Flyover corridor
-      if (Math.abs(pz - 0) < 22) continue;      // Farmgate / Manik Mia intersection
-      if (Math.abs(pz - 240) < 24) continue;    // Hanif Flyover corridor
-
-      const pier = new THREE.Mesh(this.cylCache(1.35, 1.55, deckElev - 0.6, 14), pierMat);
-      pier.position.set(flyoverX, (deckElev - 0.6) / 2, pz);
-      pier.castShadow = true;
-      this.scene.add(pier);
-
-      this.circleColliders.push({
-        x: flyoverX,
-        z: pz,
-        radius: 1.6,
-        tag: 'flyover_pier',
-      });
-
-      const pierCap = this.sharedBox(flyoverW + 0.8, 1.3, 3.2, pierMat, flyoverX, deckElev - 1.2, pz);
-      pierCap.castShadow = true;
-      this.scene.add(pierCap);
-    }
-
-    // 6. Overhead Highway Directional Sign Gantries (Green Boards with White Bold Text)
-    const signLocations = [
-      { z: -160, b1: 'উত্তরা / বিমানবন্দর / ৩০০ ফিট', e1: 'UTTARA / AIRPORT / 300FT', b2: 'বনানী প্রস্থান', e2: 'BANANI EXIT' },
-      { z: -10, b1: 'ঢাকা এলিভেটেড এক্সপ্রেসওয়ে', e1: 'DHAKA ELEVATED EXPRESSWAY', b2: 'ফার্মগেট / তেজগাঁও প্রস্থান', e2: 'FARMGATE / TEJGAON EXIT' },
-      { z: 140, b1: 'মহাখালী / বিমানবন্দর লিঙ্ক', e1: 'MOHAKHALI / AIRPORT LINK', b2: 'মতিঝিল / সদরঘাট এক্সপ্রেসওয়ে', e2: 'MOTIJHEEL / SADARGHAT EXPRESS' },
-    ];
-
-    signLocations.forEach((loc) => {
-      const gantryGroup = new THREE.Group();
-      gantryGroup.position.set(flyoverX, deckElev, loc.z);
-
-      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gx) => {
-        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
-        leg.position.set(gx, 3.1, 0);
-        gantryGroup.add(leg);
-      });
-
-      const gantryBeam = new THREE.Mesh(this.boxCache(flyoverW, 0.55, 0.4), gantryFrameMat);
-      gantryBeam.position.set(0, 6.2, 0);
-      gantryGroup.add(gantryBeam);
-
-      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
-      const signBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(10.2, 2.5, 0.12),
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
-      );
-      signBoard.position.set(0, 4.8, 0);
-      gantryGroup.add(signBoard);
-
-      this.scene.add(gantryGroup);
-    });
-
-    // 7. Highway Light Poles (Dual Cantilever Cobra-head Lights)
-    for (let lz = -310; lz <= 210; lz += 42) {
-      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
-      pole.position.set(flyoverX - flyoverW / 2 + 0.35, deckElev + 3.75, lz);
-      this.scene.add(pole);
-
-      const luminaire = new THREE.Mesh(this.boxCache(0.35, 0.15, 0.8), lampLightMat);
-      luminaire.position.set(flyoverX - flyoverW / 2 + 1.2, deckElev + 7.5, lz);
-      this.scene.add(luminaire);
-    }
+    buildFarmgateElevatedExpresswayInScene(this.getBuilderContext());
   }
 
-  /**
-   * Mayor Mohammad Hanif Flyover (মেয়র মোহাম্মদ হানিফ ফ্লাইওভার)
-   * The longest iconic elevated expressway in south Dhaka spanning 1120m along Z = 240.
-   * Connects Old Dhaka, Chawkbazar, Sayedabad, Jatrabari, Postogola and Chittagong Highway.
-   * Elevation: Y = 11.2m (clearance > 9.5m over ground streets, Mirpur Avenue & Badda Avenue)
-   * 120m approach ramps at X = -560 to -440 (West) and X = 440 to 560 (East).
-   */
   private buildMayorHanifFlyover() {
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.88,
-    });
-    const pierMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.65,
-    });
-    const barrierYellowMat = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.6,
-    });
-    const gantryFrameMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.75,
-      roughness: 0.35,
-    });
-    const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-    const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
-    this.streetLampBasicMats.push(lampLightMat);
-
-    const flyoverZ = 240;
-    const flyoverW = 14.2;
-    const deckLen = 880; // X: -440 to +440
-    const deckElev = 11.2;
-
-    // 1. Main Elevated Span Deck (X: -440 to +440) at Y = 11.2m
-    const mainDeck = this.sharedBox(deckLen, 1.2, flyoverW, deckMat, 0, deckElev - 0.6, flyoverZ);
-    mainDeck.receiveShadow = true;
-    this.scene.add(mainDeck);
-
-    // Elevated Deck Center Striping (dashed white lane lines along X)
-    for (let x = -430; x <= 430; x += 14) {
-      [-3.2, 0, 3.2].forEach((oz) => {
-        const stripe = this.sharedBox(7.5, 0.04, 0.28, stripeWhiteMat, x, deckElev + 0.03, flyoverZ + oz);
-        this.scene.add(stripe);
-      });
-    }
-
-    // 2. West Approach Ramp (X: -560 to -440, top surface Y: 0 -> 11.2, clear of Mirpur Avenue at X = -380)
-    const rampLen = 120;
-    const westSlopeAngle = Math.atan2(deckElev, rampLen);
-    const westRamp = new THREE.Mesh(this.boxCache(120.5, 1.2, flyoverW), deckMat);
-    westRamp.position.set(-500, deckElev * 0.5 - 0.6, flyoverZ);
-    westRamp.rotation.z = westSlopeAngle;
-    westRamp.receiveShadow = true;
-    this.scene.add(westRamp);
-
-    // 3. East Approach Ramp (X: 440 to 560, top surface Y: 11.2 -> 0, clear of Badda Avenue at X = 440)
-    const eastRamp = new THREE.Mesh(this.boxCache(120.5, 1.2, flyoverW), deckMat);
-    eastRamp.position.set(500, deckElev * 0.5 - 0.6, flyoverZ);
-    eastRamp.rotation.z = -westSlopeAngle;
-    eastRamp.receiveShadow = true;
-    this.scene.add(eastRamp);
-
-    // 4. Solid Concrete Crash Barriers & Physics Colliders on North & South Edges
-    const northBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 0, deckElev + 0.62, flyoverZ - flyoverW / 2 + 0.22);
-    this.scene.add(northBarrier);
-    this.buildingColliders.push({
-      minX: -440,
-      maxX: 440,
-      minZ: flyoverZ - flyoverW / 2 - 0.65,
-      maxZ: flyoverZ - flyoverW / 2 + 0.65,
-      minY: 10.0,
-      maxY: 13.5,
-      tag: 'flyover_barrier',
-    });
-
-    const southBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 0, deckElev + 0.62, flyoverZ + flyoverW / 2 - 0.22);
-    this.scene.add(southBarrier);
-    this.buildingColliders.push({
-      minX: -440,
-      maxX: 440,
-      minZ: flyoverZ + flyoverW / 2 - 0.65,
-      maxZ: flyoverZ + flyoverW / 2 + 0.65,
-      minY: 10.0,
-      maxY: 13.5,
-      tag: 'flyover_barrier',
-    });
-
-    // 4.2 West Ramp Sloped Barriers (X: -560 to -440) Following Incline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(120.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(-500, deckElev * 0.5 + 0.62, flyoverZ + oz);
-      bMesh.rotation.z = westSlopeAngle;
-      this.scene.add(bMesh);
-
-      const hanifWestSegs = [
-        { minX: -560, maxX: -530, minY: 0.0, maxY: 3.8 },
-        { minX: -530, maxX: -500, minY: 2.5, maxY: 6.8 },
-        { minX: -500, maxX: -470, minY: 5.5, maxY: 9.8 },
-        { minX: -470, maxX: -440, minY: 8.5, maxY: 13.0 },
-      ];
-      for (const seg of hanifWestSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.42,
-          maxZ: flyoverZ + oz + 0.42,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // 4.3 East Ramp Sloped Barriers (X: 440 to 560) Following Decline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(120.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(500, deckElev * 0.5 + 0.62, flyoverZ + oz);
-      bMesh.rotation.z = -westSlopeAngle;
-      this.scene.add(bMesh);
-
-      const hanifEastSegs = [
-        { minX: 440, maxX: 470, minY: 8.5, maxY: 13.0 },
-        { minX: 470, maxX: 500, minY: 5.5, maxY: 9.8 },
-        { minX: 500, maxX: 530, minY: 2.5, maxY: 6.8 },
-        { minX: 530, maxX: 560, minY: 0.0, maxY: 3.8 },
-      ];
-      for (const seg of hanifEastSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.42,
-          maxZ: flyoverZ + oz + 0.42,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // Yellow/Black Hazard Curb Trims along barriers
-    for (let x = -430; x <= 430; x += 22) {
-      const curbN = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
-      const curbS = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ + flyoverW / 2 - 0.45);
-      this.scene.add(curbN);
-      this.scene.add(curbS);
-    }
-
-    // 5. Heavy Concrete Hammerhead Piers Spaced Every 38m (All Crossing Avenues Clear)
-    for (let px = -418; px <= 418; px += 38) {
-      // Exclude all North-South street corridors to guarantee 100% unobstructed traffic underneath
-      if (
-        Math.abs(px) < 18 ||
-        Math.abs(px - 220) < 18 ||
-        Math.abs(px - (-170)) < 18 ||
-        Math.abs(px - (-380)) < 18
-      ) {
-        continue;
-      }
-      const pier = new THREE.Mesh(this.cylCache(1.35, 1.55, deckElev - 0.6, 14), pierMat);
-      pier.position.set(px, (deckElev - 0.6) / 2, flyoverZ);
-      pier.castShadow = true;
-      this.scene.add(pier);
-
-      this.circleColliders.push({
-        x: px,
-        z: flyoverZ,
-        radius: 1.6,
-        tag: 'flyover_pier',
-      });
-
-      const pierCap = this.sharedBox(3.2, 1.3, flyoverW + 0.8, pierMat, px, deckElev - 1.2, flyoverZ);
-      pierCap.castShadow = true;
-      this.scene.add(pierCap);
-    }
-
-    // 6. Overhead Highway Directional Sign Gantries
-    const signLocations = [
-      { x: -180, b1: 'মেয়র মোহাম্মদ হানিফ ফ্লাইওভার', e1: 'MAYOR MOHAMMAD HANIF FLYOVER', b2: 'যাত্রাবাড়ী / সায়েদাবাদ প্রস্থান', e2: 'JATRABARI / SAYEDABAD EXIT' },
-      { x: 0, b1: 'পোস্তগোলা / বুড়িগঙ্গা ২য় সেতু লিঙ্ক', e1: 'POSTOGOLA / BURIGANGA 2ND BRIDGE', b2: 'চট্টগ্রাম মহাসড়ক সংযোগ', e2: 'CHITTAGONG HIGHWAY LINK' },
-      { x: 180, b1: 'গুলিস্তান / মতিঝিল প্রস্থান', e1: 'GULISTAN / MOTIJHEEL EXIT', b2: 'যাত্রাবাড়ী ইন্টারচেঞ্জ', e2: 'JATRABARI INTERCHANGE' },
-    ];
-
-    signLocations.forEach((loc) => {
-      const gantryGroup = new THREE.Group();
-      gantryGroup.position.set(loc.x, deckElev, flyoverZ);
-
-      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gz) => {
-        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
-        leg.position.set(0, 3.1, gz);
-        gantryGroup.add(leg);
-      });
-
-      const gantryBeam = new THREE.Mesh(this.boxCache(0.4, 0.55, flyoverW), gantryFrameMat);
-      gantryBeam.position.set(0, 6.2, 0);
-      gantryGroup.add(gantryBeam);
-
-      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
-      const signBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 2.5, 10.2),
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
-      );
-      signBoard.position.set(0, 4.8, 0);
-      gantryGroup.add(signBoard);
-
-      this.scene.add(gantryGroup);
-    });
-
-    // 7. Highway Light Poles
-    for (let lx = -330; lx <= 330; lx += 44) {
-      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
-      pole.position.set(lx, deckElev + 3.75, flyoverZ - flyoverW / 2 + 0.35);
-      this.scene.add(pole);
-
-      const luminaire = new THREE.Mesh(this.boxCache(0.8, 0.15, 0.35), lampLightMat);
-      luminaire.position.set(lx, deckElev + 7.5, flyoverZ - flyoverW / 2 + 1.2);
-      this.scene.add(luminaire);
-    }
+    buildMayorHanifFlyoverInScene(this.getBuilderContext());
   }
 
-  /**
-   * Kuril Interchange Flyover (কুড়িল ইন্টারচেঞ্জ ফ্লাইওভার)
-   * Multi-directional elevated highway interchange spanning 360m along Z = -315 from X = 360 to 720.
-   * Elevates over Airport Road and connects directly into the Purbachal 300 Feet Grand Expressway.
-   * Elevation: Y = 11.2m, 4-lane elevated deck with drivable on/off ramps.
-   */
   private buildKurilFlyoverInterchange() {
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.88,
-    });
-    const pierMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      roughness: 0.82,
-    });
-    const barrierMat = new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.65,
-    });
-    const barrierYellowMat = new THREE.MeshStandardMaterial({
-      color: '#eab308',
-      roughness: 0.6,
-    });
-    const gantryFrameMat = new THREE.MeshStandardMaterial({
-      color: '#0284c7',
-      metalness: 0.75,
-      roughness: 0.35,
-    });
-    const stripeWhiteMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-    const lampLightMat = new THREE.MeshBasicMaterial({ color: '#fef08a' });
-    this.streetLampBasicMats.push(lampLightMat);
-
-    const flyoverZ = -315;
-    const flyoverW = 14.2;
-    const deckLen = 360; // X: 360 to 720
-    const deckElev = 11.2;
-
-    // 1. Main Elevated Span Deck (X: 360 to 720) at Y = 11.2m
-    const mainDeck = this.sharedBox(deckLen, 1.2, flyoverW, deckMat, 540, deckElev - 0.6, flyoverZ);
-    mainDeck.receiveShadow = true;
-    this.scene.add(mainDeck);
-
-    // Elevated Deck Center Striping
-    for (let x = 370; x <= 710; x += 14) {
-      [-3.2, 0, 3.2].forEach((oz) => {
-        const stripe = this.sharedBox(7.5, 0.04, 0.28, stripeWhiteMat, x, deckElev + 0.03, flyoverZ + oz);
-        this.scene.add(stripe);
-      });
-    }
-
-    // 2. West Approach On-Ramp (X: 280 to 360, top surface Y: 0 -> 11.2)
-    const rampLen = 80;
-    const slopeAngle = Math.atan2(deckElev, rampLen);
-    const westRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
-    westRamp.position.set(320, deckElev * 0.5 - 0.6, flyoverZ);
-    westRamp.rotation.z = slopeAngle;
-    westRamp.receiveShadow = true;
-    this.scene.add(westRamp);
-
-    // 3. East Off-Ramp (X: 720 to 800, top surface Y: 11.2 -> 0)
-    const eastRamp = new THREE.Mesh(this.boxCache(80.5, 1.2, flyoverW), deckMat);
-    eastRamp.position.set(760, deckElev * 0.5 - 0.6, flyoverZ);
-    eastRamp.rotation.z = -slopeAngle;
-    eastRamp.receiveShadow = true;
-    this.scene.add(eastRamp);
-
-    // 4. Outer Concrete Crash Barriers & Physics Colliders
-    const northBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 540, deckElev + 0.62, flyoverZ - flyoverW / 2 + 0.22);
-    this.scene.add(northBarrier);
-    this.buildingColliders.push({
-      minX: 360,
-      maxX: 720,
-      minZ: flyoverZ - flyoverW / 2 - 0.65,
-      maxZ: flyoverZ - flyoverW / 2 + 0.65,
-      minY: 9.5,
-      maxY: 13.5,
-      tag: 'flyover_barrier',
-    });
-
-    const southBarrier = this.sharedBox(deckLen, 1.25, 0.45, barrierMat, 540, deckElev + 0.62, flyoverZ + flyoverW / 2 - 0.22);
-    this.scene.add(southBarrier);
-    this.buildingColliders.push({
-      minX: 360,
-      maxX: 720,
-      minZ: flyoverZ + flyoverW / 2 - 0.65,
-      maxZ: flyoverZ + flyoverW / 2 + 0.65,
-      minY: 9.5,
-      maxY: 13.5,
-      tag: 'flyover_barrier',
-    });
-
-    // 4.2 West Ramp Sloped Barriers (X: 280 to 360) Following Incline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(320, deckElev * 0.5 + 0.62, flyoverZ + oz);
-      bMesh.rotation.z = slopeAngle;
-      this.scene.add(bMesh);
-
-      const kurilWestSegs = [
-        { minX: 280, maxX: 300, minY: 0.0, maxY: 3.5 },
-        { minX: 300, maxX: 320, minY: 2.0, maxY: 6.5 },
-        { minX: 320, maxX: 340, minY: 5.0, maxY: 9.5 },
-        { minX: 340, maxX: 360, minY: 8.0, maxY: 12.8 },
-      ];
-      for (const seg of kurilWestSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.42,
-          maxZ: flyoverZ + oz + 0.42,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // 4.3 East Ramp Sloped Barriers (X: 720 to 800) Following Decline
-    [-flyoverW / 2 + 0.22, flyoverW / 2 - 0.22].forEach((oz) => {
-      const bMesh = new THREE.Mesh(this.boxCache(80.5, 1.25, 0.45), barrierMat);
-      bMesh.position.set(760, deckElev * 0.5 + 0.62, flyoverZ + oz);
-      bMesh.rotation.z = -slopeAngle;
-      this.scene.add(bMesh);
-
-      const kurilEastSegs = [
-        { minX: 720, maxX: 740, minY: 8.0, maxY: 12.8 },
-        { minX: 740, maxX: 760, minY: 5.0, maxY: 9.5 },
-        { minX: 760, maxX: 780, minY: 2.0, maxY: 6.5 },
-        { minX: 780, maxX: 800, minY: 0.0, maxY: 3.5 },
-      ];
-      for (const seg of kurilEastSegs) {
-        this.buildingColliders.push({
-          minX: seg.minX,
-          maxX: seg.maxX,
-          minZ: flyoverZ + oz - 0.65,
-          maxZ: flyoverZ + oz + 0.65,
-          minY: seg.minY,
-          maxY: seg.maxY,
-          tag: 'flyover_barrier',
-        });
-      }
-    });
-
-    // Yellow/Black Hazard Curb Trims
-    for (let x = 370; x <= 710; x += 22) {
-      const curbN = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ - flyoverW / 2 + 0.45);
-      const curbS = this.sharedBox(9.5, 0.25, 0.25, barrierYellowMat, x, deckElev + 0.15, flyoverZ + flyoverW / 2 - 0.45);
-      this.scene.add(curbN);
-      this.scene.add(curbS);
-    }
-
-    // 5. Tall Concrete Interchange Piers Spaced Every 38m (Straddling Balu Suspension Bridge cleanly outside its 22m deck)
-    for (let px = 380; px <= 700; px += 38) {
-      if (Math.abs(px - 440) < 18 || Math.abs(px - 640) < 22) continue;
-      if (px >= 530 && px <= 650) {
-        // Twin Straddle Portal Columns outside the 22m Balu Suspension Bridge deck (ZERO obstruction on bridge/river!)
-        [-13.0, 13.0].forEach((offsetZ) => {
-          const portalCol = new THREE.Mesh(this.cylCache(0.95, 1.15, deckElev - 0.6, 12), pierMat);
-          portalCol.position.set(px, (deckElev - 0.6) / 2, flyoverZ + offsetZ);
-          portalCol.castShadow = true;
-          this.scene.add(portalCol);
-        });
-        const straddleBeam = this.sharedBox(2.8, 1.5, 28.0, pierMat, px, deckElev - 1.25, flyoverZ);
-        straddleBeam.castShadow = true;
-        this.scene.add(straddleBeam);
-        continue;
-      }
-      const pier = new THREE.Mesh(this.cylCache(1.4, 1.65, deckElev - 0.6, 14), pierMat);
-      pier.position.set(px, (deckElev - 0.6) / 2, flyoverZ);
-      pier.castShadow = true;
-      this.scene.add(pier);
-
-      this.circleColliders.push({
-        x: px,
-        z: flyoverZ,
-        radius: 1.7,
-        tag: 'flyover_pier',
-      });
-
-      const pierCap = this.sharedBox(3.4, 1.4, flyoverW + 0.8, pierMat, px, deckElev - 1.2, flyoverZ);
-      pierCap.castShadow = true;
-      this.scene.add(pierCap);
-    }
-
-    // 6. Kuril Interchange Highway Directional Gantries
-    const signLocations = [
-      { x: 440, b1: 'কুড়িল ইন্টারচেঞ্জ ফ্লাইওভার', e1: 'KURIL INTERCHANGE FLYOVER', b2: 'পূর্বাচল ৩০০ ফিট এক্সপ্রেসওয়ে', e2: 'PURBACHAL 300FT EXPRESSWAY' },
-      { x: 620, b1: 'বিমানবন্দর ও উত্তরা লিঙ্ক', e1: 'AIRPORT & UTTARA LINK', b2: 'নিকুঞ্জ ও বারিধারা প্রস্থান', e2: 'NIKUNJA & BARIDHARA EXIT' },
-    ];
-
-    signLocations.forEach((loc) => {
-      const gantryGroup = new THREE.Group();
-      gantryGroup.position.set(loc.x, deckElev, flyoverZ);
-
-      [-flyoverW / 2 + 0.4, flyoverW / 2 - 0.4].forEach((gz) => {
-        const leg = new THREE.Mesh(this.boxCache(0.38, 6.2, 0.38), gantryFrameMat);
-        leg.position.set(0, 3.1, gz);
-        gantryGroup.add(leg);
-      });
-
-      const gantryBeam = new THREE.Mesh(this.boxCache(0.4, 0.55, flyoverW), gantryFrameMat);
-      gantryBeam.position.set(0, 6.2, 0);
-      gantryGroup.add(gantryBeam);
-
-      const signTex = createFlyoverGantryTexture(loc.b1, loc.e1, loc.b2, loc.e2);
-      const signBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 2.5, 10.2),
-        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.4 })
-      );
-      signBoard.position.set(0, 4.8, 0);
-      gantryGroup.add(signBoard);
-
-      this.scene.add(gantryGroup);
-    });
-
-    // 7. High-mast LED Street Light Poles
-    for (let lx = 370; lx <= 710; lx += 42) {
-      const pole = new THREE.Mesh(this.cylCache(0.12, 0.16, 7.5, 8), gantryFrameMat);
-      pole.position.set(lx, deckElev + 3.75, flyoverZ - flyoverW / 2 + 0.35);
-      this.scene.add(pole);
-
-      const luminaire = new THREE.Mesh(this.boxCache(0.8, 0.15, 0.35), lampLightMat);
-      luminaire.position.set(lx, deckElev + 7.5, flyoverZ - flyoverW / 2 + 1.2);
-      this.scene.add(luminaire);
-    }
+    buildKurilFlyoverInterchangeInScene(this.getBuilderContext());
   }
 
   /**
@@ -10516,11 +9495,14 @@ export class DhakaCityEngine {
         veh.health = Math.max(0, veh.health - meleeDmg);
         this.spawnImpactSparks(
           (this.playerPos.x + veh.x) * 0.5,
-          1.05,
+          veh.y + 1.05,
           (this.playerPos.z + veh.z) * 0.5,
           tool.id === 'stun_baton' ? '#38bdf8' : '#fbbf24',
           1.2
         );
+        if (veh.health <= 0) {
+          this.explodeVehicle(veh);
+        }
         break;
       }
     }
@@ -10652,7 +9634,9 @@ export class DhakaCityEngine {
     if (this.activeVehicleId && !preferVehicle) {
       const curVeh = this.vehicles.find((v) => v.id === this.activeVehicleId);
       const nearStation = this.cngStationSpots.find(
-        (cs) => Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
+        (cs) =>
+          Math.abs(this.playerPos.y - (cs.isMarine ? 0.35 : 0)) <= 2.8 &&
+          Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
       );
       if (curVeh && nearStation && curVeh.type !== 'rickshaw') {
         if (store.spendTaka(100, nearStation.isMarine ? 'Marine Fuel Dock Refuel' : 'CNG Station Refuel & Tune-Up', 'জ্বালানি ও সার্ভিস')) {
@@ -10698,8 +9682,9 @@ export class DhakaCityEngine {
       }
     }
 
-    // 2. Check nearby Point of Interest
+    // 2. Check nearby Point of Interest (ground street level)
     for (const poi of POINTS_OF_INTEREST) {
+      if (Math.abs(this.playerPos.y) > 2.6) continue;
       const d = Math.hypot(poi.x - this.playerPos.x, poi.z - this.playerPos.z);
       if (d < 4.8 && !preferVehicle) {
         this.executePOIInteraction(poi.id);
@@ -10718,10 +9703,11 @@ export class DhakaCityEngine {
     if (!preferVehicle) {
       // 2.6 Check nearby CNG Filling Station (Refuel & Quick Repair)
       for (const cs of this.cngStationSpots) {
+        if (Math.abs(this.playerPos.y - (cs.isMarine ? 0.35 : 0)) > 2.6) continue;
         const d = Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z);
         if (d < 6.5) {
           const nearVeh = this.vehicles.find(
-            (v) => v.health > 0 && Math.hypot(v.x - cs.x, v.z - cs.z) < 12
+            (v) => v.health > 0 && Math.abs(v.y - this.playerPos.y) <= 2.6 && Math.hypot(v.x - cs.x, v.z - cs.z) < 12
           );
           if (store.spendTaka(100, 'CNG Station Refuel & Tune-Up', 'সিএনজি স্টেশন রিফুয়েল ও সার্ভিস')) {
             if (nearVeh) {
@@ -10744,6 +9730,7 @@ export class DhakaCityEngine {
       }
       // 2.7 Check Outdoor Street ATM Booth
       for (const atm of this.streetAtmSpots) {
+        if (Math.abs(this.playerPos.y) > 2.6) continue;
         const d = Math.hypot(atm.x - this.playerPos.x, atm.z - this.playerPos.z);
         if (d < 4.5) {
           if (this.streetAtmCooldown > 0) {
@@ -10814,6 +9801,7 @@ export class DhakaCityEngine {
     }
 
     for (const poi of POINTS_OF_INTEREST) {
+      if (Math.abs(this.playerPos.y) > 2.6) continue;
       const d = Math.hypot(poi.x - this.playerPos.x, poi.z - this.playerPos.z);
       if (d < 5.2) {
         this.executePOIInteraction(poi.id);
@@ -11868,6 +10856,14 @@ export class DhakaCityEngine {
       const nz = prevZ + b.vz * dt;
       b.mesh.position.set(nx, ny, nz);
 
+      if (b.isVisualOnly) {
+        if (b.life <= 0) {
+          this.scene.remove(b.mesh);
+          this.bulletTracers.splice(i, 1);
+        }
+        continue;
+      }
+
       let hitSomething = false;
 
       // Swept segment vector [prevX, prevZ] -> [nx, nz]
@@ -11980,12 +10976,13 @@ export class DhakaCityEngine {
                 veh.type === 'motorcycle' ||
                 veh.type === 'rickshaw' ||
                 veh.type === 'cng';
-              if (isOpenVehicle || ny > 0.72) {
+              if (isOpenVehicle || ny - veh.y > 0.72) {
                 // Driver fatally shot!
                 vehMesh?.remove(driverObj);
                 dhakaAudio.playSfx('pain_grunt');
                 this.spawnBloodDecal(veh.x, veh.z, 1.35, veh.y);
                 this.spawnImpactSparks(veh.x, veh.y + 0.8, veh.z, '#ef4444', 2.0);
+                const deadY = this.getRoadElevation(veh.x, veh.z, veh.y);
 
                 const deadDriverId = `dead_driver_${Date.now()}_${Math.floor(
                   Math.random() * 1000
@@ -11997,6 +10994,7 @@ export class DhakaCityEngine {
                   role: 'citizen',
                   x: veh.x,
                   z: veh.z,
+                  homeY: deadY,
                   rotation: veh.rotation,
                   shirtColor: '#991b1b',
                   pantsColor: '#1e293b',
@@ -12017,7 +11015,7 @@ export class DhakaCityEngine {
                   'citizen',
                   false
                 );
-                deadLimbs.group.position.set(veh.x, 0.08, veh.z);
+                deadLimbs.group.position.set(veh.x, deadY + 0.08, veh.z);
                 deadLimbs.group.rotation.x = -Math.PI / 2;
                 deadLimbs.group.rotation.y = veh.rotation + Math.PI / 2;
                 this.scene.add(deadLimbs.group);
@@ -12786,14 +11784,19 @@ export class DhakaCityEngine {
 
   private findNearbyMetroStation() {
     const px = this.playerPos.x;
+    const py = this.playerPos.y;
     const pz = this.playerPos.z;
     for (const st of METRO_STATIONS) {
       const kx = st.kioskX ?? st.x;
       const kz = st.kioskZ ?? st.z;
-      if (Math.hypot(kx - px, kz - pz) < 12.5) return st;
-      if (Math.hypot(st.x - px, st.z - pz) < 14.5) return st;
-      if (st.line === 'L6' && px >= -25.5 && px <= -2.5 && Math.abs(pz - st.z) <= 34) return st;
-      if (st.line === 'L5' && pz >= -214 && pz <= -189 && Math.abs(px - st.x) <= 34) return st;
+      const atStreetKiosk = py <= 2.5;
+      const atStationLevel =
+        st.line === 'L6' ? py >= 7.0 && py <= 15.6 : py >= 11.2 && py <= 19.6;
+
+      if (atStreetKiosk && Math.hypot(kx - px, kz - pz) < 12.5) return st;
+      if (atStreetKiosk && Math.hypot(st.x - px, st.z - pz) < 14.5) return st;
+      if (atStationLevel && st.line === 'L6' && px >= -25.5 && px <= -2.5 && Math.abs(pz - st.z) <= 34) return st;
+      if (atStationLevel && st.line === 'L5' && pz >= -214 && pz <= -189 && Math.abs(px - st.x) <= 34) return st;
     }
     return null;
   }
@@ -13849,12 +12852,12 @@ export class DhakaCityEngine {
       (headlightsOn ? 3.5 : 0) + (this.hornFlashTimer > 0 ? 1.5 : 0);
     this.headlightSpot.position.set(
       veh.x + Math.sin(veh.rotation) * 1.5,
-      1.2,
+      veh.y + 1.2,
       veh.z + Math.cos(veh.rotation) * 1.5
     );
     this.headlightTarget.position.set(
       veh.x + Math.sin(veh.rotation) * 24,
-      0.1,
+      veh.y + 0.1,
       veh.z + Math.cos(veh.rotation) * 24
     );
 
@@ -14441,6 +13444,23 @@ export class DhakaCityEngine {
               this.policeFireCooldown = Math.max(0.85, 2.2 - wantedLevel * 0.25);
               dhakaAudio.playSfx('gunshot');
               this.spawnImpactSparks(veh.x, veh.y + 1.5, veh.z, '#facc15', 0.9);
+              const shotDx = this.playerPos.x - veh.x;
+              const shotDy = (this.playerPos.y + 1.0) - (veh.y + 1.35);
+              const shotDz = this.playerPos.z - veh.z;
+              const shotLen = Math.max(0.1, Math.hypot(shotDx, shotDy, shotDz));
+              const shotTracer = new THREE.Mesh(this.tracerGeo, this.tracerMatSpread);
+              shotTracer.position.set(veh.x, veh.y + 1.35, veh.z);
+              shotTracer.rotation.y = Math.atan2(shotDx, shotDz);
+              this.scene.add(shotTracer);
+              this.bulletTracers.push({
+                mesh: shotTracer,
+                vx: (shotDx / shotLen) * 76,
+                vy: (shotDy / shotLen) * 76,
+                vz: (shotDz / shotLen) * 76,
+                life: shotLen / 76 + 0.08,
+                damage: 0,
+                isVisualOnly: true,
+              });
               if (Math.random() < 0.45) {
                 const pVeh = this.activeVehicleId
                   ? this.vehicles.find((pv) => pv.id === this.activeVehicleId)
@@ -15284,7 +14304,9 @@ export class DhakaCityEngine {
 
     if (this.activeVehicleId) {
       const nearStation = this.cngStationSpots.find(
-        (cs) => Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
+        (cs) =>
+          Math.abs(this.playerPos.y - (cs.isMarine ? 0.35 : 0)) <= 2.8 &&
+          Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
       );
       if (nearStation && activeVeh && activeVeh.type !== 'rickshaw') {
         store.setNearbyPrompt({
@@ -15319,7 +14341,7 @@ export class DhakaCityEngine {
       }
     }
 
-    if (!prompt) {
+    if (!prompt && Math.abs(this.playerPos.y) <= 2.6) {
       for (const poi of POINTS_OF_INTEREST) {
         const d = Math.hypot(poi.x - this.playerPos.x, poi.z - this.playerPos.z);
         if (d < 4.8) {
@@ -15348,28 +14370,40 @@ export class DhakaCityEngine {
 
     if (!prompt) {
       for (const cs of this.cngStationSpots) {
+        if (Math.abs(this.playerPos.y - (cs.isMarine ? 0.35 : 0)) > 2.6) continue;
         const d = Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z);
         if (d < 6.5) {
           prompt = {
             type: 'poi',
             id: 'cng_station',
-            labelEn: '[E] CNG Station: Refuel & Repair Nearby Vehicle — ৳100',
-            labelBn: '[E] সিএনজি পাম্প: গ্যাস ও গাড়ি মেরামত — ৳১০০',
+            labelEn: cs.isMarine
+              ? '[E] Marine Fuel Dock: Refuel & Repair Boat — ৳100'
+              : '[E] CNG Station: Refuel & Repair Nearby Vehicle — ৳100',
+            labelBn: cs.isMarine
+              ? '[E] নৌ ঘাট ফুয়েল: ট্যাংক ফুল ও মেরামত — ৳১০০'
+              : '[E] সিএনজি পাম্প: গ্যাস ও গাড়ি মেরামত — ৳১০০',
           };
           break;
         }
       }
     }
 
-    if (!prompt) {
+    if (!prompt && Math.abs(this.playerPos.y) <= 2.6) {
       for (const atm of this.streetAtmSpots) {
         const d = Math.hypot(atm.x - this.playerPos.x, atm.z - this.playerPos.z);
         if (d < 4.5) {
+          const waitSec = Math.ceil(this.streetAtmCooldown);
           prompt = {
             type: 'poi',
             id: 'street_atm',
-            labelEn: `[E] ${atm.nameEn}: Withdraw ৳500 Quick Cash`,
-            labelBn: `[E] ${atm.nameBn}: ৳৫০০ নগদ উত্তোলন`,
+            labelEn:
+              waitSec > 0
+                ? `[E] ${atm.nameEn}: Cooldown (${waitSec}s left)`
+                : `[E] ${atm.nameEn}: Withdraw ৳500 Quick Cash`,
+            labelBn:
+              waitSec > 0
+                ? `[E] ${atm.nameBn}: অপেক্ষা করুন (${waitSec}সে)`
+                : `[E] ${atm.nameBn}: ৳৫০০ নগদ উত্তোলন`,
           };
           break;
         }
@@ -15378,7 +14412,8 @@ export class DhakaCityEngine {
 
     if (!prompt) {
       for (const v of this.vehicles) {
-        if (v.health <= 0) continue;
+        if (v.health <= 0 || v.y < -1.0) continue;
+        if (Math.abs(v.y - this.playerPos.y) > 2.6 && !(v.type === 'boat' && this.isSwimming)) continue;
         const d = Math.hypot(v.x - this.playerPos.x, v.z - this.playerPos.z);
         if (d < 5.2) {
           const stats = VEHICLE_STATS[v.type];

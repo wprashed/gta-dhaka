@@ -72,4 +72,5 @@ export interface SceneBuilderContext {
   buildingColliders: BuildingCollider[];
   circleColliders: CircleCollider[];
   streetLampStdMats: THREE.MeshStandardMaterial[];
+  streetLampBasicMats: THREE.MeshBasicMaterial[];
 }

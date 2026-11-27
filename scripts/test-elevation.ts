@@ -78,7 +78,8 @@ function assertSmoothRampSweep(
   points: Array<{ x: number; z: number }>,
   expectedStartY: number,
   expectedEndY: number,
-  seedY?: number
+  seedY?: number,
+  maxStepDelta = 0.42
 ) {
   let prevY = evaluateRoadElevation(points[0].x, points[0].z, seedY ?? expectedStartY, baseCtx);
   assert.ok(
@@ -90,7 +91,7 @@ function assertSmoothRampSweep(
     const y = evaluateRoadElevation(p.x, p.z, prevY, baseCtx);
     const delta = Math.abs(y - prevY);
     assert.ok(
-      delta <= 0.42,
+      delta <= maxStepDelta,
       `${label} discontinuity at step ${i} (${p.x},${p.z}): ${prevY.toFixed(3)} -> ${y.toFixed(3)}`
     );
     prevY = y;
@@ -158,4 +159,24 @@ test('All elevated flyover & bridge ramps are continuous with zero cliff ledges'
 
   // Staying on the elevated Expressway main deck above the ramp stays flat at 16.2m
   assert.equal(evaluateRoadElevation(18, -100, 16.2, baseCtx), 16.2);
+});
+
+test('Foot Over Bridge stairs ascend smoothly without snapping down and stay separate from overhead ground/decks', () => {
+  // Farmgate FOB side staircase (halfSpan=13.5, x=14.65, z: -44.95 -> -53.35, ~0.71m rise per 1m run)
+  const fobStair: Array<{ x: number; z: number }> = [];
+  for (let z = -45.0; z >= -53.3; z -= 0.7) {
+    fobStair.push({ x: 14.65, z });
+  }
+  fobStair.push({ x: 14.65, z: -53.35 });
+  assertSmoothRampSweep('Farmgate FOB West Stair', fobStair, 0.42, 6.38, 0.4, 0.55);
+  // Crossing deck stays at 6.40m while driving underneath on ground stays at 0m
+  assert.equal(evaluateRoadElevation(0, -55, 6.4, baseCtx), 6.4);
+  assert.equal(evaluateRoadElevation(0, -55, 0, baseCtx), 0);
+});
+
+test('MRT concourse, street floor, and Expressway deck remain isolated vertically', () => {
+  // Standing on street beneath Farmgate concourse resolves to 0m, not 8.96m concourse
+  assert.equal(evaluateRoadElevation(-10.5, -15, 0, baseCtx), 0);
+  // Standing inside Farmgate concourse resolves cleanly to 8.96m
+  assert.equal(evaluateRoadElevation(-10.5, -15, 8.96, baseCtx), 8.96);
 });

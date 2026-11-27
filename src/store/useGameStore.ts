@@ -271,6 +271,20 @@ interface GameState {
 
 const SAVE_KEY = 'dhaka_city_save_v1';
 
+let wastedRespawnTimer: ReturnType<typeof setTimeout> | null = null;
+let bustedRespawnTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearRespawnTimers() {
+  if (wastedRespawnTimer !== null) {
+    clearTimeout(wastedRespawnTimer);
+    wastedRespawnTimer = null;
+  }
+  if (bustedRespawnTimer !== null) {
+    clearTimeout(bustedRespawnTimer);
+    bustedRespawnTimer = null;
+  }
+}
+
 export const useGameStore = create<GameState>((set, get) => ({
   gamePhase: 'playing',
   pauseTab: 'map',
@@ -368,6 +382,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   activeFareJob: null,
 
   startNewGame: () => {
+    clearRespawnTimers();
     dhakaAudio.init();
     dhakaAudio.setRadioStation('off');
     dhakaAudio.playSfx('ui');
@@ -419,6 +434,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   continueGame: () => {
+    clearRespawnTimers();
     dhakaAudio.init();
     dhakaAudio.playSfx('ui');
     try {
@@ -597,8 +613,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   damagePlayer: (amount) => {
+    const current = get();
+    if (current.isWasted || current.isBusted) return;
     dhakaAudio.playSfx('hit');
     set((s) => {
+      if (s.isWasted || s.isBusted) return {};
       // Kabir "Iron Fist": heavy damage resistance (-22% incoming damage)
       let remaining = s.selectedCharacterId === 'kabir' ? amount * 0.78 : amount;
       let newArmor = s.armor;
@@ -622,6 +641,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   triggerWasted: () => {
     const s = get();
     if (s.isWasted) return;
+    clearRespawnTimers();
     dhakaAudio.playSfx('wasted');
     set({
       isWasted: true,
@@ -636,7 +656,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     });
 
-    setTimeout(() => {
+    wastedRespawnTimer = setTimeout(() => {
+      wastedRespawnTimer = null;
       set((st) => ({
         isWasted: false,
         health: 100,
@@ -660,6 +681,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   triggerBusted: () => {
     const s = get();
     if (s.isBusted || s.isWasted) return;
+    clearRespawnTimers();
     dhakaAudio.playSfx('busted');
     set({
       isBusted: true,
@@ -674,7 +696,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     });
 
-    setTimeout(() => {
+    bustedRespawnTimer = setTimeout(() => {
+      bustedRespawnTimer = null;
       set((st) => ({
         isBusted: false,
         health: 100,
