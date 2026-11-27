@@ -244,6 +244,19 @@ export class DhakaCityEngine {
   private playerMetroTrainL6: THREE.Group | null = null;
   private playerMetroTrainL5: THREE.Group | null = null;
   private metroPortalRings: THREE.Mesh[] = [];
+  private metroEscalators: Array<{
+    x1: number;
+    z1: number;
+    y1: number;
+    x2: number;
+    z2: number;
+    y2: number;
+    halfWidth: number;
+    kioskX: number;
+    kioskZ: number;
+    kioskHalfX: number;
+    kioskHalfZ: number;
+  }> = [];
   private metroRide: {
     segments: Array<{
       line: 'L6' | 'L5';
@@ -2880,37 +2893,76 @@ export class DhakaCityEngine {
         const kioskZ = stairBaseZ - dirSign * 3.4;
         const stairX = -20.2;
         const topZ = stairBaseZ + dirSign * 14;
-        // Start escalator cleanly at rear portal threshold of kiosk so glass tube never intersects kiosk roof
-        const startPos = new THREE.Vector3(stairX, 0.72, stairBaseZ);
-        const endPos = new THREE.Vector3(-17.4, 9.2, topZ);
+        // Anchor bottom of escalator flush into the back threshold of the kiosk floor slab (no floating gap!)
+        const startPos = new THREE.Vector3(stairX, -0.04, stairBaseZ - dirSign * 0.9);
+        const endPos = new THREE.Vector3(-17.4, 8.95, topZ);
         const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
         const spanLen = startPos.distanceTo(endPos);
 
-        const stairBridge = new THREE.Mesh(this.boxCache(2.8, 0.55, spanLen), concourseMat);
+        const stairBridge = new THREE.Mesh(this.boxCache(2.8, 0.52, spanLen), concourseMat);
         stairBridge.position.copy(midPos);
         stairBridge.lookAt(endPos);
         this.scene.add(stairBridge);
 
-        const stairGlassTube = new THREE.Mesh(this.boxCache(3.0, 2.5, spanLen), glassMat);
-        stairGlassTube.position.copy(midPos).add(new THREE.Vector3(0, 1.45, 0));
-        stairGlassTube.lookAt(endPos.clone().add(new THREE.Vector3(0, 1.45, 0)));
+        // Ground concrete plinth base under escalator bottom threshold
+        this.scene.add(this.sharedBox(2.95, 0.65, 1.8, concreteMat, stairX, 0.32, stairBaseZ - dirSign * 0.55));
+
+        // 20 3D Stepped Escalator Treads + Twin Dark Steel Balustrades & Moving Handrails
+        const escSteps = 20;
+        for (let es = 0; es < escSteps; es++) {
+          const ft = (es + 0.5) / escSteps;
+          const sx = THREE.MathUtils.lerp(startPos.x, endPos.x, ft);
+          const sy = THREE.MathUtils.lerp(0.22, endPos.y, ft);
+          const sz = THREE.MathUtils.lerp(startPos.z, endPos.z, ft);
+          const tread = new THREE.Mesh(this.boxCache(2.15, 0.24, 0.72), afcGateMat);
+          tread.position.set(sx, sy + 0.08, sz);
+          this.scene.add(tread);
+        }
+        [-1.18, 1.18].forEach((bx) => {
+          const railBeam = new THREE.Mesh(this.boxCache(0.14, 0.95, spanLen), afcGateMat);
+          railBeam.position.copy(midPos).add(new THREE.Vector3(bx, 0.72, 0));
+          railBeam.lookAt(endPos.clone().add(new THREE.Vector3(bx, 0.72, 0)));
+          this.scene.add(railBeam);
+        });
+
+        // Glass canopy starting past the kiosk roof lip so it connects cleanly without clipping the green canopy
+        const canopyStart = startPos.clone().lerp(endPos, 0.14);
+        const canopyMid = canopyStart.clone().add(endPos).multiplyScalar(0.5);
+        const canopyLen = canopyStart.distanceTo(endPos);
+        const stairGlassTube = new THREE.Mesh(this.boxCache(3.0, 2.45, canopyLen), glassMat);
+        stairGlassTube.position.copy(canopyMid).add(new THREE.Vector3(0, 1.5, 0));
+        stairGlassTube.lookAt(endPos.clone().add(new THREE.Vector3(0, 1.5, 0)));
         this.scene.add(stairGlassTube);
 
-        // Ground Entry Kiosk Pavilion (centered slightly outward with open rear frame leading onto escalator)
-        this.scene.add(this.sharedBox(4.4, 0.22, 5.2, concourseMat, stairX, 0.11, kioskZ));
+        // Ground Entry Kiosk Pavilion with Turnstiles
+        this.scene.add(this.sharedBox(4.4, 0.22, 5.4, concourseMat, stairX, 0.11, kioskZ));
         this.scene.add(this.sharedBox(4.8, 0.52, 5.6, mrtGreenTrimMat, stairX, 3.85, kioskZ));
         this.scene.add(this.sharedBox(4.9, 0.18, 5.7, trussSteelMat, stairX, 4.18, kioskZ));
         [-1.95, 1.95].forEach((ox) => {
-          this.scene.add(this.sharedBox(0.32, 3.6, 5.0, concourseMat, stairX + ox, 1.9, kioskZ));
+          this.scene.add(this.sharedBox(0.32, 3.6, 5.2, concourseMat, stairX + ox, 1.9, kioskZ));
         });
         // Interior Turnstile Barrier Gates (walkable center lane!)
-        [-1.0, 1.0].forEach((tx) => {
+        [-1.05, 1.05].forEach((tx) => {
           this.scene.add(this.sharedBox(0.22, 1.05, 1.4, afcGateMat, stairX + tx, 0.65, kioskZ));
         });
         // Support column under escalator landing
         const landCol = new THREE.Mesh(this.cylCache(0.42, 0.52, 8.6, 8), concreteMat);
         landCol.position.set(-17.4, 4.3, topZ);
         this.scene.add(landCol);
+
+        this.metroEscalators.push({
+          x1: startPos.x,
+          z1: startPos.z,
+          y1: 0.22,
+          x2: endPos.x,
+          z2: endPos.z,
+          y2: endPos.y + 0.18,
+          halfWidth: 1.45,
+          kioskX: stairX,
+          kioskZ,
+          kioskHalfX: 2.25,
+          kioskHalfZ: 2.75,
+        });
       }
 
       // Illuminated Station Bilingual Signboard Gantries (Both Ends + Street Facade)
@@ -2985,22 +3037,50 @@ export class DhakaCityEngine {
 
       // 4. Ground-Anchored Entry Pavilion & Escalator Bridge on South Sidewalk (Z = line5Z - 10.5)
       const entryZ = line5Z - 10.5;
-      const startP = new THREE.Vector3(st.sx - 16.5, 0.75, entryZ);
-      const endP = new THREE.Vector3(st.sx - 6, 13.0, line5Z - 6.8);
+      const startP = new THREE.Vector3(st.sx - 17.4, -0.04, entryZ);
+      const endP = new THREE.Vector3(st.sx - 6, 12.85, line5Z - 6.8);
       const midP = startP.clone().add(endP).multiplyScalar(0.5);
       const span5 = startP.distanceTo(endP);
-      const esc5 = new THREE.Mesh(this.boxCache(2.8, 0.55, span5), concourseMat);
+      const esc5 = new THREE.Mesh(this.boxCache(2.8, 0.52, span5), concourseMat);
       esc5.position.copy(midP);
       esc5.lookAt(endP);
       this.scene.add(esc5);
-      const escGlass5 = new THREE.Mesh(this.boxCache(3.0, 2.5, span5), glassMat);
-      escGlass5.position.copy(midP).add(new THREE.Vector3(0, 1.45, 0));
-      escGlass5.lookAt(endP.clone().add(new THREE.Vector3(0, 1.45, 0)));
+
+      this.scene.add(this.sharedBox(1.8, 0.65, 2.95, concreteMat, st.sx - 17.0, 0.32, entryZ));
+      for (let es = 0; es < 22; es++) {
+        const ft = (es + 0.5) / 22;
+        const sx = THREE.MathUtils.lerp(startP.x, endP.x, ft);
+        const sy = THREE.MathUtils.lerp(0.22, endP.y, ft);
+        const sz = THREE.MathUtils.lerp(startP.z, endP.z, ft);
+        const tread = new THREE.Mesh(this.boxCache(0.72, 0.24, 2.15), afcGateMat);
+        tread.position.set(sx, sy + 0.08, sz);
+        this.scene.add(tread);
+      }
+
+      const canopy5Start = startP.clone().lerp(endP, 0.14);
+      const canopy5Mid = canopy5Start.clone().add(endP).multiplyScalar(0.5);
+      const escGlass5 = new THREE.Mesh(this.boxCache(3.0, 2.45, canopy5Start.distanceTo(endP)), glassMat);
+      escGlass5.position.copy(canopy5Mid).add(new THREE.Vector3(0, 1.5, 0));
+      escGlass5.lookAt(endP.clone().add(new THREE.Vector3(0, 1.5, 0)));
       this.scene.add(escGlass5);
-      this.scene.add(this.sharedBox(4.8, 0.22, 4.2, concourseMat, st.sx - 19.6, 0.11, entryZ));
+      this.scene.add(this.sharedBox(5.0, 0.22, 4.2, concourseMat, st.sx - 19.6, 0.11, entryZ));
       this.scene.add(this.sharedBox(5.2, 0.55, 4.6, mrtRedTrimMat, st.sx - 19.6, 3.85, entryZ));
       [-2.0, 2.0].forEach((oz) => {
         this.scene.add(this.sharedBox(4.4, 3.6, 0.3, concourseMat, st.sx - 19.6, 1.9, entryZ + oz));
+      });
+
+      this.metroEscalators.push({
+        x1: startP.x,
+        z1: startP.z,
+        y1: 0.22,
+        x2: endP.x,
+        z2: endP.z,
+        y2: endP.y + 0.18,
+        halfWidth: 1.45,
+        kioskX: st.sx - 19.6,
+        kioskZ: entryZ,
+        kioskHalfX: 2.55,
+        kioskHalfZ: 2.15,
       });
 
       const signTex5 = createFlyoverGantryTexture(st.nameBn, st.nameEn, 'ঢাকা ম্যাস ট্রানজিট (MRT LINE-5)', 'DMTCL NORTHERN ROUTE');
@@ -16442,6 +16522,68 @@ export class DhakaCityEngine {
           return 0;
         }
         return 9.6;
+      }
+    }
+
+    // 2.5 Pedestrian Covered Foot Over Bridges (Farmgate Z=-55, Karwan Bazar Z=48, Shahbagh Z=145, Mirpur-10 (-380,-115))
+    // Must run BEFORE Section 3 (Expressway) so East sidewalk staircases at X~14 don't get clamped to ground Y=0 underneath!
+    const fobs: Array<{ bx: number; bz: number; halfSpan: number }> = [
+      { bx: 0, bz: -55, halfSpan: 13.5 },
+      { bx: 0, bz: 48, halfSpan: 13.0 },
+      { bx: 0, bz: 145, halfSpan: 12.5 },
+      { bx: -380, bz: -115, halfSpan: 12.5 },
+    ];
+    for (const f of fobs) {
+      const lx = x - f.bx;
+      const lz = z - f.bz;
+      if (Math.abs(lx) <= f.halfSpan + 3.0 && lz >= -2.2 && lz <= 12.4) {
+        // Overhead covered walkway deck (Y = 6.40m)
+        if (Math.abs(lz) <= 1.75 && Math.abs(lx) <= f.halfSpan + 1.65) {
+          if (currentY === undefined || (currentY >= 3.8 && currentY <= 9.2)) {
+            return 6.40;
+          }
+        }
+        // West & East stepped staircases + ground entry pads along both sidewalks
+        const onSideStair =
+          Math.abs(lx - -(f.halfSpan + 1.15)) <= 1.35 ||
+          Math.abs(lx - (f.halfSpan + 1.15)) <= 1.35;
+        if (onSideStair && lz >= 1.65 && lz <= 12.3) {
+          if (lz > 10.05) {
+            if (currentY === undefined || currentY <= 2.2) return 0.18;
+          } else {
+            const t = Math.max(0, Math.min(1, (10.05 - lz) / 8.4));
+            const stairElev = 0.18 + t * (6.40 - 0.18);
+            if (currentY === undefined || (Math.abs(currentY - stairElev) <= 2.8 && currentY <= 9.2) || stairElev <= 1.5) {
+              return stairElev;
+            }
+          }
+        }
+      }
+    }
+
+    // 2.6 Walkable Metro Rail Entry Kiosks & Covered Escalator Ramps (L6 & L5)
+    for (const esc of this.metroEscalators) {
+      if (Math.abs(x - esc.kioskX) <= esc.kioskHalfX && Math.abs(z - esc.kioskZ) <= esc.kioskHalfZ) {
+        if (currentY === undefined || currentY <= 2.2) {
+          return 0.22;
+        }
+      }
+      const dx = esc.x2 - esc.x1;
+      const dz = esc.z2 - esc.z1;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq > 0.1) {
+        const rawT = ((x - esc.x1) * dx + (z - esc.z1) * dz) / lenSq;
+        if (rawT >= -0.03 && rawT <= 1.03) {
+          const t = Math.max(0, Math.min(1, rawT));
+          const px = esc.x1 + dx * t;
+          const pz = esc.z1 + dz * t;
+          if (Math.hypot(x - px, z - pz) <= esc.halfWidth) {
+            const rampElev = esc.y1 + (esc.y2 - esc.y1) * t;
+            if (currentY === undefined || (Math.abs(currentY - rampElev) <= 2.6 && currentY <= esc.y2 + 1.5) || rampElev <= 1.2) {
+              return rampElev;
+            }
+          }
+        }
       }
     }
 
