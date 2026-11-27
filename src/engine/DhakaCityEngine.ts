@@ -256,6 +256,11 @@ export class DhakaCityEngine {
     kioskZ: number;
     kioskHalfX: number;
     kioskHalfZ: number;
+    landMinX: number;
+    landMaxX: number;
+    landMinZ: number;
+    landMaxZ: number;
+    landY: number;
   }> = [];
   private metroRide: {
     segments: Array<{
@@ -2893,29 +2898,29 @@ export class DhakaCityEngine {
         const kioskZ = stairBaseZ - dirSign * 3.4;
         const stairX = -20.2;
         const topZ = stairBaseZ + dirSign * 14;
-        // Anchor bottom of escalator flush into the back threshold of the kiosk floor slab (no floating gap!)
+        // Keep escalator axis straight along Z (zero lateral skew so step treads sit square!)
         const startPos = new THREE.Vector3(stairX, -0.04, stairBaseZ - dirSign * 0.9);
-        const endPos = new THREE.Vector3(-17.4, 8.95, topZ);
+        const endPos = new THREE.Vector3(stairX, 8.95, topZ);
         const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
         const spanLen = startPos.distanceTo(endPos);
 
         const stairBridge = new THREE.Mesh(this.boxCache(2.8, 0.52, spanLen), concourseMat);
-        stairBridge.position.copy(midPos);
-        stairBridge.lookAt(endPos);
+        stairBridge.position.copy(midPos).add(new THREE.Vector3(0, -0.12, 0));
+        stairBridge.lookAt(endPos.clone().add(new THREE.Vector3(0, -0.12, 0)));
         this.scene.add(stairBridge);
 
         // Ground concrete plinth base under escalator bottom threshold
         this.scene.add(this.sharedBox(2.95, 0.65, 1.8, concreteMat, stairX, 0.32, stairBaseZ - dirSign * 0.55));
 
-        // 20 3D Stepped Escalator Treads + Twin Dark Steel Balustrades & Moving Handrails
+        // 20 Straight-Aligned 3D Escalator Treads + Twin Dark Steel Balustrades
         const escSteps = 20;
         for (let es = 0; es < escSteps; es++) {
           const ft = (es + 0.5) / escSteps;
           const sx = THREE.MathUtils.lerp(startPos.x, endPos.x, ft);
           const sy = THREE.MathUtils.lerp(0.22, endPos.y, ft);
           const sz = THREE.MathUtils.lerp(startPos.z, endPos.z, ft);
-          const tread = new THREE.Mesh(this.boxCache(2.15, 0.24, 0.72), afcGateMat);
-          tread.position.set(sx, sy + 0.08, sz);
+          const tread = new THREE.Mesh(this.boxCache(2.12, 0.22, 0.72), afcGateMat);
+          tread.position.set(sx, sy + 0.06, sz);
           this.scene.add(tread);
         }
         [-1.18, 1.18].forEach((bx) => {
@@ -2925,7 +2930,18 @@ export class DhakaCityEngine {
           this.scene.add(railBeam);
         });
 
-        // Glass canopy starting past the kiosk roof lip so it connects cleanly without clipping the green canopy
+        // Upper Walkable Concourse Landing Balcony + Glass Concourse Portal Doorway into Station
+        const landCenterZ = topZ + dirSign * 1.5;
+        this.scene.add(this.sharedBox(5.2, 0.42, 3.8, concourseMat, -19.4, 8.75, landCenterZ));
+        // Outer guardrail along outer & end edges of landing balcony
+        this.scene.add(this.sharedBox(0.12, 1.05, 3.8, trussSteelMat, -21.95, 9.48, landCenterZ));
+        this.scene.add(this.sharedBox(5.2, 1.05, 0.12, trussSteelMat, -19.4, 9.48, landCenterZ + dirSign * 1.85));
+        // Dark-framed Open Concourse Entrance Doorway Portal on station wall (X = -17.3)
+        this.scene.add(this.sharedBox(0.26, 2.8, 3.2, afcGateMat, -17.35, 10.35, landCenterZ));
+        this.scene.add(this.sharedBox(0.32, 2.4, 2.5, glassMat, -17.33, 10.2, landCenterZ));
+        this.scene.add(this.sharedBox(0.36, 0.45, 3.4, mrtGreenTrimMat, -17.32, 11.75, landCenterZ));
+
+        // Glass canopy starting past the kiosk roof lip up over the landing balcony
         const canopyStart = startPos.clone().lerp(endPos, 0.14);
         const canopyMid = canopyStart.clone().add(endPos).multiplyScalar(0.5);
         const canopyLen = canopyStart.distanceTo(endPos);
@@ -2945,9 +2961,9 @@ export class DhakaCityEngine {
         [-1.05, 1.05].forEach((tx) => {
           this.scene.add(this.sharedBox(0.22, 1.05, 1.4, afcGateMat, stairX + tx, 0.65, kioskZ));
         });
-        // Support column under escalator landing
+        // Support column cleanly beneath upper landing balcony (never blocking stairs)
         const landCol = new THREE.Mesh(this.cylCache(0.42, 0.52, 8.6, 8), concreteMat);
-        landCol.position.set(-17.4, 4.3, topZ);
+        landCol.position.set(-19.5, 4.3, landCenterZ);
         this.scene.add(landCol);
 
         this.metroEscalators.push({
@@ -2956,12 +2972,17 @@ export class DhakaCityEngine {
           y1: 0.22,
           x2: endPos.x,
           z2: endPos.z,
-          y2: endPos.y + 0.18,
+          y2: endPos.y + 0.08,
           halfWidth: 1.45,
           kioskX: stairX,
           kioskZ,
           kioskHalfX: 2.25,
           kioskHalfZ: 2.75,
+          landMinX: -22.0,
+          landMaxX: -16.8,
+          landMinZ: landCenterZ - 1.9,
+          landMaxZ: landCenterZ + 1.9,
+          landY: 8.96,
         });
       }
 
@@ -3038,12 +3059,12 @@ export class DhakaCityEngine {
       // 4. Ground-Anchored Entry Pavilion & Escalator Bridge on South Sidewalk (Z = line5Z - 10.5)
       const entryZ = line5Z - 10.5;
       const startP = new THREE.Vector3(st.sx - 17.4, -0.04, entryZ);
-      const endP = new THREE.Vector3(st.sx - 6, 12.85, line5Z - 6.8);
+      const endP = new THREE.Vector3(st.sx - 6, 12.85, entryZ);
       const midP = startP.clone().add(endP).multiplyScalar(0.5);
       const span5 = startP.distanceTo(endP);
       const esc5 = new THREE.Mesh(this.boxCache(2.8, 0.52, span5), concourseMat);
-      esc5.position.copy(midP);
-      esc5.lookAt(endP);
+      esc5.position.copy(midP).add(new THREE.Vector3(0, -0.12, 0));
+      esc5.lookAt(endP.clone().add(new THREE.Vector3(0, -0.12, 0)));
       this.scene.add(esc5);
 
       this.scene.add(this.sharedBox(1.8, 0.65, 2.95, concreteMat, st.sx - 17.0, 0.32, entryZ));
@@ -3052,10 +3073,17 @@ export class DhakaCityEngine {
         const sx = THREE.MathUtils.lerp(startP.x, endP.x, ft);
         const sy = THREE.MathUtils.lerp(0.22, endP.y, ft);
         const sz = THREE.MathUtils.lerp(startP.z, endP.z, ft);
-        const tread = new THREE.Mesh(this.boxCache(0.72, 0.24, 2.15), afcGateMat);
-        tread.position.set(sx, sy + 0.08, sz);
+        const tread = new THREE.Mesh(this.boxCache(0.72, 0.22, 2.12), afcGateMat);
+        tread.position.set(sx, sy + 0.06, sz);
         this.scene.add(tread);
       }
+
+      // Upper Walkable Concourse Landing Balcony bridging South Sidewalk Escalator into Line-5 Concourse Wall
+      const land5Z = (entryZ + (line5Z - 6.8)) * 0.5;
+      this.scene.add(this.sharedBox(3.8, 0.42, 4.4, concourseMat, st.sx - 5.2, 12.65, land5Z));
+      this.scene.add(this.sharedBox(3.2, 2.8, 0.28, afcGateMat, st.sx - 5.2, 14.25, line5Z - 6.85));
+      this.scene.add(this.sharedBox(2.5, 2.4, 0.32, glassMat, st.sx - 5.2, 14.1, line5Z - 6.83));
+      this.scene.add(this.sharedBox(3.4, 0.45, 0.36, mrtRedTrimMat, st.sx - 5.2, 15.65, line5Z - 6.82));
 
       const canopy5Start = startP.clone().lerp(endP, 0.14);
       const canopy5Mid = canopy5Start.clone().add(endP).multiplyScalar(0.5);
@@ -3075,12 +3103,17 @@ export class DhakaCityEngine {
         y1: 0.22,
         x2: endP.x,
         z2: endP.z,
-        y2: endP.y + 0.18,
+        y2: endP.y + 0.08,
         halfWidth: 1.45,
         kioskX: st.sx - 19.6,
         kioskZ: entryZ,
         kioskHalfX: 2.55,
         kioskHalfZ: 2.15,
+        landMinX: st.sx - 7.1,
+        landMaxX: st.sx - 3.3,
+        landMinZ: entryZ - 1.2,
+        landMaxZ: line5Z - 6.6,
+        landY: 12.86,
       });
 
       const signTex5 = createFlyoverGantryTexture(st.nameBn, st.nameEn, 'ঢাকা ম্যাস ট্রানজিট (MRT LINE-5)', 'DMTCL NORTHERN ROUTE');
@@ -4157,9 +4190,10 @@ export class DhakaCityEngine {
       const parapetD = b.h >= 34 ? b.d * 0.78 + 0.4 : b.d + 0.4;
       this.scene.add(this.sharedBox(parapetW, 0.85, parapetD, balconyMat, b.x, shaftH + 0.42, b.z));
 
-      // 3D Protruding Dhaka Apartment Balconies (বারান্দা) on upper floors.
+      // 3D Protruding Dhaka Apartment Balconies (বারান্দা) cleanly above commercial signboards
       if (b.style !== 'modern_glass') {
-        for (let fy = 7.5; fy < shaftH - 2.5; fy += 3.8) {
+        const balcStartY = b.signIndex !== undefined ? (b.h >= 18 ? 13.4 : 9.8) : 7.5;
+        for (let fy = balcStartY; fy < shaftH - 2.5; fy += 3.8) {
           const key = (b.w * 0.72).toFixed(2);
           if (!balconyPositions.has(key)) balconyPositions.set(key, []);
           balconyPositions.get(key)!.push({
@@ -4212,9 +4246,10 @@ export class DhakaCityEngine {
         }
       }
 
-      // AC Outdoor Units mounted on walls (Walton / General AC units)
+      // AC Outdoor Units mounted on walls cleanly above commercial signboard tiers
       if (b.style !== 'modern_glass' && b.h >= 14) {
-        for (let fy = 8.5; fy < b.h - 4.0; fy += 5.2) {
+        const acStartY = b.signIndex !== undefined ? (b.h >= 18 ? 13.8 : 10.2) : 8.5;
+        for (let fy = acStartY; fy < b.h - 4.0; fy += 5.2) {
           const acFront = this.sharedBox(1.1, 0.75, 0.45, acUnitMat, b.x + b.w * 0.28, fy, b.z + b.d / 2 + 0.24);
           this.scene.add(acFront);
           const acBack = this.sharedBox(1.1, 0.75, 0.45, acUnitMat, b.x - b.w * 0.28, fy, b.z - b.d / 2 - 0.24);
@@ -16561,8 +16596,17 @@ export class DhakaCityEngine {
       }
     }
 
-    // 2.6 Walkable Metro Rail Entry Kiosks & Covered Escalator Ramps (L6 & L5)
+    // 2.6 Walkable Metro Rail Entry Kiosks, Escalators & Upper Concourse Balconies (L6 & L5)
     for (const esc of this.metroEscalators) {
+      if (
+        x >= esc.landMinX &&
+        x <= esc.landMaxX &&
+        z >= esc.landMinZ &&
+        z <= esc.landMaxZ &&
+        (currentY === undefined || (currentY >= esc.landY - 3.2 && currentY <= esc.landY + 2.5))
+      ) {
+        return esc.landY;
+      }
       if (Math.abs(x - esc.kioskX) <= esc.kioskHalfX && Math.abs(z - esc.kioskZ) <= esc.kioskHalfZ) {
         if (currentY === undefined || currentY <= 2.2) {
           return 0.22;
