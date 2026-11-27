@@ -5375,6 +5375,193 @@ export function createMallSignboardTexture(
   return tex;
 }
 
+export function createMetroStationSignTexture(
+  stationNameBn: string,
+  stationNameEn: string,
+  lineLabel: string,
+  accentColor: string,
+  subText: string
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createLinearGradient(0, 0, 1024, 320);
+  grad.addColorStop(0, '#0f172a');
+  grad.addColorStop(0.55, '#1e293b');
+  grad.addColorStop(1, '#090d16');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1024, 320);
+
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(0, 0, 1024, 24);
+  ctx.fillRect(0, 296, 1024, 24);
+
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.45)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(10, 32, 1004, 256);
+
+  // DMTCL Circular "M" Metro Emblem
+  const cx = 122;
+  const cy = 160;
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 74, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#059669';
+  ctx.stroke();
+
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 58px "Inter", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('M', cx, cy + 3);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.roundRect(228, 48, 310, 40, 20);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 22px "Inter", sans-serif';
+  ctx.fillText(lineLabel, 248, 76);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 46px "Noto Sans Bengali", sans-serif';
+  ctx.fillText(stationNameBn, 228, 146);
+
+  ctx.fillStyle = '#fde68a';
+  ctx.font = '800 34px "Inter", sans-serif';
+  ctx.fillText(stationNameEn, 228, 204);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fillRect(228, 224, 756, 2);
+  ctx.fillStyle = '#bae6fd';
+  ctx.font = '700 24px "Inter", sans-serif';
+  ctx.fillText(subText, 228, 264);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+export function createMetroRouteMapTexture(
+  stationNameEn: string,
+  lineType: 'L6' | 'L5'
+): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 192;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, 1024, 192);
+  const lineCol = lineType === 'L6' ? '#059669' : '#be123c';
+  ctx.fillStyle = lineCol;
+  ctx.fillRect(0, 0, 1024, 34);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 20px "Inter", sans-serif';
+  ctx.fillText(
+    lineType === 'L6'
+      ? 'DHAKA METRO RAIL • MRT LINE-6 ROUTE MAP (UTTARA NORTH ↔ KAMALAPUR)'
+      : 'DHAKA METRO RAIL • MRT LINE-5 NORTHERN ROUTE (MIRPUR WEST ↔ NATUN BAZAR)',
+    24,
+    24
+  );
+
+  const stops =
+    lineType === 'L6'
+      ? ['UTTARA N.', 'CENTER', 'PALLABI', 'MIRPUR-10', 'FARMGATE', 'SHAHBAGH', 'MOTIJHEEL', 'KAMALAPUR']
+      : ['MIRPUR W.', 'MIRPUR-10', 'MOHAKHALI', 'GULSHAN-2', 'NATUN BAZAR'];
+
+  ctx.strokeStyle = lineCol;
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(70, 96);
+  ctx.lineTo(954, 96);
+  ctx.stroke();
+
+  stops.forEach((s, i) => {
+    const sx = 70 + (i / (stops.length - 1)) * 884;
+    const isHere = stationNameEn.toUpperCase().includes(s.slice(0, 6));
+    ctx.fillStyle = isHere ? '#facc15' : '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, 96, isHere ? 14 : 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = isHere ? '#dc2626' : lineCol;
+    ctx.stroke();
+
+    ctx.fillStyle = isHere ? '#b91c1c' : '#0f172a';
+    ctx.font = isHere ? 'bold 17px "Inter", sans-serif' : '600 15px "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(s, sx, i % 2 === 0 ? 142 : 166);
+  });
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+export function createJamunaFutureParkFacadeTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 360;
+  const ctx = canvas.getContext('2d')!;
+
+  const grad = ctx.createLinearGradient(0, 0, 1280, 360);
+  grad.addColorStop(0, '#1e1b4b');
+  grad.addColorStop(0.45, '#581c87');
+  grad.addColorStop(0.8, '#3b0764');
+  grad.addColorStop(1, '#090d16');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1280, 360);
+
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 12;
+  ctx.strokeRect(12, 12, 1256, 336);
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(26, 26, 1228, 308);
+
+  const glow = ctx.createRadialGradient(640, 140, 30, 640, 180, 560);
+  glow.addColorStop(0, 'rgba(250, 204, 21, 0.22)');
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 1280, 360);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 58px "Noto Sans Bengali", sans-serif';
+  ctx.fillText('যমুনা ফিউচার পার্ক', 640, 108);
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = '900 54px "Inter", sans-serif';
+  ctx.fillText('JAMUNA FUTURE PARK', 640, 188);
+
+  ctx.fillStyle = 'rgba(250, 204, 21, 0.55)';
+  ctx.fillRect(160, 214, 960, 3);
+
+  ctx.fillStyle = '#e0f2fe';
+  ctx.font = '700 26px "Inter", sans-serif';
+  ctx.fillText("SOUTH ASIA'S LARGEST MEGA MALL  •  300+ LUXURY STORES  •  IMAX CINEMAS  •  FUTURE WORLD", 640, 272);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 export function createHeritageSignboardTexture(
   titleBn: string,
   titleEn: string,
