@@ -35,6 +35,15 @@ class DhakaAudioEngine {
   private boatWakeGain: GainNode | null = null;
   private isRaining = false;
 
+  // Dhaka Metro Rail (MRT) VVVF Electric Traction & Steel Rail Rumble Nodes
+  private metroMasterGain: GainNode | null = null;
+  private metroMotorOsc: OscillatorNode | null = null;
+  private metroHarmonicOsc: OscillatorNode | null = null;
+  private metroMotorGain: GainNode | null = null;
+  private metroRailGain: GainNode | null = null;
+  private metroRailFilter: BiquadFilterNode | null = null;
+  private lastRailJointTime = 0;
+
   // Dhaka City Traffic Ambience (BGM) & Pedestrian Crowd Chatter
   private trafficGain: GainNode | null = null;
   private crowdGain: GainNode | null = null;
@@ -66,6 +75,7 @@ class DhakaAudioEngine {
       this.isInitialized = true;
       this.preloadAllAudioAssets();
       this.setupEngineSound();
+      this.setupMetroSound();
       this.setupRainAmbience();
       this.setupTrafficAmbience();
     } catch {
@@ -228,6 +238,115 @@ class DhakaAudioEngine {
 
     this.engineOsc.start();
     this.engineSubOsc.start();
+  }
+
+  private setupMetroSound() {
+    if (!this.ctx) return;
+
+    this.metroMasterGain = this.ctx.createGain();
+    this.metroMasterGain.gain.value = 0;
+    this.metroMasterGain.connect(this.ctx.destination);
+
+    // 1. VVVF Stepped PWM Electric Traction Motor Whine (Kawasaki / DMTCL MRT signature)
+    this.metroMotorOsc = this.ctx.createOscillator();
+    this.metroHarmonicOsc = this.ctx.createOscillator();
+    const motorFilter = this.ctx.createBiquadFilter();
+    this.metroMotorGain = this.ctx.createGain();
+
+    this.metroMotorOsc.type = 'triangle';
+    this.metroMotorOsc.frequency.value = 148;
+    this.metroHarmonicOsc.type = 'sine';
+    this.metroHarmonicOsc.frequency.value = 296;
+
+    motorFilter.type = 'bandpass';
+    motorFilter.frequency.value = 540;
+    motorFilter.Q.value = 0.85;
+
+    this.metroMotorGain.gain.value = 0.085;
+
+    this.metroMotorOsc.connect(motorFilter);
+    this.metroHarmonicOsc.connect(motorFilter);
+    motorFilter.connect(this.metroMotorGain);
+    this.metroMotorGain.connect(this.metroMasterGain);
+
+    this.metroMotorOsc.start();
+    this.metroHarmonicOsc.start();
+
+    // 2. Elevated Viaduct Bogie Wheel-on-Rail Rolling Rumble & Aerodynamic Rush
+    const dur = 3;
+    const bufSize = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let lastOut = 0;
+    for (let i = 0; i < bufSize; i++) {
+      const white = Math.random() * 2 - 1;
+      lastOut = (lastOut + 0.045 * white) / 1.045;
+      data[i] = lastOut * 2.8;
+    }
+    const railNoise = this.ctx.createBufferSource();
+    railNoise.buffer = buf;
+    railNoise.loop = true;
+
+    this.metroRailFilter = this.ctx.createBiquadFilter();
+    this.metroRailFilter.type = 'lowpass';
+    this.metroRailFilter.frequency.value = 260;
+
+    this.metroRailGain = this.ctx.createGain();
+    this.metroRailGain.gain.value = 0.28;
+
+    railNoise.connect(this.metroRailFilter);
+    this.metroRailFilter.connect(this.metroRailGain);
+    this.metroRailGain.connect(this.metroMasterGain);
+    railNoise.start();
+  }
+
+  /**
+   * Continuously updates Metro Rail VVVF motor whine, steel rail rumble,
+   * and rhythmic "ba-dum" rail-joint clacks for onboard rides and passing viaduct trains.
+   */
+  public updateMetroSound(active: boolean, intensity: number, speedMps: number) {
+    if (!this.ctx || !this.metroMasterGain || !this.metroMotorOsc || !this.metroHarmonicOsc || !this.metroRailFilter) {
+      return;
+    }
+
+    const now = this.ctx.currentTime;
+    const clampedIntensity = active ? Math.max(0, Math.min(1, intensity)) : 0;
+    const targetMaster = clampedIntensity * 0.42 * this.sfxVolume;
+    this.metroMasterGain.gain.setTargetAtTime(targetMaster, now, active ? 0.14 : 0.22);
+
+    if (!active || clampedIntensity <= 0.01) return;
+
+    const normSpd = Math.max(0, Math.min(1, speedMps / 35));
+    // Authentic VVVF Inverter pitch curve: glides smoothly across modulation steps
+    const motorFreq = 135 + normSpd * 285;
+    const harmStep = normSpd < 0.25 ? 2.0 : normSpd < 0.55 ? 2.5 : 1.75;
+    this.metroMotorOsc.frequency.setTargetAtTime(motorFreq, now, 0.08);
+    this.metroHarmonicOsc.frequency.setTargetAtTime(motorFreq * harmStep, now, 0.08);
+    this.metroRailFilter.frequency.setTargetAtTime(210 + normSpd * 520, now, 0.1);
+
+    // Rhythmic steel track joint "ba-dum... ba-dum..." cadence while moving fast
+    if (speedMps > 4.0 && clampedIntensity > 0.12 && this.sfxVolume > 0) {
+      const nowMs = performance.now();
+      const clackIntervalMs = Math.max(190, 920 - normSpd * 680);
+      if (nowMs - this.lastRailJointTime >= clackIntervalMs) {
+        this.lastRailJointTime = nowMs;
+        [0, 0.095].forEach((offset, pairIdx) => {
+          if (!this.ctx) return;
+          const clackOsc = this.ctx.createOscillator();
+          const clackGain = this.ctx.createGain();
+          clackOsc.type = 'triangle';
+          clackOsc.frequency.setValueAtTime(pairIdx === 0 ? 115 : 98, now + offset);
+          clackOsc.frequency.exponentialRampToValueAtTime(36, now + offset + 0.055);
+          const v = 0.065 * clampedIntensity * this.sfxVolume;
+          clackGain.gain.setValueAtTime(v, now + offset);
+          clackGain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.06);
+          clackOsc.connect(clackGain);
+          clackGain.connect(this.ctx.destination);
+          clackOsc.start(now + offset);
+          clackOsc.stop(now + offset + 0.065);
+        });
+      }
+    }
   }
 
   private setupTrafficAmbience() {
@@ -754,6 +873,8 @@ class DhakaAudioEngine {
       | 'bone_crack'
       | 'arterial_spray'
       | 'metro_chime'
+      | 'metro_door'
+      | 'metro_horn'
       | 'thunder'
   ) {
     this.init();
@@ -1305,6 +1426,68 @@ class DhakaAudioEngine {
       humGain.connect(this.ctx.destination);
       humOsc.start(now);
       humOsc.stop(now + 0.56);
+      return;
+    }
+
+    if (effect === 'metro_door') {
+      // Dhaka MRT door-closing warning beeps + pneumatic air seal hiss
+      [0, 0.19, 0.38].forEach((offset) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now + offset);
+        gain.gain.setValueAtTime(0.14 * this.sfxVolume, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.14);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.15);
+      });
+
+      const hissDur = 0.42;
+      const bufSize = Math.floor(this.ctx.sampleRate * hissDur);
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.sin((i / bufSize) * Math.PI);
+      }
+      const hiss = this.ctx.createBufferSource();
+      hiss.buffer = buf;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'bandpass';
+      hp.frequency.setValueAtTime(2200, now + 0.48);
+      hp.Q.value = 1.2;
+      const hissGain = this.ctx.createGain();
+      hissGain.gain.setValueAtTime(0.16 * this.sfxVolume, now + 0.48);
+      hissGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48 + hissDur);
+      hiss.connect(hp);
+      hp.connect(hissGain);
+      hissGain.connect(this.ctx.destination);
+      hiss.start(now + 0.48);
+      return;
+    }
+
+    if (effect === 'metro_horn') {
+      // Smooth modern electric MRT train dual-tone electric horn
+      [277.18, 349.23].forEach((freq) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const lp = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now);
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(920, now);
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.linearRampToValueAtTime(0.11 * this.sfxVolume, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+        osc.connect(lp);
+        lp.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.68);
+      });
       return;
     }
 

@@ -11743,6 +11743,7 @@ export class DhakaCityEngine {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('mousemove', this.onMouseMove);
     window.removeEventListener('mouseup', this.onMouseUp);
+    dhakaAudio.updateMetroSound(false, 0, 0);
     this.renderer.dispose();
   }
 
@@ -14460,19 +14461,33 @@ export class DhakaCityEngine {
 
     // Animate MRT Line-6 Dhaka Metro Rail gliding overhead between Uttara Diabari & Kamalapur
     const px = this.playerPos.x;
+    const py = this.playerPos.y;
     const pz = this.playerPos.z;
+    let nearestTrainDist = Infinity;
+    let nearestTrainSpeed = 0;
+
     if (this.metroTrainGroup) {
       const trainSpeed = Math.cos(t * 0.05);
       // Sweeps smoothly between Z = -1180 (Uttara Diabari) and Z = +440 (Kamalapur)
       this.metroTrainGroup.position.z = -370 + Math.sin(t * 0.05) * 810;
       this.metroTrainGroup.rotation.y = trainSpeed >= 0 ? 0 : Math.PI;
       this.metroTrainGroup.visible = Math.abs(this.metroTrainGroup.position.z - pz) < 320 && Math.abs(px - (-13.3)) < 260;
+      const d = Math.hypot(-13.3 - px, 13.2 - py, this.metroTrainGroup.position.z - pz);
+      if (d < nearestTrainDist) {
+        nearestTrainDist = d;
+        nearestTrainSpeed = Math.abs(trainSpeed) * 810 * 0.05;
+      }
     }
     if (this.metroTrainGroup2) {
       const trainSpeed2 = Math.cos(t * 0.05 + Math.PI);
       this.metroTrainGroup2.position.z = -370 + Math.sin(t * 0.05 + Math.PI) * 810;
       this.metroTrainGroup2.rotation.y = trainSpeed2 >= 0 ? 0 : Math.PI;
       this.metroTrainGroup2.visible = Math.abs(this.metroTrainGroup2.position.z - pz) < 320 && Math.abs(px - (-11.1)) < 260;
+      const d = Math.hypot(-11.1 - px, 13.2 - py, this.metroTrainGroup2.position.z - pz);
+      if (d < nearestTrainDist) {
+        nearestTrainDist = d;
+        nearestTrainSpeed = Math.abs(trainSpeed2) * 810 * 0.05;
+      }
     }
 
     // Animate MRT Line-5 Northern Route trains gliding East-West at Y = 17.5m along Z = -198
@@ -14482,12 +14497,32 @@ export class DhakaCityEngine {
       this.metroTrainLine5East.position.x = 80 + Math.sin(t * 0.055) * 500;
       this.metroTrainLine5East.rotation.y = line5SpeedEast >= 0 ? -Math.PI / 2 : Math.PI / 2;
       this.metroTrainLine5East.visible = Math.abs(this.metroTrainLine5East.position.x - px) < 320 && Math.abs(pz - (-199.2)) < 260;
+      const d = Math.hypot(this.metroTrainLine5East.position.x - px, 17.48 - py, -199.2 - pz);
+      if (d < nearestTrainDist) {
+        nearestTrainDist = d;
+        nearestTrainSpeed = Math.abs(line5SpeedEast) * 500 * 0.055;
+      }
     }
     if (this.metroTrainLine5West) {
       const line5SpeedWest = Math.cos(t * 0.055 + Math.PI);
       this.metroTrainLine5West.position.x = 80 + Math.sin(t * 0.055 + Math.PI) * 500;
       this.metroTrainLine5West.rotation.y = line5SpeedWest >= 0 ? -Math.PI / 2 : Math.PI / 2;
       this.metroTrainLine5West.visible = Math.abs(this.metroTrainLine5West.position.x - px) < 320 && Math.abs(pz - (-196.8)) < 260;
+      const d = Math.hypot(this.metroTrainLine5West.position.x - px, 17.48 - py, -196.8 - pz);
+      if (d < nearestTrainDist) {
+        nearestTrainDist = d;
+        nearestTrainSpeed = Math.abs(line5SpeedWest) * 500 * 0.055;
+      }
+    }
+
+    // Continuous Spatialized Dhaka Metro Rail Traction & Steel Track Rumble Audio
+    if (this.metroRide) {
+      dhakaAudio.updateMetroSound(true, 0.85, this.metroRide.speed);
+    } else if (nearestTrainDist < 120) {
+      const prox = Math.max(0, 1 - nearestTrainDist / 120);
+      dhakaAudio.updateMetroSound(true, Math.pow(prox, 1.55) * 0.56, nearestTrainSpeed);
+    } else {
+      dhakaAudio.updateMetroSound(false, 0, 0);
     }
 
     // Pulse nearby street-level MRT Boarding Portal Rings for instant visibility
@@ -14501,12 +14536,15 @@ export class DhakaCityEngine {
       }
     }
 
-    // Play authentic Japanese 4-tone arrival chime when near stations or passing trains
+    // Play authentic Japanese 4-tone arrival chime + electric horn when near stations or passing trains
     this.metroChimeTimer += 0.016;
-    if (this.metroChimeTimer > 28) {
+    if (this.metroChimeTimer > 22) {
       const distToLine6 = Math.abs(this.playerPos.x - (-12.2));
       const distToLine5 = Math.abs(this.playerPos.z - (-198));
-      if (distToLine6 < 45 || distToLine5 < 45) {
+      if (nearestTrainDist < 75) {
+        dhakaAudio.playSfx('metro_horn');
+        this.metroChimeTimer = 8;
+      } else if (distToLine6 < 45 || distToLine5 < 45) {
         dhakaAudio.playSfx('metro_chime');
         this.metroChimeTimer = 0;
       }
@@ -14628,6 +14666,7 @@ export class DhakaCityEngine {
     this.cameraPitch = Math.max(0.24, this.cameraPitch);
 
     dhakaAudio.playSfx('metro_chime');
+    dhakaAudio.playSfx('metro_door');
     useGameStore.getState().setActiveMetroRide({
       line: first.line,
       fromNameEn: fromSt.nameEn,
@@ -14723,7 +14762,9 @@ export class DhakaCityEngine {
 
     const store = useGameStore.getState();
     store.setActiveMetroRide(null);
+    dhakaAudio.updateMetroSound(false, 0, 0);
     dhakaAudio.playSfx('metro_chime');
+    dhakaAudio.playSfx('metro_door');
     store.showBanner({
       titleEn: `🚆 ARRIVED: ${toNameEn.toUpperCase()}`,
       titleBn: `🚆 পৌঁছে গেছেন: ${toNameBn}`,
