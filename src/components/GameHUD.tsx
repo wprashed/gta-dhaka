@@ -1427,9 +1427,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                     key={st.id}
                     disabled={isHere || blockedByPolice}
                     onClick={() => {
-                      if (spendTaka(st.fare, `Dhaka Metro Ticket -> ${st.nameEn}`, `মেট্রোরেল টিকিট -> ${st.nameBn}`)) {
-                        requestMetroRide(activeMetroModal, st.id);
+                      const paid = spendTaka(st.fare, `Dhaka Metro Ticket -> ${st.nameEn}`, `মেট্রোরেল টিকিট -> ${st.nameBn}`);
+                      if (!paid) {
+                        showBanner({
+                          titleEn: '🎫 RAPID PASS COURTESY RIDE',
+                          titleBn: '🎫 র‍্যাপিড পাস সৌজন্য যাত্রা',
+                          subtitleEn: 'Free emergency MRT boarding pass applied.',
+                          subtitleBn: 'পর্যাপ্ত টাকা না থাকায় ফ্রি র‍্যাপিড পাস ব্যবহার হয়েছে।',
+                          tone: 'gold',
+                        });
                       }
+                      requestMetroRide(activeMetroModal, st.id);
                     }}
                     className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-colors ${
                       isHere

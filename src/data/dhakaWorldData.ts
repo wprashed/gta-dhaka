@@ -326,16 +326,24 @@ export interface MetroStationStop {
   nameBn: string;
   x: number;
   z: number;
+  kioskX?: number;
+  kioskZ?: number;
   fare: number;
 }
 
 export const METRO_STATIONS: MetroStationStop[] = [
-  { id: 'mrt_uttara', line: 'L6', nameEn: 'Uttara North Terminal', nameBn: 'উত্তরা নর্থ টার্মিনাল', x: -16, z: -530, fare: 60 },
-  { id: 'mrt_mirpur10', line: 'L6', nameEn: 'Mirpur-10 Circle Hub', nameBn: 'মিরপুর-১০ গোলচত্বর', x: -16, z: -175, fare: 40 },
-  { id: 'mrt_farmgate', line: 'L6', nameEn: 'Farmgate Central', nameBn: 'ফার্মগেট স্টেশন', x: -16, z: -15, fare: 30 },
-  { id: 'mrt_shahbagh', line: 'L6', nameEn: 'Shahbagh / TSC', nameBn: 'শাহবাগ / টিএসসি', x: -16, z: 160, fare: 30 },
-  { id: 'mrt_motijheel', line: 'L6', nameEn: 'Motijheel / Kamalapur', nameBn: 'মতিঝিল / কমলাপুর', x: -16, z: 270, fare: 40 },
-  { id: 'mrt_gulshan', line: 'L5', nameEn: 'Gulshan-2 / Jamuna Link', nameBn: 'গুলশান-২ / যমুনা লিংক', x: 430, z: -204, fare: 50 },
+  { id: 'mrt_uttara_depot', line: 'L6', nameEn: 'Uttara North Depot', nameBn: 'উত্তরা উত্তর ডিপো', x: -16, z: -1150, kioskX: -20.2, kioskZ: -1124.6, fare: 70 },
+  { id: 'mrt_uttara_center', line: 'L6', nameEn: 'Uttara Center', nameBn: 'উত্তরা সেন্টার', x: -16, z: -850, kioskX: -20.2, kioskZ: -824.6, fare: 60 },
+  { id: 'mrt_uttara', line: 'L6', nameEn: 'Uttara North / Pallabi', nameBn: 'উত্তরা নর্থ / পল্লবী', x: -16, z: -530, kioskX: -20.2, kioskZ: -504.6, fare: 50 },
+  { id: 'mrt_mirpur10', line: 'L6', nameEn: 'Mirpur-10 Circle Hub', nameBn: 'মিরপুর-১০ গোলচত্বর', x: -16, z: -175, kioskX: -20.2, kioskZ: -200.4, fare: 40 },
+  { id: 'mrt_farmgate', line: 'L6', nameEn: 'Farmgate Central', nameBn: 'ফার্মগেট স্টেশন', x: -16, z: -15, kioskX: -20.2, kioskZ: 10.4, fare: 30 },
+  { id: 'mrt_shahbagh', line: 'L6', nameEn: 'Shahbagh / TSC', nameBn: 'শাহবাগ / টিএসসি', x: -16, z: 160, kioskX: -20.2, kioskZ: 185.4, fare: 30 },
+  { id: 'mrt_motijheel', line: 'L6', nameEn: 'Motijheel / Bank Plaza', nameBn: 'মতিঝিল ব্যাংক প্লাজা', x: -16, z: 270, kioskX: -20.2, kioskZ: 295.4, fare: 40 },
+  { id: 'mrt_kamalapur', line: 'L6', nameEn: 'Kamalapur Rail Terminal', nameBn: 'কমলাপুর রেল টার্মিনাল', x: -16, z: 450, kioskX: -20.2, kioskZ: 475.4, fare: 50 },
+  { id: 'mrt_mirpur_west', line: 'L5', nameEn: 'Mirpur West (Line-5)', nameBn: 'মিরপুর পশ্চিম (লাইন-৫)', x: -380, z: -204, kioskX: -399.6, kioskZ: -208.5, fare: 40 },
+  { id: 'mrt_mohakhali_n', line: 'L5', nameEn: 'Mohakhali North / Banani', nameBn: 'মহাখালী উত্তর / বনানী', x: 95, z: -204, kioskX: 75.4, kioskZ: -208.5, fare: 40 },
+  { id: 'mrt_gulshan2', line: 'L5', nameEn: 'Gulshan-2 Diplomatic', nameBn: 'গুলশান-২ ডিপ্লোম্যাটিক', x: 260, z: -204, kioskX: 240.4, kioskZ: -208.5, fare: 50 },
+  { id: 'mrt_gulshan', line: 'L5', nameEn: 'Natun Bazar / Jamuna Link', nameBn: 'নতুন বাজার / যমুনা লিংক', x: 430, z: -204, kioskX: 410.4, kioskZ: -208.5, fare: 50 },
 ];
 
 export const CNG_STATIONS: Array<{ x: number; z: number; isBlue: boolean; nameEn: string }> = [

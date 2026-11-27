@@ -96,6 +96,7 @@ export const PauseMenuModal: React.FC = () => {
     setVolumes,
     saveGameToStorage,
     showBanner,
+    openMetroModal,
   } = useGameStore();
 
   const [mapZoom, setMapZoom] = useState(1);
@@ -438,19 +439,8 @@ export const PauseMenuModal: React.FC = () => {
                   <line x1={-560} y1={240} x2={560} y2={240} stroke="#f59e0b" strokeWidth={5} strokeOpacity={0.55} />
 
                   {/* DHAKA MASS RAPID TRANSIT (MRT) SYSTEM OVERLAY */}
-                  <line x1={-12.2} y1={-920} x2={-12.2} y2={460} stroke="#10b981" strokeWidth={9} strokeDasharray="18 8" />
+                  <line x1={-12.2} y1={-1160} x2={-12.2} y2={460} stroke="#10b981" strokeWidth={9} strokeDasharray="18 8" />
                   <line x1={-460} y1={-198} x2={650} y2={-198} stroke="#f43f5e" strokeWidth={9} strokeDasharray="18 8" />
-
-                  {/* Intermediate Non-Boarding Viaduct Stations */}
-                  {[
-                    { x: -12.2, z: -850, color: '#10b981' },
-                    { x: -12.2, z: 450, color: '#10b981' },
-                    { x: -380, z: -198, color: '#f43f5e' },
-                    { x: 95, z: -198, color: '#f43f5e' },
-                    { x: 260, z: -198, color: '#f43f5e' },
-                  ].map((vs, idx) => (
-                    <circle key={`vs_${idx}`} cx={vs.x} cy={vs.z} r={9} fill={vs.color} fillOpacity={0.75} stroke="#cbd5e1" strokeWidth={2} />
-                  ))}
 
                   {/* Interactive Boardable Metro Rail Stations (Click to Set GPS Waypoint!) */}
                   {METRO_STATIONS.map((st) => {
@@ -711,7 +701,7 @@ export const PauseMenuModal: React.FC = () => {
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    🚆 {language === 'en' ? 'Metro (6)' : 'মেট্রো (৬)'}
+                    🚆 {language === 'en' ? `Metro (${METRO_STATIONS.length})` : `মেট্রো (${METRO_STATIONS.length})`}
                   </button>
                 </div>
               </div>
@@ -746,21 +736,31 @@ export const PauseMenuModal: React.FC = () => {
                           <button
                             onClick={() => {
                               setCustomWaypoint({
-                                x: st.x,
-                                z: st.z,
+                                x: st.kioskX ?? st.x,
+                                z: st.kioskZ ?? st.z,
                                 name: `${st.line} Metro: ${st.nameEn}`,
                               });
                               setGamePhase('playing');
                             }}
                             className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-cyan-300 border border-slate-700"
                           >
-                            GPS Pin
+                            GPS
                           </button>
                           <button
-                            onClick={() => requestTeleport(st.x, st.z)}
-                            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white shadow"
+                            onClick={() => requestTeleport(st.kioskX ?? st.x, st.kioskZ ?? st.z)}
+                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-extrabold text-white border border-slate-700"
                           >
                             {language === 'en' ? 'Go' : 'যান'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              requestTeleport(st.kioskX ?? st.x, st.kioskZ ?? st.z);
+                              openMetroModal(st.id);
+                              setGamePhase('playing');
+                            }}
+                            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white shadow"
+                          >
+                            🚆 {language === 'en' ? 'Ride' : 'উঠুন'}
                           </button>
                         </div>
                       </div>

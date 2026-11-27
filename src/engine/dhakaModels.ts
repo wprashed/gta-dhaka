@@ -510,20 +510,35 @@ export function createVehicleMesh(
     roughness: 0.2,
   });
 
-  const addWheel = (x: number, y: number, z: number, radiusScale = 1) => {
+  const addWheel = (x: number, y: number, z: number, radiusScale = 1, isSteer = false) => {
     const wGroup = new THREE.Group();
     wGroup.position.set(x, y, z);
     wGroup.scale.setScalar(radiusScale);
+    wGroup.userData.steer = isSteer;
 
     const tire = new THREE.Mesh(wheelGeo, tireMat);
     tire.castShadow = true;
     wGroup.add(tire);
 
+    const rimBarrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.22, 0.27, 16).rotateZ(Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: '#1e293b', metalness: 0.7, roughness: 0.35 })
+    );
+    wGroup.add(rimBarrel);
+
     const hub = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.2, 0.28, 12).rotateZ(Math.PI / 2),
+      new THREE.CylinderGeometry(0.11, 0.11, 0.29, 12).rotateZ(Math.PI / 2),
       alloyMat
     );
     wGroup.add(hub);
+
+    // 5 alloy wheel spokes so rolling rotation is clearly visible
+    for (let sp = 0; sp < 5; sp++) {
+      const angle = (sp * Math.PI * 2) / 5;
+      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.285, 0.032, 0.36), alloyMat);
+      spoke.rotation.x = angle;
+      wGroup.add(spoke);
+    }
 
     wGroup.name = 'wheel';
     group.add(wGroup);
@@ -1266,88 +1281,233 @@ export function createVehicleMesh(
   }
 
   if (type === 'pickup') {
-    const fallbackGroup = new THREE.Group();
-    const truckMat = new THREE.MeshPhysicalMaterial({
+    // SCULPTED 3D DHAKA DOUBLE-CAB 4x4 PICKUP TRUCK (Toyota Hilux / Tata Xenon Style)
+    const bodyMat = new THREE.MeshPhysicalMaterial({
       color: customColor || '#0284c7',
-      clearcoat: 0.8,
-      roughness: 0.3,
+      metalness: 0.38,
+      roughness: 0.24,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.12,
     });
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.85, 4.8), truckMat);
-    bed.position.set(0, 0.7, 0);
-    bed.castShadow = true;
-    fallbackGroup.add(bed);
+    const chassisMat = new THREE.MeshStandardMaterial({
+      color: '#0f172a',
+      roughness: 0.78,
+      metalness: 0.35,
+    });
+    const chromeMat = new THREE.MeshStandardMaterial({
+      color: '#e2e8f0',
+      metalness: 0.92,
+      roughness: 0.12,
+    });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: '#0f172a',
+      transparent: true,
+      opacity: 0.62,
+      metalness: 0.35,
+      roughness: 0.06,
+      reflectivity: 0.9,
+    });
 
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 1.9), truckMat);
-    cab.position.set(0, 1.45, 0.8);
-    cab.castShadow = true;
-    fallbackGroup.add(cab);
-    group.add(fallbackGroup);
+    // Side-profile ExtrudeGeometry silhouette in XY then rotated onto YZ along +Z forward
+    const pShape = new THREE.Shape();
+    pShape.moveTo(-2.45, 0.42); // Rear bumper bottom
+    pShape.lineTo(2.42, 0.42);  // Front bumper bottom
+    pShape.lineTo(2.46, 0.88);  // Grille top
+    pShape.lineTo(1.52, 1.06);  // Hood cowl
+    pShape.lineTo(0.88, 1.72);  // Raked windshield top
+    pShape.lineTo(-0.38, 1.72); // Double-cab roofline
+    pShape.lineTo(-0.56, 1.12); // Cab back window transition
+    pShape.lineTo(-2.45, 1.12); // Cargo bed rail top
+    pShape.closePath();
 
-    ensureModelLoaded('truck', (gltf) => {
-      const cloned = gltf.scene.clone(true);
-      cloned.scale.setScalar(1.05);
-      // CesiumMilkTruck.glb tires reach y = -0.07 in model space.
-      cloned.position.y = 0.074;
-      cloned.traverse((c) => {
-        if ((c as THREE.Mesh).isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-        }
+    const bodyGeo = new THREE.ExtrudeGeometry(pShape, {
+      depth: 1.88,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      steps: 1,
+      bevelSize: 0.045,
+      bevelThickness: 0.045,
+    });
+    bodyGeo.translate(0, 0, -0.94);
+    bodyGeo.rotateY(-Math.PI / 2);
+    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    group.add(bodyMesh);
+
+    // Lower 4x4 Steel Frame, Side Steps & Sculpted Fender Flares
+    const frameSlab = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.24, 4.78), chassisMat);
+    frameSlab.position.set(0, 0.40, -0.02);
+    group.add(frameSlab);
+
+    [-1.0, 1.0].forEach((sx) => {
+      const stepBar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 1.75), chassisMat);
+      stepBar.position.set(sx, 0.36, 0.25);
+      group.add(stepBar);
+
+      [1.48, -1.48].forEach((fz) => {
+        const arch = new THREE.Mesh(
+          new THREE.TorusGeometry(0.46, 0.085, 8, 16, Math.PI).rotateY(Math.PI / 2),
+          chassisMat
+        );
+        arch.position.set(sx * 0.94, 0.46, fz);
+        group.add(arch);
       });
-      group.remove(fallbackGroup);
-      group.add(cloned);
 
-      // 3D Human driver seated in the truck cab
-      if (hasDriver) {
-        ensureModelLoaded('readyplayerme1', (driverGltf) => {
-          if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
-          try {
-            const driver = SkeletonUtils.clone(driverGltf.scene);
-            driver.name = 'npc_driver';
-            driver.scale.setScalar(0.72);
-            driver.position.set(-0.38, 0.28, 0.35);
-            driver.rotation.y = 0;
-
-            const bones: Record<string, THREE.Bone> = {};
-            driver.traverse((c) => {
-              if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
-                c.visible = false;
-              }
-              if ((c as THREE.Bone).isBone) {
-                bones[c.name.replace(/^mixamorig[:_]?/, '')] = c as THREE.Bone;
-              }
-            });
-
-            const rig: CharacterLimbs = {
-              group: driver as THREE.Group,
-              leftLeg: new THREE.Object3D(),
-              rightLeg: new THREE.Object3D(),
-              leftArm: new THREE.Object3D(),
-              rightArm: new THREE.Object3D(),
-              head: new THREE.Object3D(),
-              weaponMesh: new THREE.Group(),
-              rpmRig: {
-                phase: 0,
-                leftUpLeg: bones.LeftUpLeg ? { bone: bones.LeftUpLeg, rest: bones.LeftUpLeg.quaternion.clone() } : undefined,
-                rightUpLeg: bones.RightUpLeg ? { bone: bones.RightUpLeg, rest: bones.RightUpLeg.quaternion.clone() } : undefined,
-                leftLeg: bones.LeftLeg ? { bone: bones.LeftLeg, rest: bones.LeftLeg.quaternion.clone() } : undefined,
-                rightLeg: bones.RightLeg ? { bone: bones.RightLeg, rest: bones.RightLeg.quaternion.clone() } : undefined,
-                leftFoot: bones.LeftFoot ? { bone: bones.LeftFoot, rest: bones.LeftFoot.quaternion.clone() } : undefined,
-                rightFoot: bones.RightFoot ? { bone: bones.RightFoot, rest: bones.RightFoot.quaternion.clone() } : undefined,
-                leftArm: bones.LeftArm ? { bone: bones.LeftArm, rest: bones.LeftArm.quaternion.clone() } : undefined,
-                rightArm: bones.RightArm ? { bone: bones.RightArm, rest: bones.RightArm.quaternion.clone() } : undefined,
-                leftForeArm: bones.LeftForeArm ? { bone: bones.LeftForeArm, rest: bones.LeftForeArm.quaternion.clone() } : undefined,
-                rightForeArm: bones.RightForeArm ? { bone: bones.RightForeArm, rest: bones.RightForeArm.quaternion.clone() } : undefined,
-                spine: bones.Spine ? { bone: bones.Spine, rest: bones.Spine.quaternion.clone() } : undefined,
-              },
-            };
-            setDrivingPose(rig, 'car', 0, 0, 0, 0.016);
-
-            cloned.add(driver);
-          } catch {}
-        });
-      }
+      // Side Cabin Windows, B-pillar & Wing Mirrors
+      const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.48, 1.32), glassMat);
+      sideGlass.position.set(sx * 0.96, 1.36, 0.22);
+      group.add(sideGlass);
+      const bPillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.52, 0.12), chassisMat);
+      bPillar.position.set(sx * 0.965, 1.36, 0.18);
+      group.add(bPillar);
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.11), chassisMat);
+      mirror.position.set(sx * 1.06, 1.18, 0.92);
+      group.add(mirror);
     });
+
+    // Front Slatted Chrome Radiator Grille & Xenon Headlights
+    const grilleSurround = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.36, 0.10), chromeMat);
+    grilleSurround.position.set(0, 0.80, 2.47);
+    group.add(grilleSurround);
+    for (let g = -0.10; g <= 0.10; g += 0.10) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.04, 0.12), chassisMat);
+      slat.position.set(0, 0.80 + g, 2.48);
+      group.add(slat);
+    }
+
+    const headMat = new THREE.MeshBasicMaterial({ color: '#fef9c3' });
+    const tailMat = new THREE.MeshBasicMaterial({ color: '#ef4444' });
+    const amberMat = new THREE.MeshBasicMaterial({ color: '#f59e0b' });
+    [-0.78, 0.78].forEach((lx) => {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.08), headMat);
+      hl.name = 'accent_headlight';
+      hl.position.set(lx, 0.84, 2.46);
+      group.add(hl);
+
+      const fog = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.06, 10).rotateX(Math.PI / 2), headMat);
+      fog.position.set(lx * 0.88, 0.54, 2.48);
+      group.add(fog);
+
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.34, 0.08), tailMat);
+      tl.name = 'accent_taillight';
+      tl.position.set(lx * 1.12, 0.86, -2.47);
+      group.add(tl);
+    });
+
+    // Raked Front Windshield & Rear Cab Glass
+    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.68, 0.06), glassMat);
+    windshield.position.set(0, 1.38, 1.19);
+    windshield.rotation.x = -0.68;
+    group.add(windshield);
+
+    const rearWin = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.48, 0.06), glassMat);
+    rearWin.position.set(0, 1.40, -0.46);
+    rearWin.rotation.x = 0.25;
+    group.add(rearWin);
+
+    // Open Ribbed Cargo Bed Interior + Chrome Roll Bar + Utility Cargo Crates
+    const bedLiner = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.36, 1.72), chassisMat);
+    bedLiner.position.set(0, 1.00, -1.48);
+    group.add(bedLiner);
+
+    const rollArchTop = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.56, 8).rotateZ(Math.PI / 2), chromeMat);
+    rollArchTop.position.set(0, 1.68, -0.70);
+    group.add(rollArchTop);
+    [-0.76, 0.76].forEach((rx) => {
+      const upright = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.62, 8), chromeMat);
+      upright.position.set(rx, 1.38, -0.70);
+      const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.92, 8), chromeMat);
+      brace.position.set(rx, 1.38, -1.08);
+      brace.rotation.x = -0.72;
+      group.add(upright, brace);
+    });
+    const cabBeacon = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.14), amberMat);
+    cabBeacon.position.set(0, 1.75, -0.05);
+    group.add(cabBeacon);
+
+    const crate1 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.95, 0.45, 0.85),
+      new THREE.MeshStandardMaterial({ color: '#92400e', roughness: 0.85 })
+    );
+    crate1.position.set(-0.22, 1.26, -1.45);
+    const tarp = new THREE.Mesh(
+      new THREE.BoxGeometry(1.52, 0.24, 0.72),
+      new THREE.MeshStandardMaterial({ color: '#1e3a8a', roughness: 0.9 })
+    );
+    tarp.position.set(0.06, 1.20, -2.02);
+    group.add(crate1, tarp);
+
+    // Front & Rear Bangla Number Plates + Bumpers
+    const frontBump = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.22, 0.16), chassisMat);
+    frontBump.position.set(0, 0.50, 2.48);
+    const rearBump = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.22, 0.18), chromeMat);
+    rearBump.position.set(0, 0.50, -2.48);
+    group.add(frontBump, rearBump);
+
+    const plateStr = `ঢাকা মেট্রো-গ ১৮-${3100 + (seed % 9) * 37}`;
+    const pTex = createBanglaNumberPlateTexture(plateStr, false);
+    const pMat = new THREE.MeshBasicMaterial({ map: pTex });
+    const frontPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.04), pMat);
+    frontPlate.position.set(0, 0.52, 2.57);
+    const rearPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.04), pMat);
+    rearPlate.position.set(0, 0.68, -2.51);
+    group.add(frontPlate, rearPlate);
+
+    // 4 Deep-Tread All-Terrain Alloy Wheels (Spinning & Front-Steerable!)
+    addWheel(-0.94, 0.40, 1.48, 1.15, true);
+    addWheel(0.94, 0.40, 1.48, 1.15, true);
+    addWheel(-0.94, 0.40, -1.48, 1.15, false);
+    addWheel(0.94, 0.40, -1.48, 1.15, false);
+
+    // 3D Human driver seated in the pickup double-cab
+    if (hasDriver) {
+      ensureModelLoaded('readyplayerme1', (driverGltf) => {
+        if (!hasDriver || (group as any).isPlayerDriven || group.userData?.noDriver) return;
+        try {
+          const driver = SkeletonUtils.clone(driverGltf.scene);
+          driver.name = 'npc_driver';
+          driver.scale.setScalar(0.72);
+          driver.position.set(-0.42, 0.22, 0.36);
+
+          const bones: Record<string, THREE.Bone> = {};
+          driver.traverse((c) => {
+            if (c.name === 'Mesh' || c.name === 'Wolf3D_Headwear') {
+              c.visible = false;
+            }
+            if ((c as THREE.Bone).isBone) {
+              bones[c.name.replace(/^mixamorig[:_]?/, '')] = c as THREE.Bone;
+            }
+          });
+
+          const rig: CharacterLimbs = {
+            group: driver as THREE.Group,
+            leftLeg: new THREE.Object3D(),
+            rightLeg: new THREE.Object3D(),
+            leftArm: new THREE.Object3D(),
+            rightArm: new THREE.Object3D(),
+            head: new THREE.Object3D(),
+            weaponMesh: new THREE.Group(),
+            rpmRig: {
+              phase: 0,
+              leftUpLeg: bones.LeftUpLeg ? { bone: bones.LeftUpLeg, rest: bones.LeftUpLeg.quaternion.clone() } : undefined,
+              rightUpLeg: bones.RightUpLeg ? { bone: bones.RightUpLeg, rest: bones.RightUpLeg.quaternion.clone() } : undefined,
+              leftLeg: bones.LeftLeg ? { bone: bones.LeftLeg, rest: bones.LeftLeg.quaternion.clone() } : undefined,
+              rightLeg: bones.RightLeg ? { bone: bones.RightLeg, rest: bones.RightLeg.quaternion.clone() } : undefined,
+              leftFoot: bones.LeftFoot ? { bone: bones.LeftFoot, rest: bones.LeftFoot.quaternion.clone() } : undefined,
+              rightFoot: bones.RightFoot ? { bone: bones.RightFoot, rest: bones.RightFoot.quaternion.clone() } : undefined,
+              leftArm: bones.LeftArm ? { bone: bones.LeftArm, rest: bones.LeftArm.quaternion.clone() } : undefined,
+              rightArm: bones.RightArm ? { bone: bones.RightArm, rest: bones.RightArm.quaternion.clone() } : undefined,
+              leftForeArm: bones.LeftForeArm ? { bone: bones.LeftForeArm, rest: bones.LeftForeArm.quaternion.clone() } : undefined,
+              rightForeArm: bones.RightForeArm ? { bone: bones.RightForeArm, rest: bones.RightForeArm.quaternion.clone() } : undefined,
+              spine: bones.Spine ? { bone: bones.Spine, rest: bones.Spine.quaternion.clone() } : undefined,
+            },
+          };
+          setDrivingPose(rig, 'car', 0, 0, 0, 0.016);
+          group.add(driver);
+        } catch {}
+      });
+    }
 
     return group;
   }
@@ -1695,12 +1855,12 @@ export function createVehicleMesh(
     group.add(busPlateRear);
 
     // Heavy-duty commercial bus wheels with dual rear wheels on both sides (Tata / Ashok Leyland layout)
-    addWheel(-1.32, 0.48, 2.65, 1.45);
-    addWheel(1.32, 0.48, 2.65, 1.45);
-    addWheel(-1.18, 0.48, -2.55, 1.45);
-    addWheel(-1.42, 0.48, -2.55, 1.45);
-    addWheel(1.18, 0.48, -2.55, 1.45);
-    addWheel(1.42, 0.48, -2.55, 1.45);
+    addWheel(-1.32, 0.48, 2.65, 1.45, true);
+    addWheel(1.32, 0.48, 2.65, 1.45, true);
+    addWheel(-1.18, 0.48, -2.55, 1.45, false);
+    addWheel(-1.42, 0.48, -2.55, 1.45, false);
+    addWheel(1.18, 0.48, -2.55, 1.45, false);
+    addWheel(1.42, 0.48, -2.55, 1.45, false);
 
     // Bus driver seated in the elevated front driver cabin (traffic only)
     if (hasDriver) {
@@ -1766,61 +1926,142 @@ export function createVehicleMesh(
   }
 
   if (type === 'boat') {
+    // SLEEK SCULPTED 3D HATIRJHEEL & BURIGANGA SPEEDBOAT / EXPRESS WATER CRUISER
     const hullMat = new THREE.MeshPhysicalMaterial({
       color: customColor || '#0284c7',
-      roughness: 0.25,
-      metalness: 0.15,
-      clearcoat: 0.8,
+      roughness: 0.22,
+      metalness: 0.18,
+      clearcoat: 0.9,
     });
-    const whiteDeckMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.35 });
-    const canopyMat = new THREE.MeshStandardMaterial({ color: '#0369a1', roughness: 0.5 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: '#7dd3fc', roughness: 0.1, transparent: true, opacity: 0.55 });
-    const woodDeckMat = new THREE.MeshStandardMaterial({ color: '#92400e', roughness: 0.8 });
+    const antiFoulMat = new THREE.MeshStandardMaterial({ color: '#991b1b', roughness: 0.48 });
+    const whiteGelMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.28, clearcoat: 0.6 } as any);
+    const canopyMat = new THREE.MeshStandardMaterial({ color: '#0c4a6e', roughness: 0.58, side: THREE.DoubleSide });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.92, roughness: 0.14 });
+    const teakDeckMat = new THREE.MeshStandardMaterial({ color: '#854d0e', roughness: 0.72 });
+    const leatherMat = new THREE.MeshStandardMaterial({ color: '#e7e5e4', roughness: 0.55 });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: '#0c4a6e',
+      roughness: 0.08,
+      metalness: 0.25,
+      transparent: true,
+      opacity: 0.56,
+    });
 
-    // Lower V-hull
-    const lowerHull = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.72, 5.6), hullMat);
-    lowerHull.position.set(0, 0.36, -0.1);
-    lowerHull.castShadow = true;
+    // Contoured tapered V-hull top-down planform extruded upward (Nose +Z, Transom -Z)
+    const hullShape = new THREE.Shape();
+    hullShape.moveTo(0, 3.65);
+    hullShape.quadraticCurveTo(0.85, 2.5, 1.18, 0.9);
+    hullShape.lineTo(1.14, -2.55);
+    hullShape.quadraticCurveTo(0.65, -2.75, 0, -2.75);
+    hullShape.quadraticCurveTo(-0.65, -2.75, -1.14, -2.55);
+    hullShape.lineTo(-1.18, 0.9);
+    hullShape.quadraticCurveTo(-0.85, 2.5, 0, 3.65);
+
+    const upperHullGeo = new THREE.ExtrudeGeometry(hullShape, {
+      depth: 0.64,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      steps: 1,
+      bevelSize: 0.04,
+      bevelThickness: 0.06,
+    });
+    upperHullGeo.rotateX(Math.PI / 2);
+    const upperHull = new THREE.Mesh(upperHullGeo, hullMat);
+    upperHull.position.y = 0.78;
+    upperHull.castShadow = true;
+    group.add(upperHull);
+
+    // Lower V-hull red anti-fouling boot & white waterline stripe
+    const lowerGeo = upperHullGeo.clone();
+    lowerGeo.scale(0.95, 0.45, 0.96);
+    const lowerHull = new THREE.Mesh(lowerGeo, antiFoulMat);
+    lowerHull.position.y = 0.24;
     group.add(lowerHull);
 
-    // Pointed bow prow (+Z)
-    const bow = new THREE.Mesh(new THREE.ConeGeometry(1.18, 1.8, 4), hullMat);
-    bow.rotation.x = Math.PI / 2;
-    bow.rotation.y = Math.PI / 4;
-    bow.position.set(0, 0.42, 3.15);
-    group.add(bow);
+    const trimGeo = upperHullGeo.clone();
+    trimGeo.scale(1.015, 0.14, 1.01);
+    const waterlineTrim = new THREE.Mesh(trimGeo, whiteGelMat);
+    waterlineTrim.position.y = 0.34;
+    group.add(waterlineTrim);
 
-    // Cabin deck & side gunwales
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.14, 5.2), woodDeckMat);
-    deck.position.set(0, 0.72, -0.1);
+    // Teakwood cockpit deck + White molded cockpit coaming
+    const deckGeo = upperHullGeo.clone();
+    deckGeo.scale(0.84, 0.16, 0.88);
+    const deck = new THREE.Mesh(deckGeo, teakDeckMat);
+    deck.position.set(0, 0.86, -0.05);
     group.add(deck);
 
-    // Passenger canopy roof & steel posts
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.16, 4.0), canopyMat);
-    roof.position.set(0, 2.05, -0.3);
+    // Cushioned Bow V-Lounge & Aft Stern Passenger Bench + Captain Helm Seat
+    const sternSeat = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.42, 0.56), leatherMat);
+    sternSeat.position.set(0, 1.02, -1.95);
+    const sternBack = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.36, 0.14), leatherMat);
+    sternBack.position.set(0, 1.32, -2.18);
+    const helmSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.48, 0.52), leatherMat);
+    helmSeat.position.set(-0.42, 1.06, 0.22);
+    const companionSeat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.48, 0.52), leatherMat);
+    companionSeat.position.set(0.42, 1.06, 0.22);
+    group.add(sternSeat, sternBack, helmSeat, companionSeat);
+
+    // Helm Console, Steering Wheel & Wrap-Around Smoked Windshield
+    const consoleBody = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.54, 0.56), whiteGelMat);
+    consoleBody.position.set(0, 1.08, 0.96);
+    const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.024, 6, 16), chromeMat);
+    wheelRing.position.set(-0.42, 1.24, 0.66);
+    wheelRing.rotation.x = 0.42;
+    const shieldCenter = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.54, 0.06), glassMat);
+    shieldCenter.position.set(0, 1.56, 1.12);
+    shieldCenter.rotation.x = -0.52;
+    [-0.86, 0.86].forEach((sx) => {
+      const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.50, 0.82), glassMat);
+      sideGlass.position.set(sx, 1.54, 0.72);
+      sideGlass.rotation.z = sx > 0 ? 0.18 : -0.18;
+      group.add(sideGlass);
+    });
+    group.add(consoleBody, wheelRing, shieldCenter);
+
+    // Canvas Bimini Sun-Canopy with Anodized Stainless Arch Struts
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.96, 0.10, 2.35), canopyMat);
+    roof.position.set(0, 2.22, -0.42);
     roof.castShadow = true;
     group.add(roof);
-    [-0.95, 0.95].forEach((px) => {
-      [-2.0, 0, 1.5].forEach((pz) => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.32, 6), whiteDeckMat);
-        post.position.set(px, 1.38, pz);
-        group.add(post);
+    [-0.90, 0.90].forEach((px) => {
+      [-1.4, 0.5].forEach((pz) => {
+        const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 1.38, 6), chromeMat);
+        strut.position.set(px, 1.54, pz);
+        strut.rotation.x = pz < 0 ? 0.14 : -0.14;
+        group.add(strut);
       });
+      // Stainless bow grab rails
+      const bowRail = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.85, 6).rotateX(Math.PI / 2), chromeMat);
+      bowRail.position.set(px * 0.65, 1.02, 2.35);
+      bowRail.rotation.y = px > 0 ? -0.34 : 0.34;
+      group.add(bowRail);
     });
 
-    // Front helm windshield & navigation lights
-    const helm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.75, 0.45), whiteDeckMat);
-    helm.position.set(0, 1.08, 1.55);
-    group.add(helm);
-    const shield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.58, 0.08), glassMat);
-    shield.position.set(0, 1.62, 1.65);
-    shield.rotation.x = -0.25;
-    group.add(shield);
+    // Port (Red) & Starboard (Green) Marine Navigation Lights + Stern Anchor Mast
+    const portLight = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#ef4444' }));
+    portLight.position.set(-0.96, 0.92, 1.45);
+    const stbdLight = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#22c55e' }));
+    stbdLight.position.set(0.96, 0.92, 1.45);
+    const mastRod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.85, 6), chromeMat);
+    mastRod.position.set(0, 2.62, -1.45);
+    const mastBeacon = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#fef9c3' }));
+    mastBeacon.position.set(0, 3.05, -1.45);
+    group.add(portLight, stbdLight, mastRod, mastBeacon);
 
-    // Rear outboard engine housing
-    const outboard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.78, 0.5), new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.4 }));
-    outboard.position.set(0, 0.75, -3.05);
-    group.add(outboard);
+    // Detailed Sculpted High-Power Outboard Engine + 3-Blade Bronze Propeller
+    const cowl = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.56, 0.62), new THREE.MeshPhysicalMaterial({ color: '#0f172a', clearcoat: 0.85, roughness: 0.25 }));
+    cowl.position.set(0, 0.98, -2.92);
+    const cowlStripe = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.08, 0.58), chromeMat);
+    cowlStripe.position.set(0, 1.02, -2.92);
+    const driveLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.72, 0.24), new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.4 }));
+    driveLeg.position.set(0, 0.36, -2.96);
+    const propHub = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 0.20, 8).rotateX(Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: '#b45309', metalness: 0.85, roughness: 0.25 })
+    );
+    propHub.position.set(0, 0.06, -3.10);
+    group.add(cowl, cowlStripe, driveLeg, propHub);
 
     return group;
   }
@@ -4528,58 +4769,235 @@ export function createStreetStallMesh(
 }
 
 export function createBurigangaLaunchMesh(): THREE.Group {
+  // AUTHENTIC MULTI-DECK SADARGHAT PASSENGER LAUNCH SHIP (এম.ভি. সুন্দরবন / সুরভী স্টাইল)
   const group = new THREE.Group();
-  const hullMat = new THREE.MeshStandardMaterial({
+  const hullNavyMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.42, metalness: 0.25 });
+  const antiFoulRedMat = new THREE.MeshStandardMaterial({ color: '#991b1b', roughness: 0.55 });
+  const whiteDeckMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.34 });
+  const cabinWallMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.46 });
+  const tealLiveryMat = new THREE.MeshStandardMaterial({ color: '#0f766e', roughness: 0.36 });
+  const greenLiveryMat = new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.4 });
+  const chromeRailMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.85, roughness: 0.22 });
+  const darkWindowMat = new THREE.MeshPhysicalMaterial({
     color: '#0f172a',
-    roughness: 0.45,
+    roughness: 0.08,
+    metalness: 0.45,
+    reflectivity: 0.9,
   });
-  const deckMat = new THREE.MeshStandardMaterial({
-    color: '#f8fafc',
-    roughness: 0.3,
+  const warmCabinMat = new THREE.MeshBasicMaterial({ color: '#fde68a' });
+
+  // 1. Sculpted Contoured Ship Planform Hull (Bow at +Z: +19m tapering to Stern -Z: -16.5m)
+  const shipShape = new THREE.Shape();
+  shipShape.moveTo(0, 19.0);
+  shipShape.quadraticCurveTo(3.3, 14.2, 4.45, 7.5);
+  shipShape.lineTo(4.45, -14.8);
+  shipShape.quadraticCurveTo(3.8, -16.5, 0, -16.5);
+  shipShape.quadraticCurveTo(-3.8, -16.5, -4.45, -14.8);
+  shipShape.lineTo(-4.45, 7.5);
+  shipShape.quadraticCurveTo(-3.3, 14.2, 0, 19.0);
+
+  const mainHullGeo = new THREE.ExtrudeGeometry(shipShape, {
+    depth: 1.75,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: 0.14,
+    bevelThickness: 0.16,
   });
-  const trimMat = new THREE.MeshStandardMaterial({ color: '#0d9488' });
-  const windowGlow = new THREE.MeshBasicMaterial({ color: '#fef08a' });
+  mainHullGeo.rotateX(Math.PI / 2);
+  const hullUpper = new THREE.Mesh(mainHullGeo, hullNavyMat);
+  hullUpper.position.y = 2.05;
+  hullUpper.castShadow = true;
+  hullUpper.receiveShadow = true;
+  group.add(hullUpper);
 
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(8.5, 2.4, 28), hullMat);
-  hull.position.set(0, 0.8, 0);
-  group.add(hull);
+  // Lower crimson anti-fouling keel + white Plimsoll waterline trim
+  const lowerHullGeo = mainHullGeo.clone();
+  lowerHullGeo.scale(0.95, 0.48, 0.97);
+  const hullLower = new THREE.Mesh(lowerHullGeo, antiFoulRedMat);
+  hullLower.position.y = 0.48;
+  group.add(hullLower);
 
-  const bow = new THREE.Mesh(
-    new THREE.ConeGeometry(6.0, 8.0, 4)
-      .rotateX(Math.PI / 2)
-      .rotateZ(Math.PI / 4),
-    hullMat
+  const waterlineGeo = mainHullGeo.clone();
+  waterlineGeo.scale(1.015, 0.14, 1.01);
+  const waterlineStripe = new THREE.Mesh(waterlineGeo, whiteDeckMat);
+  waterlineStripe.position.y = 0.68;
+  group.add(waterlineStripe);
+
+  // Bow Anchor Winch, Bulwark & Mooring Bollards on Foredeck
+  const foreDeck = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.35, 3.6), whiteDeckMat);
+  foreDeck.position.set(0, 2.24, 12.2);
+  const anchorWinch = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.1, 10).rotateZ(Math.PI / 2), chromeRailMat);
+  anchorWinch.position.set(0, 2.65, 13.6);
+  const bowMast = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 5.2, 8), whiteDeckMat);
+  bowMast.position.set(0, 4.6, 15.6);
+  const bowLamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), warmCabinMat);
+  bowLamp.position.set(0, 7.2, 15.6);
+  group.add(foreDeck, anchorWinch, bowMast, bowLamp);
+
+  [-2.6, 2.6].forEach((bx) => {
+    [-10, 0, 10].forEach((bz) => {
+      const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.45, 8), hullNavyMat);
+      bollard.position.set(bx, 2.35, bz);
+      group.add(bollard);
+    });
+  });
+
+  // Helper to build promenade safety railings & stanchions around a rectangular deck
+  const addDeckRailings = (halfW: number, deckY: number, zMin: number, zMax: number) => {
+    const railH = 0.92;
+    [-halfW, halfW].forEach((rx) => {
+      const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, zMax - zMin), whiteDeckMat);
+      topRail.position.set(rx, deckY + railH, (zMin + zMax) * 0.5);
+      const midRail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, zMax - zMin), chromeRailMat);
+      midRail.position.set(rx, deckY + railH * 0.5, (zMin + zMax) * 0.5);
+      group.add(topRail, midRail);
+
+      for (let rz = zMin; rz <= zMax + 0.05; rz += 2.4) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, railH, 0.07), whiteDeckMat);
+        post.position.set(rx, deckY + railH * 0.5, rz);
+        group.add(post);
+      }
+    });
+    [zMin, zMax].forEach((endZ) => {
+      const endRail = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2, 0.07, 0.08), whiteDeckMat);
+      endRail.position.set(0, deckY + railH, endZ);
+      const endMid = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2, 0.05, 0.06), chromeRailMat);
+      endMid.position.set(0, deckY + railH * 0.5, endZ);
+      group.add(endRail, endMid);
+    });
+  };
+
+  // 2. Deck 1: Main Passenger Promenade Deck (Y = 2.15..4.35)
+  const deck1Floor = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.22, 26.5), tealLiveryMat);
+  deck1Floor.position.set(0, 2.22, -1.2);
+  const cabin1Core = new THREE.Mesh(new THREE.BoxGeometry(6.8, 2.1, 22.8), cabinWallMat);
+  cabin1Core.position.set(0, 3.32, -1.0);
+  cabin1Core.castShadow = true;
+  const trim1 = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.26, 23.0), tealLiveryMat);
+  trim1.position.set(0, 4.24, -1.0);
+  group.add(deck1Floor, cabin1Core, trim1);
+  addDeckRailings(4.15, 2.33, -14.2, 11.8);
+
+  // Individual recessed framed cabin windows along Port & Starboard on Deck 1
+  for (let wz = -10.8; wz <= 8.8; wz += 2.2) {
+    [-3.43, 3.43].forEach((wx) => {
+      const winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.86, 1.38), hullNavyMat);
+      winFrame.position.set(wx, 3.42, wz);
+      const paneMat = Math.abs(Math.round(wz)) % 2 === 0 ? warmCabinMat : darkWindowMat;
+      const winPane = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.70, 1.20), paneMat);
+      winPane.position.set(wx, 3.42, wz);
+      group.add(winFrame, winPane);
+    });
+  }
+
+  // 3. Deck 2: VIP Cabin Promenade Deck (Y = 4.35..6.55)
+  const deck2Floor = new THREE.Mesh(new THREE.BoxGeometry(7.8, 0.22, 22.6), whiteDeckMat);
+  deck2Floor.position.set(0, 4.46, -1.2);
+  const cabin2Core = new THREE.Mesh(new THREE.BoxGeometry(6.1, 2.0, 18.8), cabinWallMat);
+  cabin2Core.position.set(0, 5.52, -1.0);
+  cabin2Core.castShadow = true;
+  const trim2 = new THREE.Mesh(new THREE.BoxGeometry(6.3, 0.24, 19.0), greenLiveryMat);
+  trim2.position.set(0, 6.40, -1.0);
+  group.add(deck2Floor, cabin2Core, trim2);
+  addDeckRailings(3.80, 4.57, -12.2, 9.8);
+
+  for (let wz = -8.6; wz <= 6.8; wz += 2.2) {
+    [-3.08, 3.08].forEach((wx) => {
+      const winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.80, 1.32), hullNavyMat);
+      winFrame.position.set(wx, 5.62, wz);
+      const paneMat = Math.abs(Math.round(wz)) % 3 === 0 ? warmCabinMat : darkWindowMat;
+      const winPane = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.64, 1.14), paneMat);
+      winPane.position.set(wx, 5.62, wz);
+      group.add(winFrame, winPane);
+    });
+  }
+
+  // Bangla Vessel Nameboard Banner along Deck 2 Side ("এম.ভি. সুন্দরবন-১২")
+  const nameTex = createBanglaSignTexture(2);
+  const nameMat = new THREE.MeshBasicMaterial({ map: nameTex });
+  [-3.14, 3.14].forEach((nx) => {
+    const nameSign = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.56, 5.4), nameMat);
+    nameSign.position.set(nx, 4.92, 4.2);
+    group.add(nameSign);
+  });
+
+  // Exterior Companionway Steel Stairs between Decks 1 & 2
+  [-3.68, 3.68].forEach((sx) => {
+    const stair1 = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.16, 3.2), chromeRailMat);
+    stair1.position.set(sx, 3.38, -11.4);
+    stair1.rotation.x = 0.68;
+    group.add(stair1);
+  });
+
+  // 4. Deck 3: Captain's Wheelhouse Bridge & Wing Decks (Y = 6.55..8.75)
+  const sunDeck = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.22, 19.6), whiteDeckMat);
+  sunDeck.position.set(0, 6.62, -1.0);
+  group.add(sunDeck);
+  addDeckRailings(3.32, 6.73, -10.6, 8.6);
+
+  const wheelhouse = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.9, 6.4), tealLiveryMat);
+  wheelhouse.position.set(0, 7.65, 4.6);
+  wheelhouse.castShadow = true;
+  const bridgeRoof = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.24, 7.0), whiteDeckMat);
+  bridgeRoof.position.set(0, 8.68, 4.6);
+  // Wrap-around dark reflective bridge panoramic windows
+  const bridgeFrontGlass = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.78, 0.10), darkWindowMat);
+  bridgeFrontGlass.position.set(0, 7.82, 7.82);
+  bridgeFrontGlass.rotation.x = -0.18;
+  [-2.64, 2.64].forEach((bx) => {
+    const sideBridgeGlass = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.75, 4.2), darkWindowMat);
+    sideBridgeGlass.position.set(bx, 7.82, 4.8);
+    group.add(sideBridgeGlass);
+  });
+  group.add(wheelhouse, bridgeRoof, bridgeFrontGlass);
+
+  // Port (Red) & Starboard (Green) Bridge Wing Navigation Lights
+  const navRed = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#ef4444' }));
+  navRed.position.set(-3.1, 8.2, 6.4);
+  const navGreen = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: '#22c55e' }));
+  navGreen.position.set(3.1, 8.2, 6.4);
+  group.add(navRed, navGreen);
+
+  // 5. Twin Smokestack Exhaust Funnels, Radar Arch & Orange Lifeboats
+  [-1.65, 1.65].forEach((fx) => {
+    const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.56, 2.8, 12), antiFoulRedMat);
+    funnel.position.set(fx, 8.0, -3.2);
+    funnel.rotation.x = -0.18;
+    const funnelCap = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.45, 0.58, 12), hullNavyMat);
+    funnelCap.position.set(fx, 9.25, -3.45);
+    funnelCap.rotation.x = -0.18;
+    group.add(funnel, funnelCap);
+
+    // Orange Davit Lifeboats mounted on Upper Sun Deck Sides
+    const lifeBoat = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.46, 2.2, 6, 10).rotateX(Math.PI / 2),
+      new THREE.MeshStandardMaterial({ color: '#ea580c', roughness: 0.42 })
+    );
+    lifeBoat.position.set(fx * 1.62, 7.15, -6.4);
+    group.add(lifeBoat);
+  });
+
+  // Steel Radar Arch & Rotating Scanner Bar on Wheelhouse Roof
+  const radarArch = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.4, 0.25), chromeRailMat);
+  radarArch.position.set(0, 9.45, 3.8);
+  const radarScanner = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.14, 0.28), whiteDeckMat);
+  radarScanner.position.set(0, 10.22, 3.8);
+  const whipMast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 3.2, 6), chromeRailMat);
+  whipMast.position.set(0.8, 10.2, 4.6);
+  group.add(radarArch, radarScanner, whipMast);
+
+  // 6. Aft Jackstaff with Bangladesh National Flag at Stern
+  const flagStaff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 4.4, 8), chromeRailMat);
+  flagStaff.position.set(0, 8.6, -9.8);
+  const flagGreen = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.35, 2.25), greenLiveryMat);
+  flagGreen.position.set(0, 10.0, -10.95);
+  const flagSun = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.42, 0.42, 0.08, 14).rotateZ(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: '#dc2626' })
   );
-  bow.position.set(0, 0.8, 17);
-  group.add(bow);
-
-  const deck1 = new THREE.Mesh(new THREE.BoxGeometry(7.8, 2.2, 24), deckMat);
-  deck1.position.set(0, 3.0, -0.5);
-  deck1.castShadow = true;
-  group.add(deck1);
-
-  const deck2 = new THREE.Mesh(new THREE.BoxGeometry(7.2, 2.1, 20), deckMat);
-  deck2.position.set(0, 5.1, -1.0);
-  deck2.castShadow = true;
-  group.add(deck2);
-
-  const bridge = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.8, 7), trimMat);
-  bridge.position.set(0, 7.0, 4.5);
-  group.add(bridge);
-
-  const lightStrip1 = new THREE.Mesh(
-    new THREE.BoxGeometry(8.0, 0.35, 22),
-    windowGlow
-  );
-  lightStrip1.position.set(0, 3.2, -0.5);
-  group.add(lightStrip1);
-
-  const lightStrip2 = new THREE.Mesh(
-    new THREE.BoxGeometry(7.4, 0.35, 18),
-    windowGlow
-  );
-  lightStrip2.position.set(0, 5.3, -1.0);
-  group.add(lightStrip2);
+  flagSun.position.set(0, 10.0, -10.95);
+  group.add(flagStaff, flagGreen, flagSun);
 
   return group;
 }
