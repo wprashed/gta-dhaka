@@ -6676,10 +6676,10 @@ export class DhakaCityEngine {
       '#0369a1'
     );
 
-    // 3. Shahbagh & TSC Foot Over Bridge (Z = 145)
+    // 3. Shahbagh & TSC Foot Over Bridge (Z = 166, clear of Expressway Off-Ramp toe at Z = 160)
     createFob(
       0,
-      145,
+      166,
       25,
       'Daraz',
       'দারাজ ১১.১১ - সবচেয়ে বড় আন্তর্জাতিক অনলাইন মেগা সেল!',
@@ -16605,6 +16605,118 @@ export class DhakaCityEngine {
       }
     }
 
+    // 0.5 Walkable Pedestrian Covered Foot Over Bridges & Metro Station Interiors/Escalators
+    // Evaluated BEFORE Expressway Ramps (Section 1) so East sidewalk staircases at X~14 are never clamped to Y=0 underneath!
+    const fobs: Array<{ bx: number; bz: number; halfSpan: number }> = [
+      { bx: 0, bz: -55, halfSpan: 13.5 },
+      { bx: 0, bz: 48, halfSpan: 13.0 },
+      { bx: 0, bz: 166, halfSpan: 12.5 },
+      { bx: -380, bz: -115, halfSpan: 12.5 },
+    ];
+    for (const f of fobs) {
+      const lx = x - f.bx;
+      const lz = z - f.bz;
+      if (Math.abs(lx) <= f.halfSpan + 3.0 && lz >= -2.2 && lz <= 12.4 && (currentY === undefined || currentY < 9.5)) {
+        // Overhead covered walkway deck (Y = 6.40m)
+        if (Math.abs(lz) <= 1.75 && Math.abs(lx) <= f.halfSpan + 1.65) {
+          if (currentY === undefined || (currentY >= 3.8 && currentY <= 9.2)) {
+            return 6.40;
+          }
+        }
+        // West & East stepped staircases + ground entry pads along both sidewalks
+        const onSideStair =
+          Math.abs(lx - -(f.halfSpan + 1.15)) <= 1.35 ||
+          Math.abs(lx - (f.halfSpan + 1.15)) <= 1.35;
+        if (onSideStair && lz >= 1.65 && lz <= 12.3) {
+          if (lz > 10.05) {
+            if (currentY === undefined || currentY <= 2.2) return 0.18;
+          } else {
+            const t = Math.max(0, Math.min(1, (10.05 - lz) / 8.4));
+            const stairElev = 0.42 + t * (6.38 - 0.42);
+            if (currentY === undefined || (Math.abs(currentY - stairElev) <= 2.8 && currentY <= 9.2) || stairElev <= 1.5) {
+              return stairElev;
+            }
+          }
+        }
+      }
+    }
+
+    // 0.6 Walkable Metro Rail Entry Kiosks, Escalators, Upper Concourse Halls & Train Platforms (L6 & L5)
+    for (const stInt of this.metroStationInteriors) {
+      const idx = stInt.inX2 - stInt.inX1;
+      const idz = stInt.inZ2 - stInt.inZ1;
+      const iLenSq = idx * idx + idz * idz;
+      if (iLenSq > 0.1) {
+        const rawT = ((x - stInt.inX1) * idx + (z - stInt.inZ1) * idz) / iLenSq;
+        if (rawT >= -0.05 && rawT <= 1.05) {
+          const t = Math.max(0, Math.min(1, rawT));
+          const ipx = stInt.inX1 + idx * t;
+          const ipz = stInt.inZ1 + idz * t;
+          if (Math.hypot(x - ipx, z - ipz) <= stInt.inHalfW) {
+            const stairY = stInt.inY1 + (stInt.inY2 - stInt.inY1) * t;
+            if (currentY !== undefined && Math.abs(currentY - stairY) <= 2.4 && currentY >= stInt.inY1 - 1.5) {
+              return stairY;
+            }
+          }
+        }
+      }
+      if (
+        x >= stInt.platMinX &&
+        x <= stInt.platMaxX &&
+        z >= stInt.platMinZ &&
+        z <= stInt.platMaxZ &&
+        currentY !== undefined &&
+        currentY >= stInt.platY - 1.6 &&
+        currentY <= stInt.platY + 3.0
+      ) {
+        return stInt.platY;
+      }
+      if (
+        x >= stInt.concourseMinX &&
+        x <= stInt.concourseMaxX &&
+        z >= stInt.concourseMinZ &&
+        z <= stInt.concourseMaxZ &&
+        currentY !== undefined &&
+        currentY >= stInt.concourseY - 2.0 &&
+        currentY <= stInt.concourseY + 2.5
+      ) {
+        return stInt.concourseY;
+      }
+    }
+    for (const esc of this.metroEscalators) {
+      if (
+        x >= esc.landMinX &&
+        x <= esc.landMaxX &&
+        z >= esc.landMinZ &&
+        z <= esc.landMaxZ &&
+        (currentY === undefined || (currentY >= esc.landY - 3.2 && currentY <= esc.landY + 2.5))
+      ) {
+        return esc.landY;
+      }
+      if (Math.abs(x - esc.kioskX) <= esc.kioskHalfX && Math.abs(z - esc.kioskZ) <= esc.kioskHalfZ) {
+        if (currentY === undefined || currentY <= 2.2) {
+          return 0.22;
+        }
+      }
+      const dx = esc.x2 - esc.x1;
+      const dz = esc.z2 - esc.z1;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq > 0.1) {
+        const rawT = ((x - esc.x1) * dx + (z - esc.z1) * dz) / lenSq;
+        if (rawT >= -0.03 && rawT <= 1.03) {
+          const t = Math.max(0, Math.min(1, rawT));
+          const px = esc.x1 + dx * t;
+          const pz = esc.z1 + dz * t;
+          if (Math.hypot(x - px, z - pz) <= esc.halfWidth) {
+            const rampElev = esc.y1 + (esc.y2 - esc.y1) * t;
+            if (currentY === undefined || (Math.abs(currentY - rampElev) <= 2.6 && currentY <= esc.y2 + 1.5) || rampElev <= 1.2) {
+              return rampElev;
+            }
+          }
+        }
+      }
+    }
+
     // 1. Dhaka Elevated Expressway On/Off Ramps (Farmgate)
     // Farmgate Southbound On-Ramp (Z: -160 to -40, X: 13.5 to 22.5)
     if (z >= -160 && z <= -40 && x >= 13.2 && x <= 22.8) {
@@ -16660,121 +16772,6 @@ export class DhakaCityEngine {
           return 0;
         }
         return 9.6;
-      }
-    }
-
-    // 2.5 Pedestrian Covered Foot Over Bridges (Farmgate Z=-55, Karwan Bazar Z=48, Shahbagh Z=145, Mirpur-10 (-380,-115))
-    // Must run BEFORE Section 3 (Expressway) so East sidewalk staircases at X~14 don't get clamped to ground Y=0 underneath!
-    const fobs: Array<{ bx: number; bz: number; halfSpan: number }> = [
-      { bx: 0, bz: -55, halfSpan: 13.5 },
-      { bx: 0, bz: 48, halfSpan: 13.0 },
-      { bx: 0, bz: 145, halfSpan: 12.5 },
-      { bx: -380, bz: -115, halfSpan: 12.5 },
-    ];
-    for (const f of fobs) {
-      const lx = x - f.bx;
-      const lz = z - f.bz;
-      if (Math.abs(lx) <= f.halfSpan + 3.0 && lz >= -2.2 && lz <= 12.4) {
-        // Overhead covered walkway deck (Y = 6.40m)
-        if (Math.abs(lz) <= 1.75 && Math.abs(lx) <= f.halfSpan + 1.65) {
-          if (currentY === undefined || (currentY >= 3.8 && currentY <= 9.2)) {
-            return 6.40;
-          }
-        }
-        // West & East stepped staircases + ground entry pads along both sidewalks
-        const onSideStair =
-          Math.abs(lx - -(f.halfSpan + 1.15)) <= 1.35 ||
-          Math.abs(lx - (f.halfSpan + 1.15)) <= 1.35;
-        if (onSideStair && lz >= 1.65 && lz <= 12.3) {
-          if (lz > 10.05) {
-            if (currentY === undefined || currentY <= 2.2) return 0.18;
-          } else {
-            const t = Math.max(0, Math.min(1, (10.05 - lz) / 8.4));
-            const stairElev = 0.18 + t * (6.40 - 0.18);
-            if (currentY === undefined || (Math.abs(currentY - stairElev) <= 2.8 && currentY <= 9.2) || stairElev <= 1.5) {
-              return stairElev;
-            }
-          }
-        }
-      }
-    }
-
-    // 2.6 Walkable Metro Rail Entry Kiosks, Escalators, Upper Concourse Halls & Train Platforms (L6 & L5)
-    for (const stInt of this.metroStationInteriors) {
-      // Interior Concourse -> Platform staircase
-      const idx = stInt.inX2 - stInt.inX1;
-      const idz = stInt.inZ2 - stInt.inZ1;
-      const iLenSq = idx * idx + idz * idz;
-      if (iLenSq > 0.1) {
-        const rawT = ((x - stInt.inX1) * idx + (z - stInt.inZ1) * idz) / iLenSq;
-        if (rawT >= -0.05 && rawT <= 1.05) {
-          const t = Math.max(0, Math.min(1, rawT));
-          const ipx = stInt.inX1 + idx * t;
-          const ipz = stInt.inZ1 + idz * t;
-          if (Math.hypot(x - ipx, z - ipz) <= stInt.inHalfW) {
-            const stairY = stInt.inY1 + (stInt.inY2 - stInt.inY1) * t;
-            if (currentY !== undefined && Math.abs(currentY - stairY) <= 2.4 && currentY >= stInt.inY1 - 1.5) {
-              return stairY;
-            }
-          }
-        }
-      }
-      // Upper Train Platform Level
-      if (
-        x >= stInt.platMinX &&
-        x <= stInt.platMaxX &&
-        z >= stInt.platMinZ &&
-        z <= stInt.platMaxZ &&
-        currentY !== undefined &&
-        currentY >= stInt.platY - 1.6 &&
-        currentY <= stInt.platY + 3.0
-      ) {
-        return stInt.platY;
-      }
-      // Lower Ticket Concourse Hall Level
-      if (
-        x >= stInt.concourseMinX &&
-        x <= stInt.concourseMaxX &&
-        z >= stInt.concourseMinZ &&
-        z <= stInt.concourseMaxZ &&
-        currentY !== undefined &&
-        currentY >= stInt.concourseY - 2.0 &&
-        currentY <= stInt.concourseY + 2.5
-      ) {
-        return stInt.concourseY;
-      }
-    }
-    for (const esc of this.metroEscalators) {
-      if (
-        x >= esc.landMinX &&
-        x <= esc.landMaxX &&
-        z >= esc.landMinZ &&
-        z <= esc.landMaxZ &&
-        (currentY === undefined || (currentY >= esc.landY - 3.2 && currentY <= esc.landY + 2.5))
-      ) {
-        return esc.landY;
-      }
-      if (Math.abs(x - esc.kioskX) <= esc.kioskHalfX && Math.abs(z - esc.kioskZ) <= esc.kioskHalfZ) {
-        if (currentY === undefined || currentY <= 2.2) {
-          return 0.22;
-        }
-      }
-      const dx = esc.x2 - esc.x1;
-      const dz = esc.z2 - esc.z1;
-      const lenSq = dx * dx + dz * dz;
-      if (lenSq > 0.1) {
-        const rawT = ((x - esc.x1) * dx + (z - esc.z1) * dz) / lenSq;
-        if (rawT >= -0.03 && rawT <= 1.03) {
-          const t = Math.max(0, Math.min(1, rawT));
-          const px = esc.x1 + dx * t;
-          const pz = esc.z1 + dz * t;
-          if (Math.hypot(x - px, z - pz) <= esc.halfWidth) {
-            const rampElev = esc.y1 + (esc.y2 - esc.y1) * t;
-            if (currentY === undefined || (Math.abs(currentY - rampElev) <= 2.6 && currentY <= esc.y2 + 1.5) || rampElev <= 1.2) {
-              return rampElev;
-            }
-          }
-        }
       }
     }
 
