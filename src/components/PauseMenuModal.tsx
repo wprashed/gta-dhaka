@@ -4,6 +4,7 @@ import {
   CNG_STATIONS,
   DISTRICTS,
   MARINE_DOCKS,
+  METRO_STATIONS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
   SPEED_CAMERAS,
@@ -36,6 +37,7 @@ import {
   Map as MapIcon,
   Navigation,
   Play,
+  RotateCcw,
   Save,
   Search,
   Settings,
@@ -43,6 +45,7 @@ import {
   ShoppingBag,
   Sparkles,
   Target,
+  Train,
   Upload,
   User,
   ZoomIn,
@@ -96,6 +99,8 @@ export const PauseMenuModal: React.FC = () => {
   } = useGameStore();
 
   const [mapZoom, setMapZoom] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [mapSidebarTab, setMapSidebarTab] = useState<'districts' | 'metro'>('districts');
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictId | null>(
     null
   );
@@ -272,16 +277,28 @@ export const PauseMenuModal: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => setMapZoom((z) => Math.max(0.8, z - 0.2))}
+                    onClick={() => setMapZoom((z) => Math.max(0.8, +(z - 0.25).toFixed(2)))}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                    title="Zoom Out"
                   >
                     <ZoomOut className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setMapZoom((z) => Math.min(1.8, z + 0.2))}
+                    onClick={() => setMapZoom((z) => Math.min(2.6, +(z + 0.25).toFixed(2)))}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                    title="Zoom In"
                   >
                     <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMapZoom(1);
+                      setMapPan({ x: 0, y: 0 });
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                    title="Reset Map View"
+                  >
+                    <RotateCcw className="w-4 h-4" />
                   </button>
                   {customWaypoint && (
                     <button
@@ -294,17 +311,23 @@ export const PauseMenuModal: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center relative">
+              <div
+                className="flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden flex items-center justify-center relative select-none"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const delta = e.deltaY < 0 ? 0.18 : -0.18;
+                  setMapZoom((z) => Math.max(0.8, Math.min(2.6, +(z + delta).toFixed(2))));
+                }}
+              >
                 <svg
-                  viewBox="-980 -950 1960 1600"
-                  className="w-full h-full max-h-[480px] transition-transform duration-200"
-                  style={{ transform: `scale(${mapZoom})` }}
+                  viewBox={`${-980 + mapPan.x} ${-950 + mapPan.y} ${1960 / mapZoom} ${1600 / mapZoom}`}
+                  className="w-full h-full max-h-[480px] transition-all duration-150"
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const nx =
-                      ((e.clientX - rect.left) / rect.width) * 1960 - 980;
-                    const nz =
-                      ((e.clientY - rect.top) / rect.height) * 1600 - 950;
+                    const vw = 1960 / mapZoom;
+                    const vh = 1600 / mapZoom;
+                    const nx = ((e.clientX - rect.left) / rect.width) * vw + (-980 + mapPan.x);
+                    const nz = ((e.clientY - rect.top) / rect.height) * vh + (-950 + mapPan.y);
                     setCustomWaypoint({
                       x: Math.round(nx),
                       z: Math.round(nz),
@@ -359,14 +382,25 @@ export const PauseMenuModal: React.FC = () => {
                   })}
 
                   {/* Water Bodies (1:1 match to DhakaCityEngine.isPositionInWater) */}
-                  <rect x={-950} y={303.5} width={1900} height={143.5} fill="#0891b2" fillOpacity={0.78} />
+                  <rect x={-900} y={303.5} width={1800} height={143.5} fill="#0891b2" fillOpacity={0.78} />
                   <text x={0} y={388} textAnchor="middle" fill="#bae6fd" fontSize="34" fontWeight="bold">
                     BURIGANGA RIVER • বুড়িগঙ্গা নদী
                   </text>
-                  <rect x={165} y={-80} width={110} height={150} rx={18} fill="#0891b2" fillOpacity={0.68} />
-                  <rect x={-265} y={-35} width={82} height={120} rx={16} fill="#0891b2" fillOpacity={0.68} />
-                  <rect x={280} y={-290} width={100} height={160} rx={16} fill="#0891b2" fillOpacity={0.68} />
-                  <rect x={-220} y={-600} width={80} height={120} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={155} y={-85} width={130} height={160} rx={18} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={-270} y={-40} width={90} height={130} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={275} y={-330} width={110} height={240} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={-222.5} y={-620} width={85} height={160} rx={16} fill="#0891b2" fillOpacity={0.68} />
+                  <rect x={571} y={-600} width={38} height={700} rx={8} fill="#0891b2" fillOpacity={0.72} />
+
+                  {/* Major Green Parks, Cricket Stadium & Sangsad Bhaban */}
+                  <rect x={-149} y={-73} width={68} height={56} rx={10} fill="#065f46" fillOpacity={0.72} />
+                  <rect x={-102} y={96} width={54} height={48} rx={10} fill="#065f46" fillOpacity={0.72} />
+                  <rect x={86} y={19} width={58} height={52} rx={10} fill="#065f46" fillOpacity={0.72} />
+                  <circle cx={-450} cy={-320} r={58} fill="#15803d" fillOpacity={0.72} stroke="#fbbf24" strokeWidth={3} />
+                  <text x={-450} y={-392} textAnchor="middle" fill="#bbf7d0" fontSize="22" fontWeight="bold">
+                    🏏 Mirpur Stadium
+                  </text>
+                  <circle cx={-68} cy={-48} r={18} fill="#0284c7" stroke="#e2e8f0" strokeWidth={3} />
 
                   {/* Jamuna Future Park Complex */}
                   <rect x={464} y={-421} width={112} height={72} rx={8} fill="#7e22ce" fillOpacity={0.85} stroke="#fbbf24" strokeWidth={4} />
@@ -397,35 +431,86 @@ export const PauseMenuModal: React.FC = () => {
                     />
                   ))}
 
+                  {/* Elevated Expressways & Flyovers Overlay */}
+                  <line x1={14} y1={-340} x2={14} y2={240} stroke="#f59e0b" strokeWidth={6} strokeOpacity={0.65} />
+                  <line x1={-340} y1={-175} x2={340} y2={-175} stroke="#f59e0b" strokeWidth={5} strokeOpacity={0.55} />
+                  <line x1={280} y1={-315} x2={800} y2={-315} stroke="#f59e0b" strokeWidth={5} strokeOpacity={0.55} />
+                  <line x1={-560} y1={240} x2={560} y2={240} stroke="#f59e0b" strokeWidth={5} strokeOpacity={0.55} />
+
                   {/* DHAKA MASS RAPID TRANSIT (MRT) SYSTEM OVERLAY */}
-                  <line x1={-12.2} y1={-900} x2={-12.2} y2={450} stroke="#10b981" strokeWidth={8} strokeDasharray="16 8" />
-                  <line x1={-480} y1={-175} x2={640} y2={-175} stroke="#f43f5e" strokeWidth={8} strokeDasharray="16 8" />
+                  <line x1={-12.2} y1={-920} x2={-12.2} y2={460} stroke="#10b981" strokeWidth={9} strokeDasharray="18 8" />
+                  <line x1={-460} y1={-198} x2={650} y2={-198} stroke="#f43f5e" strokeWidth={9} strokeDasharray="18 8" />
 
+                  {/* Intermediate Non-Boarding Viaduct Stations */}
                   {[
-                    { name: 'Uttara North', bn: 'উত্তরা উত্তর', z: -530 },
-                    { name: 'Mirpur-10', bn: 'মিরপুর-১০', z: -175 },
-                    { name: 'Farmgate', bn: 'ফার্মগেট', z: -15 },
-                    { name: 'Shahbagh', bn: 'শাহবাগ', z: 160 },
-                    { name: 'Motijheel', bn: 'মতিঝিল', z: 270 },
-                  ].map((st) => (
-                    <g key={`l6_${st.name}`}>
-                      <circle cx={-12.2} cy={st.z} r={12} fill="#10b981" stroke="#ffffff" strokeWidth={3} />
-                      <text x={-32} y={st.z + 8} textAnchor="end" fill="#6ee7b7" fontSize="22" fontWeight="bold">
-                        {language === 'en' ? st.name : st.bn}
-                      </text>
-                    </g>
+                    { x: -12.2, z: -850, color: '#10b981' },
+                    { x: -12.2, z: 450, color: '#10b981' },
+                    { x: -380, z: -198, color: '#f43f5e' },
+                    { x: 95, z: -198, color: '#f43f5e' },
+                    { x: 260, z: -198, color: '#f43f5e' },
+                  ].map((vs, idx) => (
+                    <circle key={`vs_${idx}`} cx={vs.x} cy={vs.z} r={9} fill={vs.color} fillOpacity={0.75} stroke="#cbd5e1" strokeWidth={2} />
                   ))}
 
-                  {[
-                    { name: 'Gulshan-2 / Jamuna Link', bn: 'গুলশান-২', x: 430 },
-                  ].map((st) => (
-                    <g key={`l5_${st.name}`}>
-                      <circle cx={st.x} cy={-175} r={12} fill="#f43f5e" stroke="#ffffff" strokeWidth={3} />
-                      <text x={st.x} y={-202} textAnchor="middle" fill="#fda4af" fontSize="22" fontWeight="bold">
-                        {language === 'en' ? st.name : st.bn}
-                      </text>
-                    </g>
-                  ))}
+                  {/* Interactive Boardable Metro Rail Stations (Click to Set GPS Waypoint!) */}
+                  {METRO_STATIONS.map((st) => {
+                    const isL5 = st.line === 'L5';
+                    const isHub = st.id === 'mrt_mirpur10';
+                    const isSelected = customWaypoint && Math.hypot(customWaypoint.x - st.x, customWaypoint.z - st.z) < 6;
+                    const labelText = language === 'en'
+                      ? st.nameEn.split(' / ')[0].replace(' Terminal', '').replace(' Central', '')
+                      : st.nameBn.split(' / ')[0];
+                    const lx = isL5 ? st.x : st.x - 28;
+                    const ly = isL5 ? st.z - 28 : st.z + 7;
+                    return (
+                      <g
+                        key={st.id}
+                        className="cursor-pointer"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setCustomWaypoint({
+                            x: st.x,
+                            z: st.z,
+                            name: `${st.line} Metro: ${st.nameEn}`,
+                          });
+                        }}
+                      >
+                        <circle
+                          cx={st.x}
+                          cy={st.z}
+                          r={isSelected ? 24 : 18}
+                          fill={isL5 ? '#e11d48' : '#059669'}
+                          stroke={isHub ? '#fbbf24' : '#ffffff'}
+                          strokeWidth={isHub ? 5 : 3.5}
+                        />
+                        <text
+                          x={st.x}
+                          y={st.z + 7}
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="20"
+                          fontWeight="900"
+                          className="pointer-events-none"
+                        >
+                          M
+                        </text>
+                        <text
+                          x={lx}
+                          y={ly}
+                          textAnchor={isL5 ? 'middle' : 'end'}
+                          fill={isL5 ? '#fda4af' : '#6ee7b7'}
+                          fontSize="21"
+                          fontWeight="800"
+                          stroke="#020617"
+                          strokeWidth={5}
+                          paintOrder="stroke"
+                          className="pointer-events-none"
+                        >
+                          🚇 {labelText} ({st.line})
+                        </text>
+                      </g>
+                    );
+                  })}
 
                   {POINTS_OF_INTEREST.map((poi) => (
                     <g
@@ -550,18 +635,140 @@ export const PauseMenuModal: React.FC = () => {
                     <circle cx={0} cy={0} r={9} fill="#ffffff" />
                   </g>
                 </svg>
+
+                {/* Interactive Map Legend Overlay */}
+                <div className="absolute bottom-2 left-2 right-2 pointer-events-none flex flex-wrap items-center justify-between gap-2">
+                  <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-200 shadow-lg">
+                    <span className="flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-emerald-600 border border-white inline-flex items-center justify-center text-[9px] font-black text-white">M</span>
+                      MRT Line-6
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-rose-600 border border-white inline-flex items-center justify-center text-[9px] font-black text-white">M</span>
+                      MRT Line-5
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-slate-900 inline-block" />
+                      POI / Shop
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded bg-green-600 border border-white inline-block" />
+                      CNG
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded bg-sky-600 border border-white inline-block" />
+                      Boat Pier
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-white inline-block" />
+                      You
+                    </span>
+                  </div>
+                  {mapZoom > 1.05 && (
+                    <div className="pointer-events-auto bg-slate-950/90 border border-slate-800 rounded-lg p-1 flex items-center gap-1 text-[10px] font-bold text-slate-200">
+                      <button onClick={() => setMapPan((p) => ({ ...p, x: p.x - 160 }))} className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">◀</button>
+                      <button onClick={() => setMapPan((p) => ({ ...p, y: p.y - 160 }))} className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">▲</button>
+                      <button onClick={() => setMapPan((p) => ({ ...p, y: p.y + 160 }))} className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">▼</button>
+                      <button onClick={() => setMapPan((p) => ({ ...p, x: p.x + 160 }))} className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700">▶</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-emerald-400" />
-                {language === 'en'
-                  ? '10 Dhaka Districts & Fast Travel'
-                  : 'ঢাকার ১০টি এলাকা ও দ্রুত ভ্রমণ'}
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  {mapSidebarTab === 'metro' ? (
+                    <Train className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Navigation className="w-4 h-4 text-emerald-400" />
+                  )}
+                  {mapSidebarTab === 'metro'
+                    ? language === 'en'
+                      ? 'Dhaka Metro Stations'
+                      : 'মেট্রোরেল স্টেশনসমূহ'
+                    : language === 'en'
+                    ? '10 Dhaka Districts'
+                    : 'ঢাকার ১০টি এলাকা'}
+                </h3>
+                <div className="flex bg-slate-950 rounded-lg p-0.5 border border-slate-800">
+                  <button
+                    onClick={() => setMapSidebarTab('districts')}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${
+                      mapSidebarTab === 'districts'
+                        ? 'bg-amber-400 text-slate-950'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {language === 'en' ? 'Districts' : 'এলাকা'}
+                  </button>
+                  <button
+                    onClick={() => setMapSidebarTab('metro')}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${
+                      mapSidebarTab === 'metro'
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🚆 {language === 'en' ? 'Metro (6)' : 'মেট্রো (৬)'}
+                  </button>
+                </div>
+              </div>
 
-              <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
+              {mapSidebarTab === 'metro' ? (
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
+                  {METRO_STATIONS.map((st) => {
+                    const isL5 = st.line === 'L5';
+                    return (
+                      <div
+                        key={st.id}
+                        className="p-3 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-emerald-500/60 transition-all flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white border-2 border-white shrink-0 ${
+                              isL5 ? 'bg-rose-600' : 'bg-emerald-600'
+                            }`}
+                          >
+                            M
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-extrabold text-white truncate">
+                              {language === 'en' ? st.nameEn : st.nameBn}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-semibold">
+                              MRT {st.line} • Base Fare ৳{st.fare} • ({st.x}, {st.z})
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => {
+                              setCustomWaypoint({
+                                x: st.x,
+                                z: st.z,
+                                name: `${st.line} Metro: ${st.nameEn}`,
+                              });
+                              setGamePhase('playing');
+                            }}
+                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-cyan-300 border border-slate-700"
+                          >
+                            GPS Pin
+                          </button>
+                          <button
+                            onClick={() => requestTeleport(st.x, st.z)}
+                            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[10px] font-extrabold text-white shadow"
+                          >
+                            {language === 'en' ? 'Go' : 'যান'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
                 {DISTRICTS.map((d) => (
                   <div
                     key={d.id}
@@ -614,7 +821,8 @@ export const PauseMenuModal: React.FC = () => {
                     </p>
                   </div>
                 ))}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -98,6 +98,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
     closeShopModal,
     activeMetroModal,
     closeMetroModal,
+    activeMetroRide,
+    requestMetroRide,
+    requestMetroDisembark,
     activeGarageModal,
     closeGarageModal,
     activeFareJob,
@@ -824,9 +827,65 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
           </div>
         </div>
 
-        {/* BOTTOM-CENTER: Minimal Subtitle Dialogue & Interaction Banner */}
+        {/* BOTTOM-CENTER: Minimal Subtitle Dialogue, Metro Ride & Interaction Banner */}
         <div className="pointer-events-auto flex flex-col items-center gap-2 max-w-lg w-full mx-auto">
-          {nearbyPrompt && (
+          {activeMetroRide && (
+            <div className="w-full bg-slate-950/92 backdrop-blur-md border-2 border-emerald-400/80 rounded-2xl p-3 shadow-2xl space-y-2 animate-in fade-in">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                      activeMetroRide.line === 'L5'
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-emerald-600 text-white'
+                    }`}
+                  >
+                    MRT {activeMetroRide.line}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-white truncate">
+                      🚆 {language === 'en' ? activeMetroRide.fromNameEn : activeMetroRide.fromNameBn} →{' '}
+                      {language === 'en' ? activeMetroRide.toNameEn : activeMetroRide.toNameBn}
+                    </p>
+                    <p className="text-[10px] text-emerald-300 font-semibold">
+                      {activeMetroRide.isTransferring
+                        ? language === 'en'
+                          ? 'Interchange via Mirpur-10 Hub • Drag mouse for 360° city view'
+                          : 'মিরপুর-১০ ইন্টারচেঞ্জ হয়ে যাত্রা • মাউস ঘুরিয়ে শহর দেখুন'
+                        : language === 'en'
+                        ? 'Elevated Viaduct Express • Drag mouse for 360° Dhaka view'
+                        : 'এলিভেটেড মেট্রো এক্সপ্রেস • মাউস ঘুরিয়ে ঢাকা শহর দেখুন'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono font-black text-amber-400 shrink-0">
+                  {activeMetroRide.speedKmh} km/h
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-150 ${
+                    activeMetroRide.line === 'L5' ? 'bg-rose-500' : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${Math.round(activeMetroRide.progress * 100)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-slate-400 font-semibold">
+                  {Math.round(activeMetroRide.progress * 100)}%{' '}
+                  {language === 'en' ? 'Journey Progress' : 'যাত্রা সম্পন্ন'}
+                </span>
+                <button
+                  onClick={requestMetroDisembark}
+                  className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-black transition-colors"
+                >
+                  {language === 'en' ? '[E] Arrive & Disembark Now' : '[E] এখনই স্টেশনে নামুন'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {nearbyPrompt && !activeMetroRide && (
             <button
               onClick={() => onTriggerAction('interact')}
               className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-4 py-1.5 rounded-full shadow-2xl border border-white flex items-center gap-1.5 transition-transform active:scale-95 animate-pulse"
@@ -1361,21 +1420,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
               {METRO_STATIONS.map((st) => {
                 const isHere = st.id === activeMetroModal;
                 const blockedByPolice = wantedLevel >= 3;
+                const originStation = METRO_STATIONS.find((s) => s.id === activeMetroModal);
+                const needsTransfer = Boolean(originStation && originStation.line !== st.line);
                 return (
                   <button
                     key={st.id}
                     disabled={isHere || blockedByPolice}
                     onClick={() => {
                       if (spendTaka(st.fare, `Dhaka Metro Ticket -> ${st.nameEn}`, `মেট্রোরেল টিকিট -> ${st.nameBn}`)) {
-                        requestTeleport(st.x, st.z);
-                        closeMetroModal();
-                        showBanner({
-                          titleEn: `🚆 ARRIVED: ${st.nameEn.toUpperCase()}`,
-                          titleBn: `🚆 পৌঁছে গেছেন: ${st.nameBn}`,
-                          subtitleEn: `Dhaka Metro Rail (${st.line}) express journey complete.`,
-                          subtitleBn: 'ঢাকা মেট্রোরেলে দ্রুত যাতায়াত সম্পন্ন!',
-                          tone: 'green',
-                        });
+                        requestMetroRide(activeMetroModal, st.id);
                       }
                     }}
                     className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-colors ${
@@ -1390,7 +1443,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({ onTriggerAction }) => {
                       <p className="text-xs font-black">
                         [{st.line}] {language === 'en' ? st.nameEn : st.nameBn}
                       </p>
-                      <p className="text-[10px] text-slate-400">{isHere ? 'Current Station' : `Tap to board train`}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {isHere
+                          ? language === 'en'
+                            ? 'Current Station'
+                            : 'বর্তমান স্টেশন'
+                          : needsTransfer
+                          ? language === 'en'
+                            ? 'Tap to board elevated train (Transfer at Mirpur-10)'
+                            : 'মেট্রো ট্রেনে উঠুন (মিরপুর-১০ এ লাইন পরিবর্তন)'
+                          : language === 'en'
+                          ? 'Tap to board elevated express train'
+                          : 'এলিভেটেড মেট্রো ট্রেনে উঠতে ক্লিক করুন'}
+                      </p>
                     </div>
                     <span className="text-xs font-mono font-bold text-amber-400">
                       {isHere ? 'HERE' : `৳${st.fare}`}

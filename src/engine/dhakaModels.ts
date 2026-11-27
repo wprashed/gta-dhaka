@@ -3446,10 +3446,10 @@ export function setCharacterAnimationState(
       rig.spine.bone.quaternion.copy(rig.spine.rest).multiply(_tmpQuat);
     }
     if (limbs.gltfRoot) {
-      limbs.gltfRoot.rotation.x = 0;
+      limbs.gltfRoot.rotation.x = isSwim ? 0.18 : 0;
       limbs.gltfRoot.position.y =
         isSwim
-          ? 0.34 + Math.sin(rig.phase * 0.5) * 0.04
+          ? -0.10 + Math.sin(rig.phase * 0.5) * 0.04
           : targetState === 'idle'
           ? 0
           : Math.abs(Math.sin(rig.phase)) * 0.025;
@@ -3611,7 +3611,7 @@ export function setCharacterAnimationState(
       targetState === 'swim' ? 'walk' : targetState;
     if (limbs.gltfRoot) {
       limbs.gltfRoot.rotation.x = targetState === 'swim' ? 0.78 : 0;
-      limbs.gltfRoot.position.y = targetState === 'swim' ? 0.36 : 0;
+      limbs.gltfRoot.position.y = targetState === 'swim' ? 0.08 : 0;
     }
     if (limbs.currentActionName !== clipName || !limbs.actions[clipName]?.isRunning()) {
       const prev = limbs.currentActionName

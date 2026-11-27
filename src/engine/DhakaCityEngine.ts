@@ -174,6 +174,9 @@ export class DhakaCityEngine {
   private jfpInteriorGroup: THREE.Group | null = null;
   private readonly jfpCenter = { x: 520, z: -385 };
   private jfpFerrisWheel: THREE.Group | null = null;
+  private jfpFerrisGondolas: THREE.Group[] = [];
+  private jfpDropCar: THREE.Mesh | null = null;
+  private jfpElevatorCab: THREE.Group | null = null;
   private jfpChandelier: THREE.Group | null = null;
   private wasInsideJfp = false;
   private lastMissionEnemyStepId: string | null = null;
@@ -238,6 +241,35 @@ export class DhakaCityEngine {
   private metroTrainGroup2: THREE.Group | null = null;
   private metroTrainLine5East: THREE.Group | null = null;
   private metroTrainLine5West: THREE.Group | null = null;
+  private playerMetroTrainL6: THREE.Group | null = null;
+  private playerMetroTrainL5: THREE.Group | null = null;
+  private metroPortalRings: THREE.Mesh[] = [];
+  private metroRide: {
+    segments: Array<{
+      line: 'L6' | 'L5';
+      startX: number;
+      startZ: number;
+      endX: number;
+      endZ: number;
+      y: number;
+      yaw: number;
+      length: number;
+    }>;
+    segIdx: number;
+    segDist: number;
+    totalDist: number;
+    coveredDist: number;
+    speed: number;
+    fromId: string;
+    toId: string;
+    fromNameEn: string;
+    fromNameBn: string;
+    toNameEn: string;
+    toNameBn: string;
+    toX: number;
+    toZ: number;
+    lastHudSync: number;
+  } | null = null;
   private metroChimeTimer = 0;
   private playerStuckTimer = 0;
   private npcAnimFrame = 0;
@@ -1298,56 +1330,8 @@ export class DhakaCityEngine {
     this.scene.add(saarcFountain);
     this.createFountainSpraySystem(0, 0.5, -28, 16, 3.7, 4.8);
 
-    // 3. Elevated Farmgate Metro Rail Station (ফার্মগেট মেট্রোরেল স্টেশন - MRT Line-6) right at Spawn!
-    const farmgateStation = new THREE.Group();
-    farmgateStation.position.set(0, 0, 28);
-
-    const concourseSlab = new THREE.Mesh(
-      new THREE.BoxGeometry(15.5, 1.1, 34),
-      new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.6 })
-    );
-    concourseSlab.position.y = 6.8;
-    concourseSlab.castShadow = true;
-    farmgateStation.add(concourseSlab);
-
-    // Iconic Curved Green-and-White Dhaka Metro Station Vaulted Canopy Roof
-    const stationRoof = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        8.4,
-        8.4,
-        36,
-        24,
-        1,
-        false,
-        -Math.PI / 2.3,
-        (Math.PI * 2) / 2.3
-      )
-        .rotateZ(Math.PI / 2)
-        .rotateY(Math.PI / 2),
-      new THREE.MeshStandardMaterial({
-        color: '#047857',
-        metalness: 0.45,
-        roughness: 0.3,
-        side: THREE.DoubleSide,
-      })
-    );
-    stationRoof.scale.set(1, 0.42, 1);
-    stationRoof.position.y = 10.6;
-    stationRoof.castShadow = true;
-    farmgateStation.add(stationRoof);
-
-    // Farmgate Station Name Boards on both North and South ends
-    [-17.2, 17.2].forEach((sz) => {
-      const stSign = new THREE.Mesh(
-        new THREE.BoxGeometry(11.5, 1.35, 0.25),
-        new THREE.MeshBasicMaterial({ map: createBanglaSignTexture(3) })
-      );
-      stSign.position.set(0, 9.8, sz);
-      farmgateStation.add(stSign);
-    });
-    this.scene.add(farmgateStation);
-
-    // 4. Baitul Mukarram National Mosque (বায়তুল মোকাররম জাতীয় মসজিদ) in Paltan/Motijheel West
+    // 3. Baitul Mukarram National Mosque (বায়তুল মোকাররম জাতীয় মসজিদ) in Paltan/Motijheel West
+    // (Elevated MRT Line-6 Stations are built complete with portal piers, concourse & escalators in buildMetroViaductPillars)
     const baitulMukarram = new THREE.Group();
     baitulMukarram.position.set(78, 0, 82);
     const whiteMarble = new THREE.MeshStandardMaterial({
@@ -1563,7 +1547,7 @@ export class DhakaCityEngine {
 
   public isPositionInWater(x: number, z: number): boolean {
     // Buriganga River channel (open water starts south of Sadarghat promenade curb z=303.5 and ends north of Keraniganj bank z=447)
-    if (z > 303.5 && z < 447) {
+    if (x >= -900 && x <= 900 && z > 303.5 && z < 447) {
       // Bridges spanning Buriganga across all major metropolitan arteries:
       const onBridge = DhakaCityEngine.NS_ROADS.some(
         (r) => r.zMax >= 450 && r.zMin <= 300 && Math.abs(x - r.x) <= r.width / 2 + 3.5
@@ -1574,18 +1558,35 @@ export class DhakaCityEngine {
       if (onSadarghatJetty) return false;
       return true;
     }
-    // Dhanmondi Lake
-    if (x > -265 && x < -183 && z > -35 && z < 85) return true;
-    // Hatirjheel Lake (except bridge deck & central causeway)
-    if (x > 165 && x < 275 && z > -80 && z < 70) {
-      const onBridge = x >= 208 && x <= 232;
-      const onCauseway = z >= -10 && z <= 10;
+    // Balu River waterway in Purbachal (38 x 700 centered at X=590, Z=-250), excluding crossing bridges/roads
+    if (x >= 571 && x <= 609 && z >= -600 && z <= 100) {
+      const onBaluCrossing =
+        Math.abs(z - (-460)) <= 10.5 ||
+        Math.abs(z - (-315)) <= 11.5 || // Purbachal 8-Lane Cable-Stayed Bridge
+        Math.abs(z - (-175)) <= 9.5 ||
+        Math.abs(z) <= 11.5;
+      if (!onBaluCrossing) return true;
+    }
+    // Dhanmondi Lake (90 x 130 centered at X=-225, Z=25), excluding Manik Mia / Asad Gate EW road crossing
+    if (x >= -270 && x <= -180 && z >= -40 && z <= 90) {
+      if (Math.abs(z) > 11.5) return true;
+    }
+    // Hatirjheel Lake (130 x 160 centered at X=220, Z=-5), excluding Hatirjheel Tied-Arch Bridge & EW causeway
+    if (x >= 155 && x <= 285 && z >= -85 && z <= 75) {
+      const onBridge = x >= 209 && x <= 231;
+      const onCauseway = Math.abs(z) <= 11.5;
       if (!onBridge && !onCauseway) return true;
     }
-    // Gulshan-Baridhara Lake
-    if (x > 280 && x < 380 && z > -290 && z < -130) return true;
-    // Uttara Sector 7 Lake
-    if (x > -220 && x < -140 && z > -600 && z < -480) return true;
+    // Gulshan-Baridhara Diplomatic Lake (110 x 240 centered at X=330, Z=-210), excluding Banani & Gulshan-2 EW roads
+    if (x >= 275 && x <= 385 && z >= -330 && z <= -90) {
+      const onCrossingRoad = Math.abs(z - (-315)) <= 10.5 || Math.abs(z - (-175)) <= 9.5;
+      if (!onCrossingRoad) return true;
+    }
+    // Uttara Sector 7 Lake (85 x 160 centered at X=-180, Z=-540), excluding Uttara North & South EW roads
+    if (x >= -222.5 && x <= -137.5 && z >= -620 && z <= -460) {
+      const onCrossingRoad = z <= -609.5 || z >= -470.5;
+      if (!onCrossingRoad) return true;
+    }
     return false;
   }
 
@@ -1697,7 +1698,7 @@ export class DhakaCityEngine {
         safeZ = veh.z + sinR * (vStats.width * 0.5 + 0.6);
       }
       const inWaterExit = this.isPositionInWater(safeX, safeZ);
-      const exitElev = inWaterExit ? -0.55 : this.getRoadElevation(safeX, safeZ, veh.y);
+      const exitElev = inWaterExit ? -1.05 : this.getRoadElevation(safeX, safeZ, veh.y);
       this.isSwimming = inWaterExit;
       this.playerPos.set(safeX, exitElev, safeZ);
       if (this.playerLimbs.group.parent !== this.scene) {
@@ -2463,6 +2464,13 @@ export class DhakaCityEngine {
     sangsadLake.position.y = 0.12;
     sangsadGroup.add(sangsadLake);
 
+    this.circleColliders.push({
+      x: -68,
+      z: -48,
+      radius: 18.2,
+      tag: 'sangsad_lake_basin',
+    });
+
     const concreteMat = new THREE.MeshStandardMaterial({
       color: '#cbd5e1',
       roughness: 0.75,
@@ -2743,120 +2751,280 @@ export class DhakaCityEngine {
     });
 
     // =========================================================================
-    // SECTION C: ELEVATED STATIONS WITH PSD DOORS & STREET PEDESTRIAN ACCESS PORTALS
+    // SECTION C: COMPLETE 2-TIER DHAKA MRT STATIONS, PORTAL PIERS & ESCALATORS
     // =========================================================================
+    const concourseGlowMat = new THREE.MeshStandardMaterial({
+      color: '#fef3c7',
+      emissive: new THREE.Color('#fde68a'),
+      emissiveIntensity: 0.45,
+      roughness: 0.2,
+    });
+    const mrtGreenTrimMat = new THREE.MeshStandardMaterial({ color: '#059669', roughness: 0.35, metalness: 0.25 });
+    const mrtRedTrimMat = new THREE.MeshStandardMaterial({ color: '#be123c', roughness: 0.35, metalness: 0.25 });
+    const yellowLineMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
+    const trussSteelMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', metalness: 0.65, roughness: 0.28 });
+    const afcGateMat = new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.7, roughness: 0.3 });
+
     const line6Stations = [
       { nameBn: 'উত্তরা উত্তর ডিপো স্টেশন', nameEn: 'UTTARA NORTH DEPOT', sz: -1150, hasStairs: true },
-      { nameBn: 'উত্তরা সেন্টার মেট্রো স্টেশন', nameEn: 'UTTARA CENTER METRO', sz: -850, hasStairs: false },
-      { nameBn: 'পল্লবী মেট্রো স্টেশন', nameEn: 'PALLABI METRO STATION', sz: -520, hasStairs: false },
+      { nameBn: 'উত্তরা সেন্টার মেট্রো স্টেশন', nameEn: 'UTTARA CENTER METRO', sz: -850, hasStairs: true },
+      { nameBn: 'উত্তরা উত্তর / পল্লবী স্টেশন', nameEn: 'UTTARA NORTH / PALLABI', sz: -530, hasStairs: true },
       { nameBn: 'মিরপুর-১০ ইন্টারচেঞ্জ স্টেশন', nameEn: 'MIRPUR-10 GRAND INTERCHANGE', sz: -175, hasStairs: true, isHub: true },
-      { nameBn: 'ফার্মগেট মেট্রো স্টেশন', nameEn: 'FARMGATE METRO STATION', sz: -15, hasStairs: true },
-      { nameBn: 'শাহবাগ মেট্রো স্টেশন', nameEn: 'SHAHBAGH METRO STATION', sz: 160, hasStairs: true },
-      { nameBn: 'মতিঝিল ব্যাংক প্লাজা স্টেশন', nameEn: 'MOTIJHEEL BANK PLAZA', sz: 330, hasStairs: true },
+      { nameBn: 'ফার্মগেট মেট্রো স্টেশন', nameEn: 'FARMGATE CENTRAL STATION', sz: -15, hasStairs: true },
+      { nameBn: 'শাহবাগ / টিএসসি স্টেশন', nameEn: 'SHAHBAGH / TSC STATION', sz: 160, hasStairs: true },
+      { nameBn: 'মতিঝিল / কমলাপুর স্টেশন', nameEn: 'MOTIJHEEL BANK PLAZA', sz: 270, hasStairs: true },
       { nameBn: 'কমলাপুর রেল টার্মিনাল স্টেশন', nameEn: 'KAMALAPUR TERMINAL', sz: 450, hasStairs: true },
     ];
 
     line6Stations.forEach((st) => {
-      // Station Concourse & Platform Box
-      const platform = this.sharedBox(14.5, 4.2, 64, concourseMat, -10.5, 14.5, st.sz);
+      // 1. Structural Twin-Column Concrete Portal Bents (Sidewalk X=-17.8 & Median X=-12.2, zero road obstruction)
+      [-22, -7, 7, 22].forEach((bz) => {
+        [-17.8, -12.2].forEach((px) => {
+          const col = new THREE.Mesh(this.cylCache(0.72, 0.88, 12.6, 10), concreteMat);
+          col.position.set(px, 6.3, st.sz + bz);
+          this.scene.add(col);
+          this.circleColliders.push({ x: px, z: st.sz + bz, radius: 0.92, tag: 'metro_station_pier' });
+        });
+        // Transverse concourse & platform cross-beams cantilevered cleanly over the station width
+        this.scene.add(this.sharedBox(15.2, 0.9, 1.4, concreteMat, -10.5, 8.2, st.sz + bz));
+        this.scene.add(this.sharedBox(15.8, 1.0, 1.6, concreteMat, -10.5, 12.3, st.sz + bz));
+      });
+
+      // 2. Lower Ticket Concourse Level (Y: 8.6..12.2m) with illuminated AFC window strip & DMTCL green band
+      const concourseHall = this.sharedBox(13.8, 3.2, 58, concourseMat, -10.5, 10.3, st.sz);
+      concourseHall.castShadow = true;
+      this.scene.add(concourseHall);
+      [-17.45, -3.55].forEach((wx) => {
+        this.scene.add(this.sharedBox(0.18, 1.45, 54, concourseGlowMat, wx, 10.5, st.sz));
+        this.scene.add(this.sharedBox(0.24, 0.55, 58.2, mrtGreenTrimMat, wx, 9.1, st.sz));
+      });
+
+      // 3. Upper Train Platform Deck (Y: 12.6..16.8m)
+      const platform = this.sharedBox(15.0, 4.0, 64, concourseMat, -10.5, 14.6, st.sz);
       platform.castShadow = true;
       this.scene.add(platform);
 
-      // Curved Teal Vaulted Roof Canopy
+      // Curved Teal Vaulted Roof Canopy + 5 Steel Arch Trusses & Warm Ceiling LED Strips
       const canopy = new THREE.Mesh(
-        new THREE.CylinderGeometry(8.4, 8.4, 64, 16, 1, false, 0, Math.PI).rotateX(Math.PI / 2),
+        new THREE.CylinderGeometry(8.6, 8.6, 65, 16, 1, false, 0, Math.PI).rotateX(Math.PI / 2),
         canopyMat
       );
       canopy.position.set(-10.5, 18.4, st.sz);
       this.scene.add(canopy);
+      for (let rz = -26; rz <= 26; rz += 13) {
+        const rib = new THREE.Mesh(
+          new THREE.TorusGeometry(8.65, 0.2, 6, 16, Math.PI),
+          trussSteelMat
+        );
+        rib.position.set(-10.5, 18.4, st.sz + rz);
+        this.scene.add(rib);
+      }
+      this.scene.add(this.sharedBox(1.8, 0.14, 58, concourseGlowMat, -10.5, 17.8, st.sz));
 
-      // Glass Curtain Wall Windows along Platform Edges
-      [-17.6, -3.4].forEach((wx) => {
-        const winWall = this.sharedBox(0.2, 3.4, 62, glassMat, wx, 15.2, st.sz);
-        this.scene.add(winWall);
+      // Glass Curtain Wall Windows + Vertical Mullions along Platform Edges
+      [-17.8, -3.2].forEach((wx) => {
+        this.scene.add(this.sharedBox(0.2, 3.4, 62, glassMat, wx, 15.2, st.sz));
+        for (let mz = -28; mz <= 28; mz += 7) {
+          this.scene.add(this.sharedBox(0.28, 3.8, 0.28, mastSteelMat, wx, 15.2, st.sz + mz));
+        }
       });
 
-      // Platform Screen Doors (PSD) with yellow safety tactile floor line
+      // Platform Screen Doors (PSD), Tactile Lines & LED Train Arrival Boards
       [-14.2, -10.2].forEach((psdX) => {
-        const psd = this.sharedBox(0.12, 1.8, 56, psdGlassMat, psdX, 14.2, st.sz);
-        this.scene.add(psd);
-        const yellowLine = this.sharedBox(0.2, 0.04, 56, new THREE.MeshBasicMaterial({ color: '#facc15' }), psdX + (psdX < -12 ? 0.35 : -0.35), 13.32, st.sz);
-        this.scene.add(yellowLine);
+        this.scene.add(this.sharedBox(0.12, 1.8, 56, psdGlassMat, psdX, 14.2, st.sz));
+        this.scene.add(this.sharedBox(0.22, 0.04, 56, yellowLineMat, psdX + (psdX < -12 ? 0.35 : -0.35), 13.32, st.sz));
       });
+      this.scene.add(this.sharedBox(3.6, 0.7, 0.25, new THREE.MeshBasicMaterial({ color: '#10b981' }), -10.5, 16.5, st.sz + 14));
+      this.scene.add(this.sharedBox(3.6, 0.7, 0.25, new THREE.MeshBasicMaterial({ color: '#10b981' }), -10.5, 16.5, st.sz - 14));
 
-      // Street-to-Concourse Covered Pedestrian Access Escalator Portals on Sidewalks
+      // 4. Ground-Anchored West Sidewalk Entry Pavilion & Covered Escalator Bridge (Y = 0 -> Concourse Y = 9.0m)
       if (st.hasStairs) {
-        [-20.5, -0.5].forEach((stairX, sIdx) => {
-          // Inclined covered stair bridge from street ground (Y = 0) to concourse (Y = 13.2)
-          const stairDeck = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 22), concourseMat);
-          stairDeck.position.set(stairX, 6.6, st.sz + (sIdx === 0 ? 18 : -18));
-          stairDeck.rotation.x = sIdx === 0 ? 0.42 : -0.42;
-          this.scene.add(stairDeck);
+        // Offset Mirpur-10 stair pavilion cleanly north of EW road Z=-175 so road traffic is untouched
+        const stairBaseZ = st.sz === -175 ? st.sz - 24 : st.sz + 24;
+        const stairX = -20.2;
+        const topZ = stairBaseZ + (st.sz === -175 ? 14 : -14);
+        const startPos = new THREE.Vector3(stairX, 0.8, stairBaseZ);
+        const endPos = new THREE.Vector3(-17.4, 9.2, topZ);
+        const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
+        const spanLen = startPos.distanceTo(endPos);
 
-          const stairCanopy = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.2, 22), glassMat);
-          stairCanopy.position.set(stairX, 7.8, st.sz + (sIdx === 0 ? 18 : -18));
-          stairCanopy.rotation.x = sIdx === 0 ? 0.42 : -0.42;
-          this.scene.add(stairCanopy);
+        const stairBridge = new THREE.Mesh(this.boxCache(2.8, 0.55, spanLen), concourseMat);
+        stairBridge.position.copy(midPos);
+        stairBridge.lookAt(endPos);
+        this.scene.add(stairBridge);
 
-          // Street entrance portal kiosk
-          const streetKiosk = this.sharedBox(3.4, 3.6, 5.2, concourseMat, stairX, 1.8, st.sz + (sIdx === 0 ? 28 : -28));
-          this.scene.add(streetKiosk);
+        const stairGlassTube = new THREE.Mesh(this.boxCache(3.0, 2.5, spanLen), glassMat);
+        stairGlassTube.position.copy(midPos).add(new THREE.Vector3(0, 1.45, 0));
+        stairGlassTube.lookAt(endPos.clone().add(new THREE.Vector3(0, 1.45, 0)));
+        this.scene.add(stairGlassTube);
+
+        // Ground Entry Kiosk Pavilion with Roof Canopy, Ticket Counter & Open Glass Turnstiles
+        this.scene.add(this.sharedBox(4.4, 0.22, 6.2, concourseMat, stairX, 0.11, stairBaseZ));
+        this.scene.add(this.sharedBox(4.8, 0.55, 6.6, mrtGreenTrimMat, stairX, 3.85, stairBaseZ));
+        [-1.95, 1.95].forEach((ox) => {
+          this.scene.add(this.sharedBox(0.32, 3.6, 5.8, concourseMat, stairX + ox, 1.9, stairBaseZ));
         });
+        // Interior Turnstile Barrier Gates (walkable center lane!)
+        [-1.0, 1.0].forEach((tx) => {
+          this.scene.add(this.sharedBox(0.22, 1.05, 1.4, afcGateMat, stairX + tx, 0.65, stairBaseZ));
+        });
+        // Support column under escalator landing
+        const landCol = new THREE.Mesh(this.cylCache(0.42, 0.52, 8.6, 8), concreteMat);
+        landCol.position.set(-17.4, 4.3, topZ);
+        this.scene.add(landCol);
       }
 
-      // Illuminated Station Bilingual Signboard Gantry
+      // Illuminated Station Bilingual Signboard Gantries (Both Ends + Street Facade)
       const signTex = createFlyoverGantryTexture(st.nameBn, st.nameEn, 'ঢাকা ম্যাস ট্রানজিট (MRT LINE-6)', 'DHAKA MASS TRANSIT CO. (DMTCL)');
-      const signBoard = new THREE.Mesh(
-        new THREE.PlaneGeometry(10.5, 2.4),
-        new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide })
-      );
-      signBoard.position.set(-10.5, 17.5, st.sz + 32.2);
-      this.scene.add(signBoard);
+      const signMatL6 = new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide });
+      [-32.2, 32.2].forEach((dz) => {
+        const sb = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 2.5), signMatL6);
+        sb.position.set(-10.5, 17.5, st.sz + dz);
+        this.scene.add(sb);
+      });
+      const sideSignL6 = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.4), signMatL6);
+      sideSignL6.rotation.y = Math.PI / 2;
+      sideSignL6.position.set(-18.1, 13.8, st.sz);
+      this.scene.add(sideSignL6);
     });
 
-    // Line-5 Stations: Mirpur West, Mohakhali North, Gulshan-2, Natun Bazar
+    // Line-5 Stations: Complete 2-Tier Concourse, Portal Columns & Ground Access Escalators
     const line5Stations = [
       { nameBn: 'মিরপুর পশ্চিম মেট্রো স্টেশন', nameEn: 'MIRPUR WEST METRO (LINE-5)', sx: -380 },
       { nameBn: 'মহাখালী উত্তর / বনানী স্টেশন', nameEn: 'MOHAKHALI NORTH / BANANI', sx: 95 },
       { nameBn: 'গুলশান-২ ডিপ্লোম্যাটিক স্টেশন', nameEn: 'GULSHAN-2 DIPLOMATIC CIRCLE', sx: 260 },
-      { nameBn: 'নতুন বাজার / পূর্বাচল গেটওয়ে', nameEn: 'NATUN BAZAR / PURBACHAL', sx: 460 },
+      { nameBn: 'নতুন বাজার / গুলশান লিংক', nameEn: 'NATUN BAZAR / GULSHAN-2 LINK', sx: 430 },
     ];
 
     line5Stations.forEach((st) => {
-      // Station Concourse & Platform Box (Oriented East-West along Z = -198)
-      const platform5 = this.sharedBox(64, 4.2, 14.5, concourseMat, st.sx, 18.5, line5Z);
+      // 1. Structural Twin-Column Concrete Portal Bents anchored to y=0
+      [-22, 0, 22].forEach((bx) => {
+        [line5Z - 7.8, line5Z + 7.8].forEach((pz) => {
+          const col5 = new THREE.Mesh(this.cylCache(0.75, 0.9, 16.5, 10), concreteMat);
+          col5.position.set(st.sx + bx, 8.25, pz);
+          this.scene.add(col5);
+          this.circleColliders.push({ x: st.sx + bx, z: pz, radius: 0.92, tag: 'metro_station_pier' });
+        });
+        this.scene.add(this.sharedBox(1.5, 1.0, 16.6, concreteMat, st.sx + bx, 12.2, line5Z));
+        this.scene.add(this.sharedBox(1.6, 1.1, 17.2, concreteMat, st.sx + bx, 16.3, line5Z));
+      });
+
+      // 2. Lower Ticket Concourse Level (Y: 12.6..16.2m)
+      this.scene.add(this.sharedBox(58, 3.2, 13.8, concourseMat, st.sx, 14.3, line5Z));
+      [line5Z - 6.95, line5Z + 6.95].forEach((wz) => {
+        this.scene.add(this.sharedBox(54, 1.45, 0.18, concourseGlowMat, st.sx, 14.5, wz));
+        this.scene.add(this.sharedBox(58.2, 0.55, 0.24, mrtRedTrimMat, st.sx, 13.1, wz));
+      });
+
+      // 3. Upper Train Platform Deck + Crimson Vaulted Canopy & Trusses
+      const platform5 = this.sharedBox(64, 4.0, 15.0, concourseMat, st.sx, 18.6, line5Z);
       platform5.castShadow = true;
       this.scene.add(platform5);
 
-      // Curved Red Vaulted Roof Canopy (Line-5 Crimson Theme)
       const canopy5 = new THREE.Mesh(
-        new THREE.CylinderGeometry(8.4, 8.4, 64, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
-        new THREE.MeshStandardMaterial({ color: '#be123c', metalness: 0.42, roughness: 0.28, side: THREE.DoubleSide })
+        new THREE.CylinderGeometry(8.6, 8.6, 65, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
+        mrtRedTrimMat
       );
       canopy5.position.set(st.sx, 22.4, line5Z);
       this.scene.add(canopy5);
+      for (let rx = -26; rx <= 26; rx += 13) {
+        const rib5 = new THREE.Mesh(
+          new THREE.TorusGeometry(8.65, 0.2, 6, 16, Math.PI).rotateY(Math.PI / 2),
+          trussSteelMat
+        );
+        rib5.position.set(st.sx + rx, 22.4, line5Z);
+        this.scene.add(rib5);
+      }
 
-      // Glass Curtain Wall Windows along Platform Edges
-      [line5Z - 7.2, line5Z + 7.2].forEach((wz) => {
-        const winWall5 = this.sharedBox(62, 3.4, 0.2, glassMat, st.sx, 19.4, wz);
-        this.scene.add(winWall5);
+      [line5Z - 7.4, line5Z + 7.4].forEach((wz) => {
+        this.scene.add(this.sharedBox(62, 3.4, 0.2, glassMat, st.sx, 19.4, wz));
       });
-
-      // Platform Screen Doors (PSD)
       [line5Z - 2.2, line5Z + 2.2].forEach((psdZ) => {
-        const psd5 = this.sharedBox(56, 1.8, 0.12, psdGlassMat, st.sx, 18.4, psdZ);
-        this.scene.add(psd5);
+        this.scene.add(this.sharedBox(56, 1.8, 0.12, psdGlassMat, st.sx, 18.4, psdZ));
+        this.scene.add(this.sharedBox(56, 0.04, 0.22, yellowLineMat, st.sx, 17.52, psdZ + (psdZ < line5Z ? 0.35 : -0.35)));
       });
 
-      // Illuminated Line-5 Bilingual Signboard
+      // 4. Ground-Anchored Entry Pavilion & Escalator Bridge on South Sidewalk (Z = line5Z - 11.5)
+      const entryZ = line5Z - 10.5;
+      const startP = new THREE.Vector3(st.sx - 18, 0.8, entryZ);
+      const endP = new THREE.Vector3(st.sx - 6, 13.0, line5Z - 6.8);
+      const midP = startP.clone().add(endP).multiplyScalar(0.5);
+      const span5 = startP.distanceTo(endP);
+      const esc5 = new THREE.Mesh(this.boxCache(2.8, 0.55, span5), concourseMat);
+      esc5.position.copy(midP);
+      esc5.lookAt(endP);
+      this.scene.add(esc5);
+      const escGlass5 = new THREE.Mesh(this.boxCache(3.0, 2.5, span5), glassMat);
+      escGlass5.position.copy(midP).add(new THREE.Vector3(0, 1.45, 0));
+      escGlass5.lookAt(endP.clone().add(new THREE.Vector3(0, 1.45, 0)));
+      this.scene.add(escGlass5);
+      this.scene.add(this.sharedBox(5.8, 0.22, 4.2, concourseMat, st.sx - 18, 0.11, entryZ));
+      this.scene.add(this.sharedBox(6.2, 0.55, 4.6, mrtRedTrimMat, st.sx - 18, 3.85, entryZ));
+
       const signTex5 = createFlyoverGantryTexture(st.nameBn, st.nameEn, 'ঢাকা ম্যাস ট্রানজিট (MRT LINE-5)', 'DMTCL NORTHERN ROUTE');
-      const signBoard5 = new THREE.Mesh(
-        new THREE.PlaneGeometry(10.5, 2.4),
-        new THREE.MeshBasicMaterial({ map: signTex5, side: THREE.DoubleSide })
+      const signMat5 = new THREE.MeshBasicMaterial({ map: signTex5, side: THREE.DoubleSide });
+      [-32.2, 32.2].forEach((dx) => {
+        const sb5 = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 2.5), signMat5);
+        sb5.rotation.y = Math.PI / 2;
+        sb5.position.set(st.sx + dx, 21.6, line5Z);
+        this.scene.add(sb5);
+      });
+    });
+
+    // Street-level MRT Station Ticket Gate Kiosks & Glowing Boarding Pads at every METRO_STATIONS stop
+    const metroPortalRingGeo = new THREE.RingGeometry(1.7, 2.3, 28);
+    METRO_STATIONS.forEach((st) => {
+      const accentHex = st.line === 'L5' ? '#f43f5e' : '#10b981';
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: accentHex,
+        transparent: true,
+        opacity: 0.78,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(metroPortalRingGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(st.x, 0.098, st.z);
+      this.scene.add(ring);
+      this.metroPortalRings.push(ring);
+
+      // Keep physical totem pillar slightly clear of EW road traffic at Mirpur-10 (-175)
+      const boothX = st.line === 'L6' ? -19.2 : st.x;
+      const boothZ = st.id === 'mrt_mirpur10' ? -187.0 : st.line === 'L5' ? st.z - 3.6 : st.z;
+
+      const pylon = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 4.4, 0.95),
+        new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.45, roughness: 0.35 })
       );
-      signBoard5.rotation.y = Math.PI / 2;
-      signBoard5.position.set(st.sx + 32.2, 21.6, line5Z);
-      this.scene.add(signBoard5);
+      pylon.position.set(boothX, 2.2, boothZ);
+      this.scene.add(pylon);
+
+      const canopyCap = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.48, 2.6),
+        new THREE.MeshStandardMaterial({
+          color: accentHex,
+          emissive: new THREE.Color(accentHex),
+          emissiveIntensity: 0.55,
+          roughness: 0.25,
+        })
+      );
+      canopyCap.position.set(boothX, 4.55, boothZ);
+      this.scene.add(canopyCap);
+
+      const signTex = createFlyoverGantryTexture(
+        st.nameBn,
+        st.nameEn,
+        `মেট্রোরেল [E] • ${st.line === 'L5' ? 'লাইন-৫' : 'লাইন-৬'}`,
+        `PRESS [E] TO RIDE • ৳${st.fare}`
+      );
+      const portalSign = new THREE.Mesh(
+        new THREE.BoxGeometry(2.8, 1.05, 0.22),
+        new THREE.MeshBasicMaterial({ map: signTex })
+      );
+      portalSign.position.set(boothX, 3.4, boothZ + (st.line === 'L5' ? 0.6 : 0));
+      if (st.line === 'L6') portalSign.rotation.y = Math.PI / 2;
+      this.scene.add(portalSign);
+
+      this.circleColliders.push({ x: boothX, z: boothZ, radius: 0.72, tag: 'metro_ticket_pylon' });
     });
 
     // =========================================================================
@@ -3057,6 +3225,15 @@ export class DhakaCityEngine {
     this.metroTrainLine5West.position.set(280, 17.48, -196.8);
     this.metroTrainLine5West.rotation.y = Math.PI / 2; // Faces -X (Westbound)
     this.scene.add(this.metroTrainLine5West);
+
+    // Express 6-Coach Trains reserved for real-time player Metro Rail Rides
+    this.playerMetroTrainL6 = createRealistic6CoachTrain('line6');
+    this.playerMetroTrainL6.visible = false;
+    this.scene.add(this.playerMetroTrainL6);
+
+    this.playerMetroTrainL5 = createRealistic6CoachTrain('line5');
+    this.playerMetroTrainL5.visible = false;
+    this.scene.add(this.playerMetroTrainL5);
   }
 
   private buildDistrictHighwaySigns() {
@@ -3313,6 +3490,7 @@ export class DhakaCityEngine {
   });
   private coilGeo: THREE.BufferGeometry = new THREE.TorusGeometry(0.36, 0.055, 8, 16);
   private matCache = new Map<string, THREE.Material>();
+  private texCache = new Map<string, THREE.Texture>();
 
   /** Box geometry cache keyed by rounded dimensions. */
   private boxCache(w: number, h: number, d: number): THREE.BufferGeometry {
@@ -3632,13 +3810,34 @@ export class DhakaCityEngine {
       metalness: 0.2,
     });
 
+    const corniceMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.55, metalness: 0.25 });
+    const stoneTrimMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.6 });
+    const mullionDarkMat = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.85, roughness: 0.22 });
+    const awningMats = [
+      new THREE.MeshStandardMaterial({ color: '#b91c1c', roughness: 0.72 }),
+      new THREE.MeshStandardMaterial({ color: '#047857', roughness: 0.72 }),
+      new THREE.MeshStandardMaterial({ color: '#1d4ed8', roughness: 0.72 }),
+      new THREE.MeshStandardMaterial({ color: '#b45309', roughness: 0.72 }),
+    ];
+    const lobbyGlassMat = new THREE.MeshStandardMaterial({
+      color: '#bae6fd',
+      emissive: new THREE.Color('#fef08a'),
+      emissiveIntensity: 0.28,
+      metalness: 0.75,
+      roughness: 0.12,
+    });
+    const btsSteelMat = new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.88, roughness: 0.25 });
+    const aviationRedMat = new THREE.MeshBasicMaterial({ color: '#ff1744' });
+
     const balconyPositions = new Map<
       string,
       Array<{ x: number; y: number; z: number }>
     >();
-    buildingBlocks.forEach((b) => {
-      // Select authentic orthographic 3D Dhaka architectural facade texture by district style
-      const facadeTex =
+    buildingBlocks.forEach((b, bIdx) => {
+      // Proportional UV scaling so floor height & window width match real human scale across all heights
+      const repX = Math.max(1, Math.round(b.w / 10));
+      const repY = Math.max(1, Math.round(b.h / 12));
+      const baseFacadeTex =
         b.style === 'old_dhaka'
           ? dhakaOldCityTex
           : b.style === 'commercial'
@@ -3646,6 +3845,21 @@ export class DhakaCityEngine {
           : b.style === 'residential'
           ? dhakaRealFacadeTex
           : createBuildingFacadeTexture(b.style, b.color);
+
+      let scaledTex = baseFacadeTex;
+      if (b.style === 'modern_glass' || b.style === 'commercial') {
+        const texKey = `ftex|${b.style}|${b.color}|${repX}x${repY}`;
+        let cachedTex = this.texCache.get(texKey);
+        if (!cachedTex) {
+          cachedTex = baseFacadeTex.clone();
+          cachedTex.wrapS = THREE.RepeatWrapping;
+          cachedTex.wrapT = THREE.RepeatWrapping;
+          cachedTex.repeat.set(repX, repY);
+          cachedTex.needsUpdate = true;
+          this.texCache.set(texKey, cachedTex);
+        }
+        scaledTex = cachedTex;
+      }
 
       const tint =
         b.style === 'modern_glass' ||
@@ -3655,12 +3869,12 @@ export class DhakaCityEngine {
           : b.color;
       let mat: THREE.Material;
       if (b.style === 'modern_glass') {
-        const glassKey = `facade_glass|${b.color}|${facadeTex.uuid}|${b.x}_${b.z}`;
+        const glassKey = `facade_glass|${b.color}|${repX}x${repY}|${b.x}_${b.z}`;
         let glassMat = this.matCache.get(glassKey) as THREE.MeshPhysicalMaterial | undefined;
         if (!glassMat) {
           const windowTex = createEmissiveWindowGridTexture(Math.abs(Math.round(b.x * 7 + b.z * 13)));
           glassMat = new THREE.MeshPhysicalMaterial({
-            map: facadeTex,
+            map: scaledTex,
             color: b.color || '#bae6fd',
             bumpMap: brickBump,
             bumpScale: 0.02,
@@ -3678,12 +3892,12 @@ export class DhakaCityEngine {
         }
         mat = glassMat;
       } else if (b.style === 'commercial') {
-        const commKey = `facade_comm|${b.color}|${facadeTex.uuid}|${b.x}_${b.z}`;
+        const commKey = `facade_comm|${b.color}|${repX}x${repY}|${b.x}_${b.z}`;
         let commMat = this.matCache.get(commKey) as THREE.MeshStandardMaterial | undefined;
         if (!commMat) {
           const windowTex = createEmissiveWindowGridTexture(Math.abs(Math.round(b.x * 11 + b.z * 5)));
           commMat = new THREE.MeshStandardMaterial({
-            map: facadeTex,
+            map: scaledTex,
             color: tint,
             bumpMap: brickBump,
             bumpScale: 0.05,
@@ -3698,11 +3912,11 @@ export class DhakaCityEngine {
         }
         mat = commMat;
       } else {
-        const facadeKey = `facade|${b.style}|${tint}|${facadeTex.uuid}`;
+        const facadeKey = `facade|${b.style}|${tint}|${scaledTex.uuid}`;
         let stdMat = this.matCache.get(facadeKey) as THREE.MeshStandardMaterial | undefined;
         if (!stdMat) {
           stdMat = new THREE.MeshStandardMaterial({
-            map: facadeTex,
+            map: scaledTex,
             color: tint,
             bumpMap: brickBump,
             bumpScale: 0.07,
@@ -3714,42 +3928,63 @@ export class DhakaCityEngine {
         mat = stdMat;
       }
 
-      const mesh = new THREE.Mesh(this.boxCache(b.w, b.h, b.d), mat);
-      mesh.position.set(b.x, b.h / 2, b.z);
+      // Main Tower Body + Concrete Podium Cornice & Stepped Upper Setback for tall towers
+      const shaftH = b.h >= 34 ? b.h - 4.2 : b.h;
+      const mesh = new THREE.Mesh(this.boxCache(b.w, shaftH, b.d), mat);
+      mesh.position.set(b.x, shaftH / 2, b.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
 
-      // 3D Architectural Aluminum Mullions for Glass Towers
-      if (b.style === 'modern_glass' && b.h >= 22) {
-        const mullionMat = new THREE.MeshStandardMaterial({
-          color: '#0f172a',
-          metalness: 0.85,
-          roughness: 0.25,
-        });
-        const numFins = Math.floor(b.w / 4.2);
-        for (let fi = -numFins / 2; fi <= numFins / 2; fi++) {
-          const finX = b.x + fi * 4.2;
-          const fin = new THREE.Mesh(this.boxCache(0.14, b.h - 4.5, 0.24), mullionMat);
-          fin.position.set(finX, (b.h + 4.5) / 2, b.z + b.d / 2 + 0.1);
-          this.scene.add(fin);
-        }
+      if (b.h >= 34) {
+        const setW = b.w * 0.78;
+        const setD = b.d * 0.78;
+        const setMesh = new THREE.Mesh(this.boxCache(setW, 4.2, setD), mat);
+        setMesh.position.set(b.x, shaftH + 2.1, b.z);
+        setMesh.castShadow = true;
+        this.scene.add(setMesh);
+        this.scene.add(this.sharedBox(setW + 0.5, 0.45, setD + 0.5, corniceMat, b.x, b.h + 0.22, b.z));
       }
 
-      // Ground-Floor Authentic Dhaka Shopfront Arcade Skin (বিরিয়ানি হাউস | ড্রাগ ফার্মেসী)
-      // Shared materials: one instance per style instead of one per building.
-      const arcadeMat =
-        b.style === 'old_dhaka' ? oldArcadeMat : shopArcadeMat;
-      const groundArcade = this.sharedBox(
-        b.w + 0.24,
-        4.1,
-        b.d + 0.24,
-        arcadeMat,
-        b.x,
-        2.05,
-        b.z
-      );
+      // 3D Architectural Aluminum Mullions & Horizontal Spandrel Bands for Glass Towers
+      if (b.style === 'modern_glass' && b.h >= 22) {
+        const numFins = Math.floor(b.w / 4.8);
+        for (let fi = -numFins / 2; fi <= numFins / 2; fi++) {
+          const finX = b.x + fi * 4.8;
+          this.scene.add(this.sharedBox(0.16, shaftH - 4.5, 0.24, mullionDarkMat, finX, (shaftH + 4.5) / 2, b.z + b.d / 2 + 0.1));
+          this.scene.add(this.sharedBox(0.16, shaftH - 4.5, 0.24, mullionDarkMat, finX, (shaftH + 4.5) / 2, b.z - b.d / 2 - 0.1));
+        }
+        for (let sy = 9; sy < shaftH - 3; sy += 9.5) {
+          this.scene.add(this.sharedBox(b.w + 0.26, 0.34, b.d + 0.26, corniceMat, b.x, sy, b.z));
+        }
+      } else {
+        // Vertical architectural corner pilasters on commercial, residential & old_dhaka buildings
+        [-b.w / 2, b.w / 2].forEach((cx) => {
+          [-b.d / 2, b.d / 2].forEach((cz) => {
+            this.scene.add(this.sharedBox(0.55, shaftH, 0.55, stoneTrimMat, b.x + cx, shaftH / 2, b.z + cz));
+          });
+        });
+      }
+
+      // Ground-Floor Authentic Dhaka Shopfront Arcade Skin + Podium Cornice + Shop Awnings & Lobby Vestibule
+      const arcadeMat = b.style === 'old_dhaka' ? oldArcadeMat : shopArcadeMat;
+      const groundArcade = this.sharedBox(b.w + 0.28, 4.1, b.d + 0.28, arcadeMat, b.x, 2.05, b.z);
       this.scene.add(groundArcade);
+      // Heavy architectural floor cornice separating street retail from upper floors
+      this.scene.add(this.sharedBox(b.w + 0.72, 0.42, b.d + 0.72, corniceMat, b.x, 4.28, b.z));
+
+      // Street-facing shopfront awning canopy & illuminated lobby vestibule
+      const faceZSign = b.z > 0 ? -1 : 1;
+      if (b.style === 'modern_glass' || b.style === 'commercial') {
+        const lobbyCanopy = this.sharedBox(Math.min(b.w * 0.44, 7.2), 0.26, 1.9, corniceMat, b.x, 3.8, b.z + faceZSign * (b.d / 2 + 0.95));
+        const lobbyDoor = this.sharedBox(Math.min(b.w * 0.3, 4.4), 3.3, 0.2, lobbyGlassMat, b.x, 1.75, b.z + faceZSign * (b.d / 2 + 0.18));
+        this.scene.add(lobbyCanopy, lobbyDoor);
+      } else {
+        const awningMat = awningMats[bIdx % awningMats.length];
+        const awning = this.sharedBox(b.w * 0.76, 0.18, 1.55, awningMat, b.x, 3.65, b.z + faceZSign * (b.d / 2 + 0.78));
+        awning.rotation.x = faceZSign * 0.24;
+        this.scene.add(awning);
+      }
 
       // Paved Dhaka Sidewalk Plinth around Building (ফুটপাতের টাইলস)
       const sidewalkPlinth = this.sharedBox(
@@ -3765,21 +4000,14 @@ export class DhakaCityEngine {
       this.scene.add(sidewalkPlinth);
 
       // Rooftop Parapet Wall Ledge (ছাদের রেলিং)
-      const parapet = this.sharedBox(
-        b.w + 0.4,
-        0.9,
-        b.d + 0.4,
-        balconyMat,
-        b.x,
-        b.h + 0.45,
-        b.z
-      );
-      this.scene.add(parapet);
+      const topRoofY = b.h;
+      const parapetW = b.h >= 34 ? b.w * 0.78 + 0.4 : b.w + 0.4;
+      const parapetD = b.h >= 34 ? b.d * 0.78 + 0.4 : b.d + 0.4;
+      this.scene.add(this.sharedBox(parapetW, 0.85, parapetD, balconyMat, b.x, shaftH + 0.42, b.z));
 
       // 3D Protruding Dhaka Apartment Balconies (বারান্দা) on upper floors.
-      // Deferred: collected per building width and instanced after the loop.
       if (b.style !== 'modern_glass') {
-        for (let fy = 7.5; fy < b.h - 2.5; fy += 3.8) {
+        for (let fy = 7.5; fy < shaftH - 2.5; fy += 3.8) {
           const key = (b.w * 0.72).toFixed(2);
           if (!balconyPositions.has(key)) balconyPositions.set(key, []);
           balconyPositions.get(key)!.push({
@@ -3790,33 +4018,47 @@ export class DhakaCityEngine {
         }
       }
 
-      // Rooftop Gazi water tanks — shared geometry, two shared materials.
-      const tank = new THREE.Mesh(
-        this.boxCache(2.6, 2.3, 2.6),
-        b.x % 2 === 0 ? tankBlueMat : tankSlateMat
-      );
-      tank.position.set(b.x + b.w * 0.22, b.h + 1.15, b.z - b.d * 0.22);
-      this.scene.add(tank);
+      // Varied Realistic Rooftops by Building Type & Height
+      if (b.style === 'modern_glass' || b.h >= 36) {
+        // Corporate Rooftop HVAC Chiller Units + Telecom Spire & Aviation Warning Light
+        [-3.2, 3.2].forEach((hx) => {
+          this.scene.add(this.sharedBox(2.4, 1.5, 3.6, corniceMat, b.x + hx, topRoofY + 0.95, b.z));
+        });
+        if (b.h >= 40) {
+          const spire = new THREE.Mesh(this.cylCache(0.12, 0.28, 7.5, 8), btsSteelMat);
+          spire.position.set(b.x, topRoofY + 3.75, b.z);
+          const avLight = new THREE.Mesh(this.boxCache(0.45, 0.45, 0.45), aviationRedMat);
+          avLight.position.set(b.x, topRoofY + 7.6, b.z);
+          this.scene.add(spire, avLight);
+          this.aviationBeacons.push(avLight);
+        }
+      } else {
+        // Authentic Cylindrical Gazi/RFL Water Tanks on concrete pads + Stairwell Bulkhead (চিলেকোঠা)
+        const tank1 = new THREE.Mesh(this.cylCache(1.15, 1.15, 2.3, 12), bIdx % 2 === 0 ? tankBlueMat : tankSlateMat);
+        tank1.position.set(b.x + b.w * 0.22, topRoofY + 1.25, b.z - b.d * 0.2);
+        const tank2 = new THREE.Mesh(this.cylCache(0.95, 0.95, 1.9, 12), tankDarkMat);
+        tank2.position.set(b.x - b.w * 0.22, topRoofY + 1.05, b.z + b.d * 0.18);
+        this.scene.add(tank1, tank2);
 
-      // Second rooftop tank for the authentic Dhaka skyline
-      const tank2 = new THREE.Mesh(
-        this.boxCache(2.0, 1.9, 2.0),
-        tankDarkMat
-      );
-      tank2.position.set(b.x - b.w * 0.22, b.h + 0.95, b.z + b.d * 0.18);
-      this.scene.add(tank2);
+        const stairRoom = this.sharedBox(
+          Math.min(b.w * 0.32, 4.0),
+          2.6,
+          Math.min(b.d * 0.32, 3.6),
+          stoneTrimMat,
+          b.x - b.w * 0.08,
+          topRoofY + 1.3,
+          b.z - b.d * 0.08
+        );
+        this.scene.add(stairRoom);
 
-      // Rooftop Concrete Stairwell / Elevator Machine Bulkhead (চিলেকোঠা)
-      const stairRoom = this.sharedBox(
-        Math.min(b.w * 0.35, 4.2),
-        2.8,
-        Math.min(b.d * 0.35, 3.8),
-        balconyMat,
-        b.x - b.w * 0.1,
-        b.h + 1.4,
-        b.z - b.d * 0.1
-      );
-      this.scene.add(stairRoom);
+        // Mobile Telecom BTS Lattice Antenna Mast on every 4th commercial/residential rooftop
+        if (bIdx % 4 === 0 && b.h >= 20) {
+          const btsMast = new THREE.Mesh(this.cylCache(0.15, 0.28, 6.2, 6), btsSteelMat);
+          btsMast.position.set(b.x + b.w * 0.25, topRoofY + 3.1, b.z + b.d * 0.2);
+          this.scene.add(btsMast);
+          this.scene.add(this.sharedBox(1.4, 0.85, 0.22, stoneTrimMat, b.x + b.w * 0.25, topRoofY + 5.6, b.z + b.d * 0.2));
+        }
+      }
 
       // AC Outdoor Units mounted on walls (Walton / General AC units)
       if (b.style !== 'modern_glass' && b.h >= 14) {
@@ -4685,9 +4927,9 @@ export class DhakaCityEngine {
         // Ground-Floor Dhaka Shopfront Arcade & Raised Sidewalk Plinth for street-facing buildings
         if (ring.minR <= 450) {
           const groundArcade = this.sharedBox(
-            width + 0.22,
+            width + 0.26,
             4.1,
-            depth + 0.22,
+            depth + 0.26,
             groundShopArcadeMat,
             bx,
             2.05,
@@ -4695,6 +4937,18 @@ export class DhakaCityEngine {
           );
           groundArcade.rotation.y = towerMesh.rotation.y;
           this.scene.add(groundArcade);
+
+          const podiumCornice = this.sharedBox(
+            width + 0.65,
+            0.38,
+            depth + 0.65,
+            mechCrownMat,
+            bx,
+            4.25,
+            bz
+          );
+          podiumCornice.rotation.y = towerMesh.rotation.y;
+          this.scene.add(podiumCornice);
 
           const sidewalkPlinth = this.sharedBox(
             width + 3.2,
@@ -4739,24 +4993,24 @@ export class DhakaCityEngine {
         parapet.rotation.y = towerMesh.rotation.y;
         this.scene.add(parapet);
 
-        if (height > 55) {
+        if (height > 36) {
           const tierW = width * 0.72;
           const tierD = depth * 0.72;
-          const tierH = height * 0.28;
+          const tierH = height * 0.24;
           const tierMat = style === 'gulshan' || style === 'motijheel' ? glassTowerMat : mechCrownMat;
           const tierMesh = this.sharedBox(tierW, tierH, tierD, tierMat, bx, height + tierH / 2, bz);
           tierMesh.rotation.y = towerMesh.rotation.y;
           this.scene.add(tierMesh);
 
-          const crownH = 5.5 + rnd() * 4;
+          const crownH = 4.5 + rnd() * 3.5;
           const crownMesh = this.sharedBox(tierW * 0.6, crownH, tierD * 0.6, mechCrownMat, bx, height + tierH + crownH / 2, bz);
           crownMesh.rotation.y = towerMesh.rotation.y;
           this.scene.add(crownMesh);
 
           const totalRoofY = height + tierH + crownH;
 
-          if (height > 75) {
-            const spireH = 14 + rnd() * 22;
+          if (height > 62) {
+            const spireH = 14 + rnd() * 20;
             const spire = new THREE.Mesh(this.cylCache(0.18, 0.45, spireH, 8), spireMat);
             spire.position.set(bx, totalRoofY + spireH / 2, bz);
             this.scene.add(spire);
@@ -4767,8 +5021,8 @@ export class DhakaCityEngine {
             this.aviationBeacons.push(beacon);
           } else {
             const tankMat = rnd() > 0.5 ? gaziWaterTankMat : nationalTankMat;
-            const tank = new THREE.Mesh(this.cylCache(1.8, 1.8, 2.6, 12), tankMat);
-            tank.position.set(bx + (rnd() - 0.5) * (tierW * 0.3), totalRoofY + 1.3, bz + (rnd() - 0.5) * (tierD * 0.3));
+            const tank = new THREE.Mesh(this.cylCache(1.5, 1.5, 2.4, 10), tankMat);
+            tank.position.set(bx + (rnd() - 0.5) * (tierW * 0.3), totalRoofY + 1.2, bz + (rnd() - 0.5) * (tierD * 0.3));
             this.scene.add(tank);
           }
         } else {
@@ -5203,12 +5457,12 @@ export class DhakaCityEngine {
     const westBarrier = this.sharedBox(0.45, 1.25, deckLen, barrierMat, flyoverX - flyoverW / 2 + 0.22, deckElev + 0.62, -50);
     this.scene.add(westBarrier);
     this.buildingColliders.push({
-      minX: 6.8,
-      maxX: 7.45,
+      minX: 6.75,
+      maxX: 7.55,
       minZ: -340,
       maxZ: 240,
       minY: 14.5,
-      maxY: 18.5,
+      maxY: 19.5,
       tag: 'flyover_barrier',
     });
 
@@ -5217,25 +5471,25 @@ export class DhakaCityEngine {
     const eastBarrierN = this.sharedBox(0.45, 1.25, 180, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, -250);
     this.scene.add(eastBarrierN);
     this.buildingColliders.push({
-      minX: 20.6,
-      maxX: 21.25,
+      minX: 20.55,
+      maxX: 21.35,
       minZ: -340,
       maxZ: -160,
       minY: 14.5,
-      maxY: 18.5,
+      maxY: 19.5,
       tag: 'flyover_barrier',
     });
 
-    // Middle Segment: Z: -15 to 15 (between on-ramp merge taper and off-ramp diverge taper)
-    const eastBarrierM = this.sharedBox(0.45, 1.25, 30, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
+    // Middle Segment: Z: -40 to +40 (between on-ramp merge end and off-ramp diverge start)
+    const eastBarrierM = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 0);
     this.scene.add(eastBarrierM);
     this.buildingColliders.push({
-      minX: 20.6,
-      maxX: 21.25,
-      minZ: -15,
-      maxZ: 15,
+      minX: 20.55,
+      maxX: 21.35,
+      minZ: -40,
+      maxZ: 40,
       minY: 14.5,
-      maxY: 18.5,
+      maxY: 19.5,
       tag: 'flyover_barrier',
     });
 
@@ -5243,12 +5497,12 @@ export class DhakaCityEngine {
     const eastBarrierS = this.sharedBox(0.45, 1.25, 80, barrierMat, flyoverX + flyoverW / 2 - 0.22, deckElev + 0.62, 200);
     this.scene.add(eastBarrierS);
     this.buildingColliders.push({
-      minX: 20.6,
-      maxX: 21.25,
+      minX: 20.55,
+      maxX: 21.35,
       minZ: 160,
       maxZ: 240,
       minY: 14.5,
-      maxY: 18.5,
+      maxY: 19.5,
       tag: 'flyover_barrier',
     });
 
@@ -6220,18 +6474,108 @@ export class DhakaCityEngine {
     });
     const plazaGraniteMat = new THREE.MeshStandardMaterial({
       color: '#cbd5e1',
-      roughness: 0.55,
+      roughness: 0.45,
+      metalness: 0.08,
     });
+    const champagneGoldMat = new THREE.MeshStandardMaterial({
+      color: '#eab308',
+      metalness: 0.78,
+      roughness: 0.24,
+    });
+    const darkTitaniumMat = new THREE.MeshStandardMaterial({
+      color: '#1e293b',
+      metalness: 0.72,
+      roughness: 0.3,
+    });
+    const neonVioletMat = new THREE.MeshBasicMaterial({ color: '#c084fc' });
+    const neonCyanMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
 
     // Front Drop-Off Marble Plaza (South apron Z: -349 .. -328, clear of Z=-315 road)
     const frontPlaza = this.sharedBox(118, 0.16, 22, plazaGraniteMat, 0, 0.08, 46);
     frontPlaza.receiveShadow = true;
     jfpGroup.add(frontPlaza);
 
+    // Decorative Drop-Off Curb & Driveway Bay Lanes on Plaza Forecourt
+    [-16, 16].forEach((lx) => {
+      const bayLine = this.sharedBox(14, 0.03, 0.25, champagneGoldMat, lx, 0.17, 54.5);
+      jfpGroup.add(bayLine);
+    });
+
+    // Twin Flanking Outdoor Plaza Water Fountains (lx = ±28, lz = 45)
+    const plazaWaterMat = new THREE.MeshStandardMaterial({
+      color: '#0284c7',
+      roughness: 0.08,
+      metalness: 0.25,
+      transparent: true,
+      opacity: 0.85,
+    });
+    [-28, 28].forEach((fx) => {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.8, 0.55, 24), marbleMat);
+      basin.position.set(fx, 0.43, 45);
+      jfpGroup.add(basin);
+      const water = new THREE.Mesh(new THREE.CylinderGeometry(3.15, 3.15, 0.2, 24), plazaWaterMat);
+      water.position.set(fx, 0.64, 45);
+      jfpGroup.add(water);
+      const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.65, 1.4, 14), champagneGoldMat);
+      spire.position.set(fx, 1.1, 45);
+      jfpGroup.add(spire);
+      const jet = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.26, 2.1, 10),
+        new THREE.MeshBasicMaterial({ color: '#bae6fd', transparent: true, opacity: 0.72 })
+      );
+      jet.position.set(fx, 2.4, 45);
+      jfpGroup.add(jet);
+      this.circleColliders.push({ x: MX + fx, z: MZ + 45, radius: 3.85, tag: 'jfp_plaza_fountain' });
+    });
+
+    // Landscaped Royal Palm & Flower Planter Islands along Forecourt
+    const outerPalmTrunkMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 });
+    const outerPalmLeafMat = new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.68 });
+    [-42, -16, 16, 42].forEach((px) => {
+      const planter = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.65, 3.2), darkTitaniumMat);
+      planter.position.set(px, 0.48, 49.5);
+      jfpGroup.add(planter);
+      const trunk = new THREE.Mesh(this.cylCache(0.18, 0.26, 4.6, 8), outerPalmTrunkMat);
+      trunk.position.set(px, 2.9, 49.5);
+      jfpGroup.add(trunk);
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.65, 0), outerPalmLeafMat);
+      crown.scale.set(1.25, 0.6, 1.25);
+      crown.position.set(px, 5.3, 49.5);
+      jfpGroup.add(crown);
+      this.circleColliders.push({ x: MX + px, z: MZ + 49.5, radius: 1.75, tag: 'jfp_plaza_palm' });
+    });
+
     // Wide Crimson Entrance Red Carpet Runner leading into South Gate
     const redCarpetMat = new THREE.MeshStandardMaterial({ color: '#991b1b', roughness: 0.85 });
     const entryCarpet = this.sharedBox(10, 0.04, 18, redCarpetMat, 0, 0.20, 40);
     jfpGroup.add(entryCarpet);
+
+    // Grand Glass & Steel Porte-Cochere Canopy extending over South Drop-Off Entrance
+    const porteCanopy = this.sharedBox(22, 0.35, 11.5, facadeGlassMat, 0, 6.2, 42.2);
+    jfpGroup.add(porteCanopy);
+    const porteFrame = this.sharedBox(22.5, 0.48, 11.8, darkTitaniumMat, 0, 6.45, 42.2);
+    jfpGroup.add(porteFrame);
+    const porteTrim = this.sharedBox(22.6, 0.14, 11.9, neonVioletMat, 0, 6.18, 42.2);
+    jfpGroup.add(porteTrim);
+    // Warm recessed ceiling light bars under Porte-Cochere
+    [-5, 0, 5].forEach((lx) => {
+      jfpGroup.add(this.sharedBox(0.35, 0.08, 9.5, new THREE.MeshBasicMaterial({ color: '#fef9c3' }), lx, 6.0, 42.2));
+    });
+    // Paired V-Shaped Canopy Support Columns (clear of central walkway)
+    [-9.8, 9.8].forEach((cx) => {
+      const col = new THREE.Mesh(this.cylCache(0.35, 0.45, 6.1, 12), champagneGoldMat);
+      col.position.set(cx, 3.1, 46.8);
+      jfpGroup.add(col);
+      this.circleColliders.push({ x: MX + cx, z: MZ + 46.8, radius: 0.55, tag: 'jfp_porte_pillar' });
+    });
+
+    // Sleek Entrance Security Walk-Through Scanners inside South Gate (wide 5.6m center gap unobstructed)
+    [-3.1, 3.1].forEach((sx) => {
+      const post = this.sharedBox(0.32, 2.5, 0.65, darkTitaniumMat, sx, 1.5, 34.4);
+      const led = this.sharedBox(0.14, 2.1, 0.08, new THREE.MeshBasicMaterial({ color: '#10b981' }), sx, 1.5, 34.76);
+      jfpGroup.add(post, led);
+    });
+    jfpGroup.add(this.sharedBox(6.5, 0.28, 0.65, darkTitaniumMat, 0, 2.85, 34.4));
 
     // Sleek Chrome Pedestrian-Only Bollards outside South, West & East Gates (blocks cars, lets player walk through!)
     const bollardMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.9, roughness: 0.18 });
@@ -6250,9 +6594,9 @@ export class DhakaCityEngine {
       });
     });
 
-    // Helper to build perimeter wall with lower marble + upper panoramic glass
+    // Helper to build perimeter wall with lower marble, panoramic glass & vertical titanium mullions
     const addExteriorWall = (wx: number, wz: number, ww: number, wd: number) => {
-      // Ground floor marble wall
+      // Ground floor marble wall with champagne-gold plinth trim
       const lower = this.sharedBox(ww, 5.2, wd, marbleMat, wx, 2.6, wz);
       lower.castShadow = true;
       lower.receiveShadow = true;
@@ -6260,10 +6604,41 @@ export class DhakaCityEngine {
       // Upper curtain glass band (Y: 5.2..16.2)
       const glass = this.sharedBox(ww, 10.6, wd, facadeGlassMat, wx, 10.5, wz);
       jfpGroup.add(glass);
-      // Top cornice fascia
+      // Horizontal floor spandrel dividers (1F & 2F exterior expression)
+      jfpGroup.add(this.sharedBox(ww + 0.22, 0.42, wd + 0.22, darkTitaniumMat, wx, 5.4, wz));
+      jfpGroup.add(this.sharedBox(ww + 0.22, 0.42, wd + 0.22, darkTitaniumMat, wx, 10.55, wz));
+      // Vertical curtain-wall mullions
+      const isHorizontalWall = ww > wd;
+      const span = isHorizontalWall ? ww : wd;
+      for (let m = -span / 2 + 5; m <= span / 2 - 5; m += 7.5) {
+        const mullion = this.sharedBox(
+          isHorizontalWall ? 0.28 : wd + 0.26,
+          10.8,
+          isHorizontalWall ? wd + 0.26 : 0.28,
+          darkTitaniumMat,
+          isHorizontalWall ? wx + m : wx,
+          10.5,
+          isHorizontalWall ? wz : wz + m
+        );
+        jfpGroup.add(mullion);
+      }
+      // Top cornice fascia + gold accent trim
       const fascia = this.sharedBox(ww + 0.4, 1.8, wd + 0.4, darkTrimMat, wx, 16.7, wz);
-      jfpGroup.add(fascia);
+      const corniceGold = this.sharedBox(ww + 0.55, 0.24, wd + 0.55, champagneGoldMat, wx, 17.65, wz);
+      jfpGroup.add(fascia, corniceGold);
     };
+
+    // 4 Corner Architectural Chamfered Limestone Piers framing JFP corners
+    [
+      [-MW / 2, -MD / 2],
+      [MW / 2, -MD / 2],
+      [-MW / 2, MD / 2],
+      [MW / 2, MD / 2],
+    ].forEach(([cx, cz]) => {
+      const cornerPier = this.sharedBox(3.6, 18.2, 3.6, marbleMat, cx, 9.1, cz);
+      const cornerCap = this.sharedBox(4.0, 0.5, 4.0, champagneGoldMat, cx, 18.3, cz);
+      jfpGroup.add(cornerPier, cornerCap);
+    });
 
     // North Wall (solid perimeter)
     addExteriorWall(0, -MD / 2, MW, 1.2);
@@ -6317,19 +6692,37 @@ export class DhakaCityEngine {
     const colonnadeArch = this.sharedBox(102, 2.6, 6.5, marbleMat, 0, 18.6, 40.2);
     jfpGroup.add(colonnadeArch);
 
-    // Grand Illuminated Jamuna Future Park Signboard
+    // Grand Illuminated Jamuna Future Park Signboards (South Main + East/West Wing Facades)
     const jfpSignTex = createMallSignboardTexture(
       'যমুনা ফিউচার পার্ক',
       'JAMUNA FUTURE PARK',
       "SOUTH ASIA'S LARGEST MALL | 300+ SHOPS | FOOD COURT | BLOCKBUSTER CINEMAS",
       '#6b21a8'
     );
+    const jfpSignMat = new THREE.MeshBasicMaterial({ map: jfpSignTex });
     const jfpSignBoard = new THREE.Mesh(
       new THREE.BoxGeometry(46, 8.2, 0.45),
-      new THREE.MeshBasicMaterial({ map: jfpSignTex })
+      jfpSignMat
     );
     jfpSignBoard.position.set(0, 23.6, 41.5);
     jfpGroup.add(jfpSignBoard);
+
+    [-MW / 2 - 0.65, MW / 2 + 0.65].forEach((sx, idx) => {
+      const wingSign = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.8, 28), jfpSignMat);
+      wingSign.position.set(sx, 19.6, 0);
+      if (idx === 0) wingSign.rotation.y = Math.PI;
+      jfpGroup.add(wingSign);
+    });
+
+    // Iconic Glass Atrium Crown Rotunda Archways above South Facade
+    [-18, 0, 18].forEach((ax, aIdx) => {
+      const crownRib = new THREE.Mesh(
+        new THREE.TorusGeometry(aIdx === 1 ? 14 : 9, 0.35, 8, 20, Math.PI),
+        aIdx === 1 ? champagneGoldMat : neonVioletMat
+      );
+      crownRib.position.set(ax, 17.6, 36.2);
+      jfpGroup.add(crownRib);
+    });
 
     // Perimeter Roof Slabs around 32m x 24m Central Skylight Atrium Opening
     const roofSlabMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.65 });
@@ -6357,20 +6750,79 @@ export class DhakaCityEngine {
     atriumSkylight.position.set(0, MH + 0.4, 0);
     jfpGroup.add(atriumSkylight);
 
-    // Future Park Iconic Rooftop Ferris Wheel
+    // Future Park Iconic Rooftop Amusement Theme Park ("Future World")
+    // 1. Anchored Giant Ferris Wheel with Dual A-Frame Support Legs & 12 Passenger Gondolas
+    const ferrisHubY = MH + 17.5;
+    [-3.2, 3.2].forEach((fz) => {
+      [-9.5, 9.5].forEach((lx) => {
+        const legLen = Math.hypot(9.5, 17.5);
+        const leg = new THREE.Mesh(this.cylCache(0.38, 0.55, legLen, 8), darkTitaniumMat);
+        leg.position.set(lx * 0.5, MH + 8.75, -22 + fz);
+        leg.rotation.z = lx > 0 ? 0.48 : -0.48;
+        jfpGroup.add(leg);
+      });
+    });
+    const ferrisAxle = new THREE.Mesh(this.cylCache(0.7, 0.7, 7.6, 12).rotateX(Math.PI / 2), champagneGoldMat);
+    ferrisAxle.position.set(0, ferrisHubY, -22);
+    jfpGroup.add(ferrisAxle);
+
     const ferrisGroup = new THREE.Group();
-    ferrisGroup.position.set(0, MH + 16, -22);
+    ferrisGroup.position.set(0, ferrisHubY, -22);
     const wheelRim = new THREE.Mesh(new THREE.TorusGeometry(15, 0.45, 8, 28), pillarMat);
-    ferrisGroup.add(wheelRim);
-    const innerRim = new THREE.Mesh(new THREE.TorusGeometry(10, 0.25, 6, 24), new THREE.MeshBasicMaterial({ color: '#a855f7' }));
-    ferrisGroup.add(innerRim);
+    const innerRim = new THREE.Mesh(new THREE.TorusGeometry(10, 0.25, 6, 24), neonVioletMat);
+    const outerNeonRim = new THREE.Mesh(new THREE.TorusGeometry(15.45, 0.16, 6, 28), neonCyanMat);
+    ferrisGroup.add(wheelRim, innerRim, outerNeonRim);
     for (let sp = 0; sp < 12; sp++) {
       const spMesh = new THREE.Mesh(this.boxCache(0.18, 30, 0.18), pillarMat);
       spMesh.rotation.z = (sp / 12) * Math.PI;
       ferrisGroup.add(spMesh);
     }
+    const gondolaColors = ['#ef4444', '#f59e0b', '#10b981', '#0ea5e9', '#a855f7', '#ec4899'];
+    for (let gIdx = 0; gIdx < 12; gIdx++) {
+      const ang = (gIdx / 12) * Math.PI * 2;
+      const gPod = new THREE.Group();
+      gPod.position.set(Math.cos(ang) * 15, Math.sin(ang) * 15, 0);
+      const hanger = new THREE.Mesh(this.boxCache(0.14, 1.1, 0.14), champagneGoldMat);
+      hanger.position.y = -0.55;
+      const cabin = new THREE.Mesh(
+        this.boxCache(1.65, 1.45, 1.4),
+        new THREE.MeshStandardMaterial({ color: gondolaColors[gIdx % gondolaColors.length], roughness: 0.35 })
+      );
+      cabin.position.y = -1.6;
+      const cabinWin = new THREE.Mesh(this.boxCache(1.7, 0.55, 1.05), neonCyanMat);
+      cabinWin.position.y = -1.45;
+      gPod.add(hanger, cabin, cabinWin);
+      ferrisGroup.add(gPod);
+      this.jfpFerrisGondolas.push(gPod);
+    }
     this.jfpFerrisWheel = ferrisGroup;
     jfpGroup.add(ferrisGroup);
+
+    // 2. Rooftop Sky Drop Tower Spire (West Wing)
+    const dropTowerX = -38;
+    const dropTowerZ = -18;
+    const dropSpire = new THREE.Mesh(this.boxCache(1.6, 24, 1.6), darkTitaniumMat);
+    dropSpire.position.set(dropTowerX, MH + 12, dropTowerZ);
+    const dropCrown = new THREE.Mesh(this.cylCache(0.2, 1.8, 3.2, 8), neonVioletMat);
+    dropCrown.position.set(dropTowerX, MH + 25.5, dropTowerZ);
+    const dropCar = new THREE.Mesh(
+      new THREE.TorusGeometry(2.1, 0.42, 8, 18).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: '#facc15' })
+    );
+    dropCar.position.set(dropTowerX, MH + 6, dropTowerZ);
+    this.jfpDropCar = dropCar;
+    jfpGroup.add(dropSpire, dropCrown, dropCar);
+
+    // 3. Rooftop Future World Carousel Pavilion (East Wing)
+    const carouselX = 38;
+    const carouselZ = -18;
+    const carBase = new THREE.Mesh(this.cylCache(6.5, 6.8, 1.0, 18), marbleMat);
+    carBase.position.set(carouselX, MH + 0.5, carouselZ);
+    const carRoof = new THREE.Mesh(this.cylCache(0.4, 7.2, 3.8, 18), new THREE.MeshStandardMaterial({ color: '#be185d', roughness: 0.35 }));
+    carRoof.position.set(carouselX, MH + 5.8, carouselZ);
+    const carCol = new THREE.Mesh(this.cylCache(0.55, 0.55, 4.2, 12), champagneGoldMat);
+    carCol.position.set(carouselX, MH + 2.8, carouselZ);
+    jfpGroup.add(carBase, carRoof, carCol);
 
     this.scene.add(jfpGroup);
 
@@ -6565,7 +7017,7 @@ export class DhakaCityEngine {
     buildEscalator(-22.5, Y0, '▲ TO 1ST FLOOR', 0, 9.8);
     buildEscalator(22.5, Y1, '▲ TO 2ND FLOOR', 4.6, 16.5);
 
-    // ─── 6. CENTRAL GRAND ATRIUM: FOUNTAIN, PALMS, BENCHES, CHANDELIER & ELEVATOR ───
+    // ─── 6. CENTRAL GRAND ATRIUM: CASCADING FOUNTAIN, PALMS, KIOSKS, CHANDELIER & ELEVATOR ───
     const fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.7, 0.58, 28), creamMarbleMat);
     fountainRim.position.set(0, Y0 + 0.29, 0);
     g.add(fountainRim);
@@ -6575,6 +7027,15 @@ export class DhakaCityEngine {
     );
     fountainWater.position.set(0, Y0 + 0.42, 0);
     g.add(fountainWater);
+    const fountainGlowRing = new THREE.Mesh(
+      new THREE.TorusGeometry(3.6, 0.08, 6, 28).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: '#38bdf8' })
+    );
+    fountainGlowRing.position.set(0, Y0 + 0.56, 0);
+    g.add(fountainGlowRing);
+    const fountainUpperBowl = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 1.1, 0.42, 20), creamMarbleMat);
+    fountainUpperBowl.position.set(0, Y0 + 1.45, 0);
+    g.add(fountainUpperBowl);
     const fountainPlinth = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.3, 1.2, 16), goldMat);
     fountainPlinth.position.set(0, Y0 + 0.85, 0);
     g.add(fountainPlinth);
@@ -6584,7 +7045,37 @@ export class DhakaCityEngine {
     );
     fountainJet.position.set(0, Y0 + 2.6, 0);
     g.add(fountainJet);
-    this.circleColliders.push({ x: MX, z: MZ, radius: 4.5, tag: 'jfp_fountain' });
+    this.createFountainSpraySystem(MX, Y0 + 0.55, MZ, 12, 3.2, 3.6);
+    this.circleColliders.push({ x: MX, z: MZ, radius: 4.8, tag: 'jfp_fountain' });
+
+    // Ground-Floor Digital Mall Directory Touch Kiosks flanking South Atrium Entry
+    [-10.5, 10.5].forEach((kx) => {
+      const kBase = this.sharedBox(1.1, 2.2, 0.45, darkBorderTileMat, kx, Y0 + 1.1, 19.5);
+      const kScreen = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.92, 1.45),
+        new THREE.MeshBasicMaterial({
+          map: makeShopSignTex('MALL DIRECTORY', 'GF FASHION • 1F TECH • 2F FOOD & IMAX', '#312e81'),
+        })
+      );
+      kScreen.position.set(kx, Y0 + 1.25, 19.74);
+      g.add(kBase, kScreen);
+      this.circleColliders.push({ x: MX + kx, z: MZ + 19.5, radius: 0.72, tag: 'jfp_kiosk' });
+    });
+
+    // Hanging Colorful Atrium Festival Banners suspended under Skylight
+    [
+      { lx: -9, lz: -5, title: 'EID GRAND', sub: 'SALE UP TO 50%', bg: '#7e22ce' },
+      { lx: 9, lz: -5, title: 'BLOCKBUSTER', sub: '3D IMAX CINEMAS', bg: '#991b1b' },
+      { lx: -9, lz: 5, title: 'FUTURE WORLD', sub: 'ARCADE & VR', bg: '#0369a1' },
+      { lx: 9, lz: 5, title: 'FOOD COURT', sub: '2ND FLOOR', bg: '#b45309' },
+    ].forEach((bn) => {
+      const bannerMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 4.4, 0.08),
+        new THREE.MeshBasicMaterial({ map: makeShopSignTex(bn.title, bn.sub, bn.bg) })
+      );
+      bannerMesh.position.set(bn.lx, 13.8, bn.lz);
+      g.add(bannerMesh);
+    });
 
     // Indoor Marble Planters & Tropical Royal Palms in Atrium Corners
     const palmTrunkMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 });
@@ -6638,7 +7129,7 @@ export class DhakaCityEngine {
     this.jfpChandelier = chandelier;
     g.add(chandelier);
 
-    // Panoramic Glass Capsule Elevator at North Atrium Edge (localX = 0, localZ = -13.2)
+    // Panoramic Glass Capsule Elevator Shaft & Animated Cabin at North Atrium Edge (localX = 0, localZ = -13.2)
     const elevShaft = new THREE.Mesh(new THREE.BoxGeometry(3.2, 16.5, 3.0), clearGlassMat);
     elevShaft.position.set(0, Y0 + 8.25, -13.2);
     g.add(elevShaft);
@@ -6647,6 +7138,18 @@ export class DhakaCityEngine {
       rail.position.set(ex, Y0 + 8.25, -11.7);
       g.add(rail);
     });
+    const elevCabGroup = new THREE.Group();
+    elevCabGroup.position.set(0, Y0 + 1.5, -13.2);
+    const cabBody = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 2.7, 16), clearGlassMat);
+    const cabFloor = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 0.25, 16), goldMat);
+    cabFloor.position.y = -1.3;
+    const cabCrown = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 0.28, 16), goldMat);
+    cabCrown.position.y = 1.35;
+    const cabLight = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 12), warmLightStripMat);
+    cabLight.position.y = 1.18;
+    elevCabGroup.add(cabBody, cabFloor, cabCrown, cabLight);
+    this.jfpElevatorCab = elevCabGroup;
+    g.add(elevCabGroup);
     const elevSign = new THREE.Mesh(
       new THREE.BoxGeometry(3.2, 0.7, 0.14),
       new THREE.MeshBasicMaterial({ map: makeShopSignTex('GLASS ELEVATOR', 'PRESS [E] ALL FLOORS', '#6b21a8') })
@@ -6761,7 +7264,7 @@ export class DhakaCityEngine {
         minY, maxY, tag: 'mall_counter',
       });
 
-      // Category-specific 3D interior merchandise props!
+      // Category-specific 3D interior merchandise & storefront display props!
       if (category === 'fashion' || category === 'footwear') {
         const colors = ['#ef4444', '#eab308', '#3b82f6', '#ec4899', '#10b981'];
         [-w * 0.3, w * 0.3].forEach((rx, rIdx) => {
@@ -6770,8 +7273,18 @@ export class DhakaCityEngine {
             const gMat = new THREE.MeshStandardMaterial({ color: colors[(rIdx + Math.round((h + 1) * 3)) % colors.length], roughness: 0.65 });
             sg.add(this.sharedBox(0.28, 0.9, 0.48, gMat, rx + h, 1.05, 0));
           }
+          // Illuminated Window Display Mannequin / Shoe Showcase Pedestal near glass window
+          sg.add(this.sharedBox(1.1, 0.55, 0.9, creamMarbleMat, rx, 0.28, frontZ - dir * 1.15));
+          const mannequinTorso = new THREE.Mesh(
+            this.cylCache(0.16, 0.22, 0.95, 8),
+            new THREE.MeshStandardMaterial({ color: colors[(rIdx + 2) % colors.length], roughness: 0.5 })
+          );
+          mannequinTorso.position.set(rx, 1.05, frontZ - dir * 1.15);
+          sg.add(mannequinTorso);
         });
       } else if (category === 'tech' || category === 'books') {
+        // Wall-mounted glowing LED display gallery on back accent wall
+        sg.add(this.sharedBox(w * 0.52, 1.65, 0.12, new THREE.MeshBasicMaterial({ color: category === 'tech' ? '#0ea5e9' : '#f59e0b' }), 0, 2.5, backZ + dir * 0.22));
         [-w * 0.28, w * 0.28].forEach((tx) => {
           sg.add(this.sharedBox(2.6, 0.9, 1.1, chromeMat, tx, 0.45, 0.2 * dir));
           [-0.7, 0, 0.7].forEach((dx) => {
@@ -6780,16 +7293,32 @@ export class DhakaCityEngine {
           });
         });
       } else if (category === 'arcade') {
-        for (let ax = -w * 0.36; ax <= w * 0.36; ax += 3.2) {
+        for (let ax = -w * 0.38; ax <= -2; ax += 3.2) {
           sg.add(this.sharedBox(1.1, 2.0, 0.9, new THREE.MeshStandardMaterial({ color: '#4c1d95', roughness: 0.4 }), ax, 1.0, 0.2 * dir));
           sg.add(this.sharedBox(0.85, 0.65, 0.08, new THREE.MeshBasicMaterial({ color: '#22d3ee' }), ax, 1.45, 0.2 * dir + 0.45 * dir));
         }
+        // VR Arena Neon Pad & Miniature Bowling Alley on right side of Future World
+        sg.add(this.sharedBox(4.8, 0.14, 3.4, new THREE.MeshBasicMaterial({ color: '#a855f7' }), w * 0.22, 0.12, 0.5 * dir));
+        sg.add(this.sharedBox(2.2, 0.08, d - 2.4, woodMat, w * 0.38, 0.1, 0));
       } else if (category === 'cinema') {
-        // Red velvet theater runner & golden poster frames
+        // Red velvet theater runner, popcorn kiosk counter & golden movie poster frames
         sg.add(this.sharedBox(4.8, 0.05, d - 1.2, redCarpetMat, 0, 0.07, 0));
-        [-6, 0, 6].forEach((px, pIdx) => {
-          const pCol = ['#dc2626', '#2563eb', '#d97706'][pIdx];
-          sg.add(this.sharedBox(2.2, 2.8, 0.14, new THREE.MeshBasicMaterial({ color: pCol }), px, 2.2, backZ + dir * 0.25));
+        [-10, -5, 5, 10].forEach((px, pIdx) => {
+          const pCol = ['#dc2626', '#2563eb', '#d97706', '#7c3aed'][pIdx];
+          sg.add(this.sharedBox(2.1, 2.7, 0.14, new THREE.MeshBasicMaterial({ color: pCol }), px, 2.2, backZ + dir * 0.25));
+          sg.add(this.sharedBox(2.3, 2.9, 0.08, goldMat, px, 2.2, backZ + dir * 0.18));
+        });
+        // Brass & red velvet stanchion posts flanking red carpet entrance
+        [-2.4, 2.4].forEach((vx) => {
+          const post = new THREE.Mesh(this.cylCache(0.06, 0.08, 0.95, 8), goldMat);
+          post.position.set(vx, 0.5, frontZ - dir * 1.4);
+          sg.add(post);
+        });
+      } else if (category === 'food') {
+        // Illuminated digital overhead menu boards above Food Court service counter
+        [-3.5, 0, 3.5].forEach((mx, mIdx) => {
+          const menuCol = mIdx === 1 ? '#f59e0b' : '#ef4444';
+          sg.add(this.sharedBox(2.8, 1.15, 0.1, new THREE.MeshBasicMaterial({ color: menuCol }), mx, 2.9, counterZ + dir * 0.1));
         });
       } else if (category === 'atm') {
         [-2.2, 2.2].forEach((ax) => {
@@ -6935,7 +7464,7 @@ export class DhakaCityEngine {
       labelEn: '[E] Deshi Kacchi — Royal Kacchi Platter (+100 HP & +50 Armor, ৳250)', labelBn: '[E] দেশি কাচ্চি — শাহী কাচ্চি ও বোরহানি (+১০০ হেলথ, ৳২৫০)', cost: 250,
     });
 
-    // Food Court Dining Tables & Chairs on 2nd Floor South & West Galleries
+    // Food Court Dining Tables, Trays & Chairs on 2nd Floor South Gallery
     const chairColors = ['#ef4444', '#f59e0b', '#0ea5e9', '#10b981'];
     [-36, -24, -12, 0, 12, 24, 36].forEach((tx, idx) => {
       const tz = 17;
@@ -6945,6 +7474,8 @@ export class DhakaCityEngine {
       const tLeg = new THREE.Mesh(this.cylCache(0.08, 0.12, 0.82, 8), chromeMat);
       tLeg.position.set(tx, Y2 + 0.41, tz);
       g.add(tLeg);
+      const tray = this.sharedBox(0.38, 0.04, 0.28, new THREE.MeshStandardMaterial({ color: '#f97316', roughness: 0.4 }), tx - 0.15, Y2 + 0.91, tz + 0.1);
+      g.add(tray);
       const cMat = new THREE.MeshStandardMaterial({ color: chairColors[idx % chairColors.length], roughness: 0.55 });
       [
         [1.15, 0],
@@ -7032,6 +7563,18 @@ export class DhakaCityEngine {
         lx: -42, y: Y2, lz: 30.2, shirt: '#dc2626', pants: '#1e293b',
         lineEn: 'Hot crispy chicken, pizza, and shahi kacchi served fresh on the 2nd floor!',
         lineBn: 'গরম ক্রিস্পি চিকেন, পিৎজা আর কাচ্চি বিরিয়ানি একদম রেডি!',
+      },
+      {
+        id: 'mall_npc_diner', nameEn: 'BracU Food Court Diner', nameBn: 'ফুড কোর্ট ভিজিটর', role: 'student',
+        lx: -10, y: Y2, lz: 15.2, shirt: '#f59e0b', pants: '#0f172a',
+        lineEn: 'Best view in Dhaka! Try the Deshi Kacchi platter or check out Future World VR behind us.',
+        lineBn: 'দারুণ ভিউ! দেশি কাচ্চি আর ফিউচার ওয়ার্ল্ড গেম জোন দারুণ জমেছে।',
+      },
+      {
+        id: 'mall_npc_vr', nameEn: 'Future World Arcade Host', nameBn: 'ফিউচার ওয়ার্ল্ড হোস্ট', role: 'shopkeeper',
+        lx: 32, y: Y2, lz: -30.2, shirt: '#7c3aed', pants: '#1e293b',
+        lineEn: 'VR arena, bowling & rooftop amusement rides open all day — press [E] to play!',
+        lineBn: 'ভিআর এরিনা, বোলিং ও ছাদের অ্যামিউজমেন্ট পার্ক খোলা আছে — [E] চাপুন!',
       },
     ];
 
@@ -7496,6 +8039,16 @@ export class DhakaCityEngine {
     pondWater.position.set(-110, 0.46, 247);
     fortGroup.add(pond, pondWater);
 
+    this.buildingColliders.push({
+      minX: -113.1,
+      maxX: -106.9,
+      minZ: 243.9,
+      maxZ: 250.1,
+      minY: 0,
+      maxY: 2.0,
+      tag: 'lalbagh_pond',
+    });
+
     // -----------------------------------------------------------------------
     // 2. AHSAN MANZIL PINK PALACE (আহসান মঞ্জিল - বুড়িগঙ্গা রিভারফ্রন্ট)
     // -----------------------------------------------------------------------
@@ -7887,10 +8440,13 @@ export class DhakaCityEngine {
       maxZ: mz + 6,
       tag: 'star_masjid_prayer_hall',
     });
-    this.circleColliders.push({
-      x: mx,
-      z: mz + 14,
-      radius: 3.2,
+    this.buildingColliders.push({
+      minX: mx - 4.1,
+      maxX: mx + 4.1,
+      minZ: mz + 14 - 2.85,
+      maxZ: mz + 14 + 2.85,
+      minY: 0,
+      maxY: 2.0,
       tag: 'star_masjid_pool',
     });
 
@@ -8493,6 +9049,17 @@ export class DhakaCityEngine {
       const barrier = this.sharedBox(110, 1.1, 0.45, barrierMat, 590, 0.95, -315 + bz);
       bridgeGroup.add(barrier);
 
+      // Guardrail colliders along Balu River 8-Lane Suspension Bridge
+      this.buildingColliders.push({
+        minX: 535,
+        maxX: 645,
+        minZ: -315 + bz - 0.35,
+        maxZ: -315 + bz + 0.35,
+        minY: 0.1,
+        maxY: 2.6,
+        tag: 'balu_bridge_guardrail',
+      });
+
       // Yellow Reflector Studs along the barrier
       for (let rx = -50; rx <= 50; rx += 8) {
         const stud = new THREE.Mesh(this.boxCache(0.4, 0.2, 0.1), yellowStripeMat);
@@ -8745,6 +9312,16 @@ export class DhakaCityEngine {
     fountainWater.rotation.x = -Math.PI / 2;
     fountainWater.position.set(bx, 0.62, bz - 38);
     bbcfecGroup.add(fountainBasin, fountainWater);
+
+    this.buildingColliders.push({
+      minX: bx - 12.2,
+      maxX: bx + 12.2,
+      minZ: bz - 38 - 6.2,
+      maxZ: bz - 38 + 6.2,
+      minY: 0,
+      maxY: 2.5,
+      tag: 'bbcfec_fountain',
+    });
 
     // Symmetrical Flagpoles flying national flags
     [-18, -6, 6, 18].forEach((fx) => {
@@ -9463,6 +10040,7 @@ export class DhakaCityEngine {
       rot: number;
       isTraffic: boolean;
       color: string;
+      onFlyover?: boolean;
     }> = [
       { type: 'cng', x: 8.5, z: 12, rot: 0, isTraffic: false, color: '#15803d' },
       { type: 'car', x: 8.6, z: 8, rot: 0, isTraffic: false, color: '#f8fafc' },
@@ -9541,8 +10119,8 @@ export class DhakaCityEngine {
       { type: 'motorcycle', x: 0, z: 436.5, rot: -Math.PI / 2, isTraffic: false, color: '#06b6d4' },
 
       // Mohakhali Flyover West Approach Ramp (Z = -175, X = -280)
-      { type: 'motorcycle', x: -280, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#e11d48' },
-      { type: 'car', x: -255, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#0ea5e9' },
+      { type: 'motorcycle', x: -280, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#e11d48', onFlyover: true },
+      { type: 'car', x: -255, z: -175, rot: Math.PI / 2, isTraffic: false, color: '#0ea5e9', onFlyover: true },
 
       // Mirpur Cricket Stadium Grand Concourse (X = -450, Z = -230)
       { type: 'motorcycle', x: -450, z: -230, rot: 0, isTraffic: false, color: '#16a34a' },
@@ -9563,7 +10141,7 @@ export class DhakaCityEngine {
     presets.forEach((p, idx) => {
       const stats = VEHICLE_STATS[p.type];
       const id = `veh_${idx}_${p.type}`;
-      const elev = this.getRoadElevation(p.x, p.z);
+      const elev = this.getRoadElevation(p.x, p.z, p.onFlyover ? undefined : 0);
       const isEW = Math.abs(Math.sin(p.rot)) > 0.7;
       const roadAxis: 'ns' | 'ew' = isEW ? 'ew' : 'ns';
       const laneDirection: 1 | -1 = isEW
@@ -10697,6 +11275,13 @@ export class DhakaCityEngine {
       }
     }
 
+    // 0. If currently riding the Dhaka Metro Rail, [E] / [F] arrives & disembarks at destination
+    if (this.metroRide) {
+      this.finishMetroRide();
+      dhakaAudio.playSfx('ui');
+      return;
+    }
+
     // 1. Safe Vehicle Exit
     if (this.activeVehicleId) {
       this.exitCurrentVehicle();
@@ -10725,11 +11310,14 @@ export class DhakaCityEngine {
       }
     }
 
-    // 2.5 Check nearby Dhaka Metro Rail (MRT) Station
+    // 2.5 Check nearby Dhaka Metro Rail (MRT) Station (or Farmgate South Sidewalk Portal)
     if (!preferVehicle) {
       for (const st of METRO_STATIONS) {
         const d = Math.hypot(st.x - this.playerPos.x, st.z - this.playerPos.z);
-        if (d < 8.5) {
+        const atFarmgateStairs =
+          st.id === 'mrt_farmgate' &&
+          Math.hypot(-20.5 - this.playerPos.x, 13 - this.playerPos.z) < 6.5;
+        if (d < 10.5 || atFarmgateStairs) {
           dhakaAudio.playSfx('metro_chime');
           store.openMetroModal(st.id);
           return;
@@ -11596,8 +12184,15 @@ export class DhakaCityEngine {
       this.switchPlayerCharacter(store.selectedCharacterId);
     }
     if (store.teleportRequest) {
+      if (this.metroRide) {
+        this.metroRide = null;
+        if (this.playerMetroTrainL6) this.playerMetroTrainL6.visible = false;
+        if (this.playerMetroTrainL5) this.playerMetroTrainL5.visible = false;
+        this.playerLimbs.group.visible = true;
+        store.setActiveMetroRide(null);
+      }
       const { x, z } = store.teleportRequest;
-      const targetElev = this.getRoadElevation(x, z);
+      const targetElev = this.getRoadElevation(x, z, 0);
       this.playerPos.set(x, targetElev, z);
       this.playerLimbs.group.position.set(x, targetElev, z);
       this.playerLimbs.group.rotation.x = 0;
@@ -11624,6 +12219,17 @@ export class DhakaCityEngine {
         }
       }
       store.clearEngineRequests();
+    }
+    if (store.metroRideRequest) {
+      const { fromId, toId } = store.metroRideRequest;
+      store.clearEngineRequests();
+      this.startMetroRide(fromId, toId);
+    }
+    if (store.metroDisembarkRequest) {
+      store.clearEngineRequests();
+      if (this.metroRide) {
+        this.finishMetroRide();
+      }
     }
 
     // Update Player Outfit & Weapon Visuals (wait until gltfRoot is loaded so async .GLB never misses tint)
@@ -11677,6 +12283,8 @@ export class DhakaCityEngine {
         setCharacterAnimationState(this.playerLimbs, 'idle', dt, 0, false, 1.0, wCat);
         this.playerLimbs.group.position.set(this.playerPos.x, 0, this.playerPos.z);
         this.playerLimbs.group.rotation.x = 0;
+      } else if (this.metroRide) {
+        this.updateMetroRide(dt);
       } else if (this.activeVehicleId) {
         this.updateDrivenVehicle(dt);
       } else {
@@ -11753,16 +12361,33 @@ export class DhakaCityEngine {
     }
     if (jfpDist < 260 && this.jfpFerrisWheel) {
       this.jfpFerrisWheel.rotation.z += dt * 0.16;
+      const wheelRot = this.jfpFerrisWheel.rotation.z;
+      for (let i = 0; i < this.jfpFerrisGondolas.length; i++) {
+        this.jfpFerrisGondolas[i].rotation.z = -wheelRot;
+      }
+      if (this.jfpDropCar) {
+        const dropWave = Math.pow(0.5 + 0.5 * Math.sin(performance.now() * 0.0014), 2.2);
+        this.jfpDropCar.position.y = 17.6 + 2.6 + dropWave * 19.5;
+      }
     }
     if (jfpDist < 140 && this.jfpChandelier) {
       this.jfpChandelier.rotation.y += dt * 0.25;
     }
     const insideJfpNow =
       !this.activeVehicleId &&
+      !this.metroRide &&
       this.playerPos.x >= this.jfpCenter.x - 55.5 &&
       this.playerPos.x <= this.jfpCenter.x + 55.5 &&
       this.playerPos.z >= this.jfpCenter.z - 35.5 &&
       this.playerPos.z <= this.jfpCenter.z + 35.5;
+    if (jfpDist < 140 && this.jfpElevatorCab) {
+      const targetCabY =
+        insideJfpNow
+          ? (this.playerPos.y >= 8.2 ? 10.55 : this.playerPos.y >= 3.2 ? 5.4 : 0.25) + 1.5
+          : 5.4 + Math.sin(performance.now() * 0.0009) * 4.8;
+      this.jfpElevatorCab.position.y +=
+        (targetCabY - this.jfpElevatorCab.position.y) * Math.min(1, dt * 3.5);
+    }
     if (insideJfpNow) {
       const floorIdx = this.playerPos.y >= 8.2 ? 2 : this.playerPos.y >= 3.2 ? 1 : 0;
       if (!this.wasInsideJfp) {
@@ -12671,6 +13296,17 @@ export class DhakaCityEngine {
       this.metroTrainLine5West.visible = Math.abs(this.metroTrainLine5West.position.x - px) < 320 && Math.abs(pz - (-196.8)) < 260;
     }
 
+    // Pulse nearby street-level MRT Boarding Portal Rings for instant visibility
+    if (this.metroPortalRings.length > 0) {
+      const pulse = 1 + Math.sin(t * 3.2) * 0.08;
+      for (let i = 0; i < this.metroPortalRings.length; i++) {
+        const ring = this.metroPortalRings[i];
+        if (Math.abs(ring.position.x - px) < 90 && Math.abs(ring.position.z - pz) < 90) {
+          ring.scale.set(pulse, pulse, 1);
+        }
+      }
+    }
+
     // Play authentic Japanese 4-tone arrival chime when near stations or passing trains
     this.metroChimeTimer += 0.016;
     if (this.metroChimeTimer > 28) {
@@ -12681,6 +13317,197 @@ export class DhakaCityEngine {
         this.metroChimeTimer = 0;
       }
     }
+  }
+
+  private startMetroRide(fromId: string, toId: string) {
+    const fromSt = METRO_STATIONS.find((s) => s.id === fromId);
+    const toSt = METRO_STATIONS.find((s) => s.id === toId);
+    if (!fromSt || !toSt || fromSt.id === toSt.id) return;
+
+    if (this.activeVehicleId) {
+      this.exitCurrentVehicle();
+    }
+    this.isSwimming = false;
+    this.isCrouching = false;
+    this.isAiming = false;
+    this.playerVelY = 0;
+    this.playerLimbs.group.visible = false;
+
+    const segments: Array<{
+      line: 'L6' | 'L5';
+      startX: number;
+      startZ: number;
+      endX: number;
+      endZ: number;
+      y: number;
+      yaw: number;
+      length: number;
+    }> = [];
+
+    const pushL6Seg = (z1: number, z2: number) => {
+      const len = Math.abs(z2 - z1);
+      if (len < 0.5) return;
+      const southbound = z2 > z1;
+      const trackX = southbound ? -13.3 : -11.1;
+      const yaw = southbound ? Math.PI : 0;
+      segments.push({ line: 'L6', startX: trackX, startZ: z1, endX: trackX, endZ: z2, y: 13.2, yaw, length: len });
+    };
+
+    const pushL5Seg = (x1: number, x2: number) => {
+      const len = Math.abs(x2 - x1);
+      if (len < 0.5) return;
+      const eastbound = x2 > x1;
+      const trackZ = eastbound ? -199.2 : -196.8;
+      const yaw = eastbound ? -Math.PI / 2 : Math.PI / 2;
+      segments.push({ line: 'L5', startX: x1, startZ: trackZ, endX: x2, endZ: trackZ, y: 17.48, yaw, length: len });
+    };
+
+    if (fromSt.line === 'L6' && toSt.line === 'L6') {
+      pushL6Seg(fromSt.z, toSt.z);
+    } else if (fromSt.line === 'L5' && toSt.line === 'L5') {
+      pushL5Seg(fromSt.x, toSt.x);
+    } else if (fromSt.line === 'L6' && toSt.line === 'L5') {
+      pushL6Seg(fromSt.z, -198);
+      pushL5Seg(-12.2, toSt.x);
+    } else {
+      pushL5Seg(fromSt.x, -12.2);
+      pushL6Seg(-198, toSt.z);
+    }
+
+    if (segments.length === 0) {
+      this.playerLimbs.group.visible = true;
+      return;
+    }
+
+    const totalDist = segments.reduce((acc, s) => acc + s.length, 0);
+    const first = segments[0];
+    this.metroRide = {
+      segments,
+      segIdx: 0,
+      segDist: 0,
+      totalDist,
+      coveredDist: 0,
+      speed: 6.0,
+      fromId: fromSt.id,
+      toId: toSt.id,
+      fromNameEn: fromSt.nameEn,
+      fromNameBn: fromSt.nameBn,
+      toNameEn: toSt.nameEn,
+      toNameBn: toSt.nameBn,
+      toX: toSt.x,
+      toZ: toSt.z,
+      lastHudSync: 0,
+    };
+
+    this.playerPos.set(first.startX, first.y + 2.4, first.startZ);
+    this.currentCameraDist = 21;
+    this.cameraYaw = first.yaw + 0.55;
+    this.cameraPitch = Math.max(0.24, this.cameraPitch);
+
+    dhakaAudio.playSfx('metro_chime');
+    useGameStore.getState().setActiveMetroRide({
+      line: first.line,
+      fromNameEn: fromSt.nameEn,
+      fromNameBn: fromSt.nameBn,
+      toNameEn: toSt.nameEn,
+      toNameBn: toSt.nameBn,
+      progress: 0,
+      speedKmh: 22,
+      isTransferring: segments.length > 1,
+    });
+  }
+
+  private updateMetroRide(dt: number) {
+    const ride = this.metroRide;
+    if (!ride) return;
+
+    const remainingTotal = Math.max(0, ride.totalDist - ride.coveredDist);
+    const targetSpeed = remainingTotal < 65 ? Math.max(6.0, (remainingTotal / 65) * 32) : 32;
+    ride.speed += (targetSpeed - ride.speed) * Math.min(1, dt * 2.2);
+
+    const step = ride.speed * dt;
+    ride.segDist += step;
+    ride.coveredDist = Math.min(ride.totalDist, ride.coveredDist + step);
+
+    while (ride.segIdx < ride.segments.length && ride.segDist >= ride.segments[ride.segIdx].length) {
+      ride.segDist -= ride.segments[ride.segIdx].length;
+      ride.segIdx++;
+      if (ride.segIdx < ride.segments.length) {
+        dhakaAudio.playSfx('metro_chime');
+        this.cameraYaw = ride.segments[ride.segIdx].yaw + 0.55;
+      }
+    }
+
+    if (ride.segIdx >= ride.segments.length) {
+      this.finishMetroRide();
+      return;
+    }
+
+    const seg = ride.segments[ride.segIdx];
+    const t = Math.max(0, Math.min(1, ride.segDist / Math.max(0.01, seg.length)));
+    const curX = seg.startX + (seg.endX - seg.startX) * t;
+    const curZ = seg.startZ + (seg.endZ - seg.startZ) * t;
+
+    if (this.playerMetroTrainL6 && this.playerMetroTrainL5) {
+      const activeTrain = seg.line === 'L6' ? this.playerMetroTrainL6 : this.playerMetroTrainL5;
+      const inactiveTrain = seg.line === 'L6' ? this.playerMetroTrainL5 : this.playerMetroTrainL6;
+      inactiveTrain.visible = false;
+      activeTrain.visible = true;
+      activeTrain.position.set(curX, seg.y, curZ);
+      activeTrain.rotation.y = seg.yaw;
+    }
+
+    this.playerPos.set(curX, seg.y + 2.4, curZ);
+    this.playerLimbs.group.position.set(curX, seg.y + 1.0, curZ);
+
+    const now = performance.now();
+    if (now - ride.lastHudSync > 85) {
+      ride.lastHudSync = now;
+      useGameStore.getState().setActiveMetroRide({
+        line: seg.line,
+        fromNameEn: ride.fromNameEn,
+        fromNameBn: ride.fromNameBn,
+        toNameEn: ride.toNameEn,
+        toNameBn: ride.toNameBn,
+        progress: Math.min(1, ride.coveredDist / Math.max(1, ride.totalDist)),
+        speedKmh: Math.round(ride.speed * 3.1),
+        isTransferring: ride.segments.length > 1 && ride.segIdx === 0,
+      });
+    }
+  }
+
+  private finishMetroRide() {
+    const ride = this.metroRide;
+    if (!ride) return;
+
+    if (this.playerMetroTrainL6) this.playerMetroTrainL6.visible = false;
+    if (this.playerMetroTrainL5) this.playerMetroTrainL5.visible = false;
+
+    const elev = this.getRoadElevation(ride.toX, ride.toZ, 0);
+    this.playerPos.set(ride.toX, elev, ride.toZ);
+    this.playerLimbs.group.visible = true;
+    this.playerLimbs.group.position.set(ride.toX, elev, ride.toZ);
+    this.playerLimbs.group.rotation.set(0, this.playerRotation, 0);
+    this.isGrounded = true;
+    this.isSwimming = false;
+    this.playerVelY = 0;
+    this.playerStamina = 100;
+    this.currentCameraDist = 6.2;
+
+    const { toNameEn, toNameBn, segments } = ride;
+    const arrivedLine = segments[segments.length - 1]?.line ?? 'L6';
+    this.metroRide = null;
+
+    const store = useGameStore.getState();
+    store.setActiveMetroRide(null);
+    dhakaAudio.playSfx('metro_chime');
+    store.showBanner({
+      titleEn: `🚆 ARRIVED: ${toNameEn.toUpperCase()}`,
+      titleBn: `🚆 পৌঁছে গেছেন: ${toNameBn}`,
+      subtitleEn: `Dhaka Metro Rail (${arrivedLine}) express ride complete.`,
+      subtitleBn: 'ঢাকা মেট্রোরেলে এলিভেটেড যাত্রা সম্পন্ন!',
+      tone: 'green',
+    });
   }
 
   private updateOnFootPlayer(dt: number) {
@@ -12737,13 +13564,14 @@ export class DhakaCityEngine {
       const elevX = this.getRoadElevation(nextX, this.playerPos.z, curElev);
       const elevZ = this.getRoadElevation(this.playerPos.x, nextZ, curElev);
 
-      // Prevent walking off steep cliffs / elevated decks into empty air (> 2.8m drop) or climbing vertical walls (> 1.35m)
+      // Prevent walking off steep cliffs / elevated decks into empty air (> 2.8m drop) or climbing vertical walls (> 1.35m, or 1.65m when climbing out of water)
+      const maxClimb = this.isSwimming ? 1.65 : 1.35;
       const isHighCliffDropX = curElev > 3.5 && curElev - elevX > 2.8;
-      const isWallClimbX = elevX - curElev > 1.35;
+      const isWallClimbX = elevX - curElev > maxClimb;
       const safeElevX = !isHighCliffDropX && !isWallClimbX;
 
       const isHighCliffDropZ = curElev > 3.5 && curElev - elevZ > 2.8;
-      const isWallClimbZ = elevZ - curElev > 1.35;
+      const isWallClimbZ = elevZ - curElev > maxClimb;
       const safeElevZ = !isHighCliffDropZ && !isWallClimbZ;
 
       if (safeElevX) {
@@ -13002,7 +13830,7 @@ export class DhakaCityEngine {
       this.isCrouching = false;
       this.isAiming = false;
       this.playerVelY = 0;
-      this.playerPos.y = -0.55 + Math.sin(performance.now() * 0.004) * 0.06;
+      this.playerPos.y = -1.05 + Math.sin(performance.now() * 0.004) * 0.05;
       const swimDrain =
         moveForward === 0 && moveRight === 0
           ? 2.8
@@ -13340,7 +14168,7 @@ export class DhakaCityEngine {
         this.activeVehicleId = null;
         this.isSwimming = true;
         this.playerLimbs.group.visible = true;
-        this.playerPos.set(veh.x, -0.5, veh.z);
+        this.playerPos.set(veh.x, -1.05, veh.z);
         this.playerLimbs.group.position.copy(this.playerPos);
       }
       return;
@@ -14736,7 +15564,7 @@ export class DhakaCityEngine {
       if (job) {
         if (this.fareMarkerGroup) {
           this.fareMarkerGroup.visible = true;
-          const dropY = this.getRoadElevation(job.dropX, job.dropZ);
+          const dropY = this.getRoadElevation(job.dropX, job.dropZ, 0);
           this.fareMarkerGroup.position.set(job.dropX, dropY, job.dropZ);
         }
         const dJob = Math.hypot(this.playerPos.x - job.dropX, this.playerPos.z - job.dropZ);
@@ -14894,6 +15722,11 @@ export class DhakaCityEngine {
       });
     }
 
+    if (this.metroRide) {
+      store.setNearbyPrompt(null);
+      return;
+    }
+
     if (this.activeVehicleId) {
       const nearStation = this.cngStationSpots.find(
         (cs) => Math.hypot(cs.x - this.playerPos.x, cs.z - this.playerPos.z) < 12
@@ -14949,12 +15782,15 @@ export class DhakaCityEngine {
     if (!prompt) {
       for (const st of METRO_STATIONS) {
         const d = Math.hypot(st.x - this.playerPos.x, st.z - this.playerPos.z);
-        if (d < 8.5) {
+        const atFarmgateStairs =
+          st.id === 'mrt_farmgate' &&
+          Math.hypot(-20.5 - this.playerPos.x, 13 - this.playerPos.z) < 6.5;
+        if (d < 10.5 || atFarmgateStairs) {
           prompt = {
             type: 'poi',
             id: st.id,
-            labelEn: `[E] Board Dhaka Metro Rail (${st.nameEn}) — ৳${st.fare}`,
-            labelBn: `[E] ঢাকা মেট্রোরেলে উঠুন (${st.nameBn}) — ৳${st.fare}`,
+            labelEn: `[E] Ride Dhaka Metro Rail (${st.nameEn}) — from ৳30`,
+            labelBn: `[E] ঢাকা মেট্রোরেলে উঠুন (${st.nameBn}) — ৳৩০+`,
           };
           break;
         }
@@ -15036,26 +15872,28 @@ export class DhakaCityEngine {
     dt: number,
     mode: 'third_person' | 'far_chase' | 'hood_close'
   ) {
+    const isRidingMetro = Boolean(this.metroRide);
     const isDriving = Boolean(this.activeVehicleId);
     const isInsideJfp =
+      !isRidingMetro &&
       !isDriving &&
       this.playerPos.x >= this.jfpCenter.x - 56 &&
       this.playerPos.x <= this.jfpCenter.x + 56 &&
       this.playerPos.z >= this.jfpCenter.z - 36 &&
       this.playerPos.z <= this.jfpCenter.z + 36;
 
-    let desiredDist = isDriving ? 9.2 : isInsideJfp ? 4.4 : 6.2;
-    let heightOffset = isDriving ? 2.4 : isInsideJfp ? 1.68 : 1.75;
+    let desiredDist = isRidingMetro ? 21.0 : isDriving ? 9.2 : isInsideJfp ? 4.4 : 6.2;
+    let heightOffset = isRidingMetro ? 4.6 : isDriving ? 2.4 : isInsideJfp ? 1.68 : 1.75;
 
-    if (!isDriving && this.isAiming) {
+    if (!isRidingMetro && !isDriving && this.isAiming) {
       desiredDist = 3.6;
       heightOffset = 1.62;
     } else if (mode === 'far_chase') {
-      desiredDist = isDriving ? 13.5 : isInsideJfp ? 5.6 : 9.0;
-      heightOffset = isDriving ? 3.4 : isInsideJfp ? 1.85 : 2.3;
+      desiredDist = isRidingMetro ? 28.0 : isDriving ? 13.5 : isInsideJfp ? 5.6 : 9.0;
+      heightOffset = isRidingMetro ? 6.0 : isDriving ? 3.4 : isInsideJfp ? 1.85 : 2.3;
     } else if (mode === 'hood_close') {
-      desiredDist = isDriving ? 5.6 : isInsideJfp ? 3.4 : 4.0;
-      heightOffset = isDriving ? 1.8 : 1.55;
+      desiredDist = isRidingMetro ? 14.0 : isDriving ? 5.6 : isInsideJfp ? 3.4 : 4.0;
+      heightOffset = isRidingMetro ? 3.2 : isDriving ? 1.8 : 1.55;
     }
 
     let targetX = this.playerPos.x;
@@ -15079,20 +15917,22 @@ export class DhakaCityEngine {
       Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * desiredDist;
 
     let occluded = false;
-    for (const b of this.buildingColliders) {
-      if (b.tag === 'road_median') continue;
-      if (b.tag === 'flyover_barrier') continue;
-      if (isInsideJfp && (b.tag === 'jfp_wall' || b.tag === 'jfp_railing' || b.tag === 'jfp_escalator_rail')) continue;
-      if (b.minY !== undefined && targetY < b.minY) continue;
-      if (b.maxY !== undefined && targetY > b.maxY) continue;
-      if (
-        testCamX + 0.6 > b.minX &&
-        testCamX - 0.6 < b.maxX &&
-        testCamZ + 0.6 > b.minZ &&
-        testCamZ - 0.6 < b.maxZ
-      ) {
-        occluded = true;
-        break;
+    if (!isRidingMetro) {
+      for (const b of this.buildingColliders) {
+        if (b.tag === 'road_median') continue;
+        if (b.tag === 'flyover_barrier') continue;
+        if (isInsideJfp && (b.tag === 'jfp_wall' || b.tag === 'jfp_railing' || b.tag === 'jfp_escalator_rail')) continue;
+        if (b.minY !== undefined && targetY < b.minY) continue;
+        if (b.maxY !== undefined && targetY > b.maxY) continue;
+        if (
+          testCamX + 0.6 > b.minX &&
+          testCamX - 0.6 < b.maxX &&
+          testCamZ + 0.6 > b.minZ &&
+          testCamZ - 0.6 < b.maxZ
+        ) {
+          occluded = true;
+          break;
+        }
       }
     }
 
@@ -15400,6 +16240,40 @@ export class DhakaCityEngine {
         return 1.0;
       }
       return 0.16; // Pedestrian embankment promenade at natural curb elevation
+    }
+
+    // 8. Hatirjheel Tied-Arch Bridge Deck (X: 210..230, Z: -52.5..42.5 at Y = 0.50m) with smooth 5m approach ramps
+    if (x >= 210 && x <= 230 && z >= -57.5 && z <= 47.5) {
+      if (z < -52.5) {
+        const t = (z - (-57.5)) / 5;
+        return 0.08 + t * 0.42;
+      }
+      if (z > 42.5) {
+        const t = (47.5 - z) / 5;
+        return 0.08 + t * 0.42;
+      }
+      return 0.50;
+    }
+
+    // 9. Balu River 8-Lane Suspension Bridge Deck at Purbachal (X: 535..645, Z: -326..-304 at Y = 0.80m) with smooth 10m ramps
+    if (Math.abs(z - (-315)) <= 11.0 && x >= 525 && x <= 655 && (currentY === undefined || currentY < 5.5)) {
+      if (x < 535) {
+        const t = (x - 525) / 10;
+        return 0.08 + t * 0.72;
+      }
+      if (x > 645) {
+        const t = (655 - x) / 10;
+        return 0.08 + t * 0.72;
+      }
+      return 0.80;
+    }
+
+    // 10. Elevated Monument & Exhibition Plazas (Shaheed Minar red altar, BBCFEC entrance plaza)
+    if (x >= -45.5 && x <= -30.5 && z >= 53 && z <= 63) {
+      return 0.80;
+    }
+    if (x >= 770 && x <= 830 && z >= -243 && z <= -213) {
+      return 0.16;
     }
 
     return 0;

@@ -127,6 +127,18 @@ interface GameState {
   resprayVehicleRequest: string | null;
   upgradeVehicleRequest: boolean;
   teleportRequest: { x: number; z: number } | null;
+  metroRideRequest: { fromId: string; toId: string } | null;
+  metroDisembarkRequest: boolean;
+  activeMetroRide: {
+    line: 'L6' | 'L5';
+    fromNameEn: string;
+    fromNameBn: string;
+    toNameEn: string;
+    toNameBn: string;
+    progress: number;
+    speedKmh: number;
+    isTransferring: boolean;
+  } | null;
   switchCharacterRequest: PlayableCharacterId | null;
 
   // Mall interior & interactive modals & side-jobs
@@ -150,6 +162,9 @@ interface GameState {
   activeMetroModal: string | null; // station id near player
   openMetroModal: (stationId: string) => void;
   closeMetroModal: () => void;
+  requestMetroRide: (fromId: string, toId: string) => void;
+  setActiveMetroRide: (ride: GameState['activeMetroRide']) => void;
+  requestMetroDisembark: () => void;
 
   activeGarageModal: string | null; // garage poi id
   openGarageModal: (garageId: string) => void;
@@ -335,6 +350,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   resprayVehicleRequest: null,
   upgradeVehicleRequest: false,
   teleportRequest: null,
+  metroRideRequest: null,
+  metroDisembarkRequest: false,
+  activeMetroRide: null,
   switchCharacterRequest: null,
 
   // Mall interior & modals
@@ -375,6 +393,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       mallFloor: 0,
       activeShopModal: null,
       activeMetroModal: null,
+      activeMetroRide: null,
+      metroRideRequest: null,
+      metroDisembarkRequest: false,
       activeGarageModal: null,
       activeFareJob: null,
       customWaypoint: null,
@@ -1103,10 +1124,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       resprayVehicleRequest: null,
       upgradeVehicleRequest: false,
       teleportRequest: null,
+      metroRideRequest: null,
+      metroDisembarkRequest: false,
       switchCharacterRequest: null,
     }),
   requestTeleport: (x, z) =>
     set({ teleportRequest: { x, z }, gamePhase: 'playing' }),
+  requestMetroRide: (fromId, toId) =>
+    set({
+      metroRideRequest: { fromId, toId },
+      activeMetroModal: null,
+      gamePhase: 'playing',
+    }),
+  setActiveMetroRide: (ride) => set({ activeMetroRide: ride }),
+  requestMetroDisembark: () => set({ metroDisembarkRequest: true }),
 
   enterMall: (mallId) => set({ isInsideMall: true, mallId, mallFloor: 0 }),
   exitMall: () => set({ isInsideMall: false, mallId: null, mallFloor: 0 }),

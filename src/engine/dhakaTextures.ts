@@ -170,20 +170,23 @@ export function createBuildingFacadeTexture(
   const ctx = canvas.getContext('2d')!;
 
   // Base architectural concrete / glass curtain wall
-  ctx.fillStyle = style === 'modern_glass' ? '#0f172a' : baseColor;
+  ctx.fillStyle = style === 'modern_glass' ? '#0b1324' : baseColor;
   ctx.fillRect(0, 0, 512, 1024);
 
   const rows = 14;
-  const cols = 4;
-  const padX = 18;
-  const padY = 20;
+  const cols = style === 'modern_glass' ? 6 : 5;
+  const padX = style === 'modern_glass' ? 10 : 16;
+  const padY = 18;
   const cellW = (512 - padX * (cols + 1)) / cols;
   const cellH = (1024 - padY * (rows + 1)) / rows;
 
   for (let r = 0; r < rows; r++) {
-    // Concrete floor slab ledge & balcony grille
-    ctx.fillStyle = style === 'modern_glass' ? '#334155' : 'rgba(15,23,42,0.45)';
-    ctx.fillRect(0, r * (cellH + padY), 512, 8);
+    const rowY = r * (cellH + padY);
+    // Concrete floor slab spandrel ledge
+    ctx.fillStyle = style === 'modern_glass' ? '#1e293b' : 'rgba(15,23,42,0.52)';
+    ctx.fillRect(0, rowY, 512, 9);
+    ctx.fillStyle = style === 'modern_glass' ? '#475569' : 'rgba(255,255,255,0.16)';
+    ctx.fillRect(0, rowY + 9, 512, 3);
 
     for (let c = 0; c < cols; c++) {
       const wx = padX + c * (cellW + padX);
@@ -191,24 +194,44 @@ export function createBuildingFacadeTexture(
       const isLit = (r * 7 + c * 5) % 4 === 0 || (r + c) % 3 === 0;
 
       if (style === 'modern_glass') {
+        // Exterior dark mullion recess
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(wx - 2, wy - 2, cellW + 4, cellH * 0.9 + 4);
         const grad = ctx.createLinearGradient(wx, wy, wx + cellW, wy + cellH);
-        grad.addColorStop(0, isLit ? '#7dd3fc' : '#0369a1');
-        grad.addColorStop(1, isLit ? '#fef08a' : '#0c4a6e');
+        grad.addColorStop(0, isLit ? '#bae6fd' : '#0284c7');
+        grad.addColorStop(0.55, isLit ? '#38bdf8' : '#0c4a6e');
+        grad.addColorStop(1, isLit ? '#fef08a' : '#082f49');
         ctx.fillStyle = grad;
         ctx.fillRect(wx, wy, cellW, cellH * 0.88);
+        // Subtle diagonal sky specular reflection & horizontal glass transom
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.fillRect(wx, wy, cellW, 4);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(wx, wy + cellH * 0.44, cellW, 3);
       } else {
-        // Dhaka apartment/commercial window with AC outdoor unit & verandah bars
+        // Dhaka apartment/commercial recessed window frame with curtain interior, balcony grille & AC unit
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(wx - 2, wy - 2, cellW + 4, cellH * 0.8 + 4);
         ctx.fillStyle = isLit ? '#fde68a' : '#1e293b';
         ctx.fillRect(wx, wy, cellW, cellH * 0.78);
+        // Interior blind / room shadow & center mullion
+        ctx.fillStyle = isLit ? 'rgba(180,83,9,0.22)' : 'rgba(148,163,184,0.18)';
+        ctx.fillRect(wx, wy, cellW, cellH * 0.3);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(wx + cellW * 0.48, wy, 3, cellH * 0.78);
 
-        // Verandah railing stripes
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(wx, wy + cellH * 0.6, cellW, 4);
+        // Verandah concrete sill & vertical iron grille stripes
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(wx - 3, wy + cellH * 0.76, cellW + 6, 5);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(wx, wy + cellH * 0.58, cellW, 3);
 
-        // Split AC outdoor unit box on alternating floors
+        // Split AC outdoor unit box on alternating windows
         if ((r + c) % 2 === 0) {
           ctx.fillStyle = '#e2e8f0';
-          ctx.fillRect(wx + cellW - 26, wy + 6, 22, 16);
+          ctx.fillRect(wx + cellW - 24, wy + 5, 20, 14);
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(wx + cellW - 22, wy + 8, 10, 8);
         }
       }
     }

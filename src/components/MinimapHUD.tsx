@@ -4,6 +4,7 @@ import {
   CNG_STATIONS,
   DISTRICTS,
   MARINE_DOCKS,
+  METRO_STATIONS,
   POINTS_OF_INTEREST,
   SIDE_MISSIONS,
   STORY_MISSIONS,
@@ -180,16 +181,18 @@ export const MinimapHUD: React.FC = () => {
 
     // Draw Water Bodies (exact match to DhakaCityEngine.isPositionInWater)
     ctx.fillStyle = '#0e7490';
-    const buri = worldToRadar(-950, 303.5);
-    ctx.fillRect(buri.rx, buri.rz, 1900 * scale, 143.5 * scale);
-    const hatir = worldToRadar(165, -80);
-    ctx.fillRect(hatir.rx, hatir.rz, 110 * scale, 150 * scale);
-    const dhan = worldToRadar(-265, -35);
-    ctx.fillRect(dhan.rx, dhan.rz, 82 * scale, 120 * scale);
-    const gulshan = worldToRadar(280, -290);
-    ctx.fillRect(gulshan.rx, gulshan.rz, 100 * scale, 160 * scale);
-    const uttaraLake = worldToRadar(-220, -600);
-    ctx.fillRect(uttaraLake.rx, uttaraLake.rz, 80 * scale, 120 * scale);
+    const buri = worldToRadar(-900, 303.5);
+    ctx.fillRect(buri.rx, buri.rz, 1800 * scale, 143.5 * scale);
+    const hatir = worldToRadar(155, -85);
+    ctx.fillRect(hatir.rx, hatir.rz, 130 * scale, 160 * scale);
+    const dhan = worldToRadar(-270, -40);
+    ctx.fillRect(dhan.rx, dhan.rz, 90 * scale, 130 * scale);
+    const gulshan = worldToRadar(275, -330);
+    ctx.fillRect(gulshan.rx, gulshan.rz, 110 * scale, 240 * scale);
+    const uttaraLake = worldToRadar(-222.5, -620);
+    ctx.fillRect(uttaraLake.rx, uttaraLake.rz, 85 * scale, 160 * scale);
+    const balu = worldToRadar(571, -600);
+    ctx.fillRect(balu.rx, balu.rz, 38 * scale, 700 * scale);
 
     // Draw Dhaka Green Parks (Ramna Park, Suhrawardy Udyan, Chandrima Udyan)
     ctx.fillStyle = '#065f46';
@@ -223,47 +226,42 @@ export const MinimapHUD: React.FC = () => {
 
     // Draw MRT Line-6 (North-South: Uttara Diabari - Mirpur - Farmgate - Kamalapur)
     ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 3.0;
+    ctx.lineWidth = 3.2;
     ctx.setLineDash([5, 3]);
     const m1 = worldToRadar(-12.2, -1250);
-    const m2 = worldToRadar(-12.2, 460);
+    const m2 = worldToRadar(-12.2, 470);
     ctx.beginPath();
     ctx.moveTo(m1.rx, m1.rz);
     ctx.lineTo(m2.rx, m2.rz);
     ctx.stroke();
 
-    // Draw MRT Line-5 Northern Route (East-West: Mirpur West - Mirpur-10 - Gulshan-2 - Purbachal)
+    // Draw MRT Line-5 Northern Route (East-West along Z = -198)
     ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 3.0;
+    ctx.lineWidth = 3.2;
     ctx.setLineDash([5, 3]);
-    const m5_1 = worldToRadar(-480, -175);
-    const m5_2 = worldToRadar(640, -175);
+    const m5_1 = worldToRadar(-460, -198);
+    const m5_2 = worldToRadar(650, -198);
     ctx.beginPath();
     ctx.moveTo(m5_1.rx, m5_1.rz);
     ctx.lineTo(m5_2.rx, m5_2.rz);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Draw Metro Station Dots & Mirpur-10 Grand Interchange on Radar
-    const radarStations = [
+    // Draw Intermediate Viaduct Stops (non-boarding track ticks)
+    const viaductStops = [
       { x: -12.2, z: -1150, color: '#10b981' },
       { x: -12.2, z: -850, color: '#10b981' },
-      { x: -12.2, z: -520, color: '#10b981' },
-      { x: -12.2, z: -15, color: '#10b981' },
-      { x: -12.2, z: 160, color: '#10b981' },
-      { x: -12.2, z: 330, color: '#10b981' },
       { x: -12.2, z: 450, color: '#10b981' },
-      { x: -380, z: -175, color: '#f43f5e' },
-      { x: 95, z: -175, color: '#f43f5e' },
-      { x: 260, z: -175, color: '#f43f5e' },
-      { x: 460, z: -175, color: '#f43f5e' },
+      { x: -380, z: -198, color: '#f43f5e' },
+      { x: 95, z: -198, color: '#f43f5e' },
+      { x: 260, z: -198, color: '#f43f5e' },
     ];
-    radarStations.forEach((st) => {
+    viaductStops.forEach((st) => {
       const sp = worldToRadar(st.x, st.z);
       if (Math.hypot(sp.rx, sp.rz) < half - 6) {
         ctx.fillStyle = st.color;
         ctx.beginPath();
-        ctx.arc(sp.rx, sp.rz, 3, 0, Math.PI * 2);
+        ctx.arc(sp.rx, sp.rz, 2.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
@@ -271,17 +269,41 @@ export const MinimapHUD: React.FC = () => {
       }
     });
 
-    // Mirpur-10 Grand Interchange Hub (Line-6 & Line-5 cross point)
-    const hubP = worldToRadar(-12.2, -175);
-    if (Math.hypot(hubP.rx, hubP.rz) < half - 6) {
-      ctx.fillStyle = '#fbbf24';
-      ctx.beginPath();
-      ctx.arc(hubP.rx, hubP.rz, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+    // Draw Interactive Boardable Dhaka Metro Rail Stations with Crisp "M" Badges & Labels
+    METRO_STATIONS.forEach((st) => {
+      const sp = worldToRadar(st.x, st.z);
+      if (Math.hypot(sp.rx, sp.rz) < half - 8) {
+        const isL5 = st.line === 'L5';
+        const isHub = st.id === 'mrt_mirpur10';
+        ctx.fillStyle = isL5 ? '#e11d48' : '#059669';
+        ctx.beginPath();
+        ctx.arc(sp.rx, sp.rz, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = isHub ? '#fbbf24' : '#ffffff';
+        ctx.lineWidth = isHub ? 2 : 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('M', sp.rx, sp.rz + 0.4);
+
+        const shortName =
+          language === 'en'
+            ? st.nameEn.split(' / ')[0].replace(' Terminal', '').replace(' Central', '')
+            : st.nameBn.split(' / ')[0];
+        ctx.font = 'bold 7.5px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.82)';
+        const labelW = ctx.measureText(shortName).width + 6;
+        ctx.fillRect(sp.rx + 8.5, sp.rz - 5.5, labelW, 11);
+        ctx.fillStyle = isL5 ? '#fda4af' : '#6ee7b7';
+        ctx.fillText(shortName, sp.rx + 11.5, sp.rz + 0.5);
+      }
+    });
+    ctx.textBaseline = 'alphabetic';
 
     // Draw District Labels on Radar
     ctx.font = 'bold 8px sans-serif';
@@ -435,6 +457,7 @@ export const MinimapHUD: React.FC = () => {
     isInsideMall,
     mallFloor,
     activeFareJob,
+    language,
   ]);
 
   const districtObj =
