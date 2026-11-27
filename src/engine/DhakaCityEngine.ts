@@ -3249,38 +3249,40 @@ export class DhakaCityEngine {
         const kioskZ = stairBaseZ - dirSign * 3.4;
         const stairX = -20.2;
         const topZ = stairBaseZ + dirSign * 14;
-        const startPos = new THREE.Vector3(stairX, -0.04, stairBaseZ - dirSign * 0.9);
+        const startPos = new THREE.Vector3(stairX, 0.04, stairBaseZ - dirSign * 0.9);
         const endPos = new THREE.Vector3(stairX, 8.95, topZ);
         const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
         const spanLen = startPos.distanceTo(endPos);
 
-        const stairBridge = new THREE.Mesh(this.boxCache(2.8, 0.52, spanLen), concourseMat);
-        stairBridge.position.copy(midPos).add(new THREE.Vector3(0, -0.12, 0));
-        stairBridge.lookAt(endPos.clone().add(new THREE.Vector3(0, -0.12, 0)));
+        // Structural under-belly escalator truss beam (cleanly recessed beneath steps — never pokes through treads!)
+        const stairBridge = new THREE.Mesh(this.boxCache(2.6, 0.42, spanLen), concourseMat);
+        stairBridge.position.copy(midPos).add(new THREE.Vector3(0, -0.32, 0));
+        stairBridge.lookAt(endPos.clone().add(new THREE.Vector3(0, -0.32, 0)));
         this.scene.add(stairBridge);
 
-        this.scene.add(this.sharedBox(2.95, 0.65, 1.8, concreteMat, stairX, 0.32, stairBaseZ - dirSign * 0.55));
+        // Flush brushed-steel escalator comb landing plate bridging kiosk floor (Y=0.22) cleanly into step 1
+        this.scene.add(this.sharedBox(2.95, 0.22, 1.9, concourseMat, stairX, 0.11, stairBaseZ - dirSign * 0.65));
 
-        // 20 Straight-Aligned 3D Escalator Treads with Yellow Safety Edge Strips + Twin Glass/Rubber Balustrades
-        const escSteps = 20;
+        // 26 Seamless Overlapping Escalator Steps + Yellow Safety Front Edges + Glass & Rubber Handrails
+        const escSteps = 26;
         for (let es = 0; es < escSteps; es++) {
           const ft = (es + 0.5) / escSteps;
           const sx = THREE.MathUtils.lerp(startPos.x, endPos.x, ft);
-          const sy = THREE.MathUtils.lerp(0.22, endPos.y, ft);
+          const sy = THREE.MathUtils.lerp(0.10, endPos.y - 0.15, ft);
           const sz = THREE.MathUtils.lerp(startPos.z, endPos.z, ft);
-          const tread = new THREE.Mesh(this.boxCache(2.12, 0.22, 0.72), afcGateMat);
-          tread.position.set(sx, sy + 0.06, sz);
+          const tread = new THREE.Mesh(this.boxCache(2.14, 0.40, 0.78), afcGateMat);
+          tread.position.set(sx, sy, sz);
           this.scene.add(tread);
-          this.scene.add(this.sharedBox(2.08, 0.04, 0.09, yellowLineMat, sx, sy + 0.18, sz + dirSign * 0.28));
+          this.scene.add(this.sharedBox(2.10, 0.035, 0.09, yellowLineMat, sx, sy + 0.21, sz + dirSign * 0.30));
         }
         [-1.18, 1.18].forEach((bx) => {
           const railGlass = new THREE.Mesh(this.boxCache(0.1, 0.85, spanLen), glassMat);
-          railGlass.position.copy(midPos).add(new THREE.Vector3(bx, 0.62, 0));
-          railGlass.lookAt(endPos.clone().add(new THREE.Vector3(bx, 0.62, 0)));
+          railGlass.position.copy(midPos).add(new THREE.Vector3(bx, 0.66, 0));
+          railGlass.lookAt(endPos.clone().add(new THREE.Vector3(bx, 0.66, 0)));
           this.scene.add(railGlass);
           const handrail = new THREE.Mesh(this.boxCache(0.18, 0.12, spanLen), rubberHandrailMat);
-          handrail.position.copy(midPos).add(new THREE.Vector3(bx, 1.08, 0));
-          handrail.lookAt(endPos.clone().add(new THREE.Vector3(bx, 1.08, 0)));
+          handrail.position.copy(midPos).add(new THREE.Vector3(bx, 1.12, 0));
+          handrail.lookAt(endPos.clone().add(new THREE.Vector3(bx, 1.12, 0)));
           this.scene.add(handrail);
         });
 
@@ -3306,18 +3308,54 @@ export class DhakaCityEngine {
         stairRoofCap.lookAt(endPos.clone().add(new THREE.Vector3(0, 2.75, 0)));
         this.scene.add(stairRoofCap);
 
-        // Ground Entry Kiosk Pavilion with Turnstiles & Glowing Canopy Slats
-        this.scene.add(this.sharedBox(4.4, 0.22, 5.4, concourseMat, stairX, 0.11, kioskZ));
-        this.scene.add(this.sharedBox(4.8, 0.52, 5.6, mrtGreenTrimMat, stairX, 3.85, kioskZ));
-        this.scene.add(this.sharedBox(5.1, 0.18, 5.9, trussSteelMat, stairX, 4.18, kioskZ));
+        // Sleek Glazed Street Entry Kiosk Pavilion with Sloped Apron, Framed Glass Walls & AFC Turnstiles
+        this.scene.add(this.sharedBox(4.5, 0.22, 5.6, concourseMat, stairX, 0.11, kioskZ));
+        this.scene.add(this.sharedBox(2.4, 0.03, 5.2, graniteTileMat, stairX, 0.23, kioskZ));
+        // Sloped approach ramp apron on street entry threshold (zero hard edge!)
+        const entryApron = new THREE.Mesh(this.boxCache(4.5, 0.18, 1.5), graniteTileMat);
+        entryApron.position.set(stairX, 0.06, kioskZ - dirSign * 3.4);
+        entryApron.rotation.x = dirSign * 0.15;
+        this.scene.add(entryApron);
+
+        // Canopy Roof + Illuminated Downlights + Overhead Station Fascia Sign
+        this.scene.add(this.sharedBox(4.8, 0.52, 5.8, mrtGreenTrimMat, stairX, 3.85, kioskZ));
+        this.scene.add(this.sharedBox(5.1, 0.18, 6.1, trussSteelMat, stairX, 4.18, kioskZ));
         this.scene.add(this.sharedBox(3.4, 0.1, 4.0, concourseGlowMat, stairX, 3.55, kioskZ));
-        [-1.95, 1.95].forEach((ox) => {
-          this.scene.add(this.sharedBox(0.32, 3.6, 5.2, concourseMat, stairX + ox, 1.9, kioskZ));
-          this.scene.add(this.sharedBox(0.36, 1.9, 3.6, glassMat, stairX + ox, 2.1, kioskZ));
+
+        // Framed Glazed Curtain Side Walls (waist-high dado + large glass panes + steel columns + COLLIDERS!)
+        [-2.05, 2.05].forEach((ox) => {
+          this.scene.add(this.sharedBox(0.24, 0.95, 5.4, graniteTileMat, stairX + ox, 0.6, kioskZ));
+          this.scene.add(this.sharedBox(0.14, 2.55, 5.0, glassMat, stairX + ox, 2.35, kioskZ));
+          [-2.5, 0, 2.5].forEach((cz) => {
+            this.scene.add(this.sharedBox(0.26, 3.65, 0.26, mastSteelMat, stairX + ox, 2.0, kioskZ + cz));
+          });
+          this.buildingColliders.push({
+            minX: stairX + ox - 0.18,
+            maxX: stairX + ox + 0.18,
+            minZ: kioskZ - 2.8,
+            maxZ: kioskZ + 2.8,
+            minY: 0,
+            maxY: 4.3,
+            tag: 'metro_kiosk_wall',
+          });
         });
-        [-1.05, 1.05].forEach((tx) => {
-          this.scene.add(this.sharedBox(0.22, 1.05, 1.4, afcGateMat, stairX + tx, 0.65, kioskZ));
-          this.scene.add(this.sharedBox(0.26, 0.14, 0.18, ledGreenMat, stairX + tx, 1.12, kioskZ + dirSign * 0.5));
+
+        // Stainless Steel AFC Rapid-Pass Smart Turnstile Housings + Flap Gates + Card Scanners + Colliders
+        [-1.08, 1.08].forEach((tx) => {
+          this.scene.add(this.sharedBox(0.28, 0.98, 1.48, trussSteelMat, stairX + tx, 0.71, kioskZ));
+          this.scene.add(this.sharedBox(0.30, 0.16, 1.50, mrtGreenTrimMat, stairX + tx, 1.15, kioskZ));
+          this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledGreenMat, stairX + tx, 1.25, kioskZ - dirSign * 0.55));
+          this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledCyanMat, stairX + tx, 1.25, kioskZ + dirSign * 0.55));
+          this.scene.add(this.sharedBox(0.32, 0.62, 0.06, psdGlassMat, stairX + tx - (tx > 0 ? 0.28 : -0.28), 0.78, kioskZ));
+          this.buildingColliders.push({
+            minX: stairX + tx - 0.16,
+            maxX: stairX + tx + 0.16,
+            minZ: kioskZ - 0.76,
+            maxZ: kioskZ + 0.76,
+            minY: 0,
+            maxY: 1.5,
+            tag: 'metro_turnstile',
+          });
         });
         const landCol = new THREE.Mesh(this.cylCache(0.42, 0.52, 8.6, 10), concreteMat);
         landCol.position.set(-19.5, 4.3, landCenterZ);
@@ -3504,25 +3542,25 @@ export class DhakaCityEngine {
 
       // 4. Ground-Anchored Entry Pavilion & Escalator Bridge on South Sidewalk (Z = line5Z - 10.5)
       const entryZ = line5Z - 10.5;
-      const startP = new THREE.Vector3(st.sx - 17.4, -0.04, entryZ);
+      const startP = new THREE.Vector3(st.sx - 17.4, 0.04, entryZ);
       const endP = new THREE.Vector3(st.sx - 6, 12.85, entryZ);
       const midP = startP.clone().add(endP).multiplyScalar(0.5);
       const span5 = startP.distanceTo(endP);
-      const esc5 = new THREE.Mesh(this.boxCache(2.8, 0.52, span5), concourseMat);
-      esc5.position.copy(midP).add(new THREE.Vector3(0, -0.12, 0));
-      esc5.lookAt(endP.clone().add(new THREE.Vector3(0, -0.12, 0)));
+      const esc5 = new THREE.Mesh(this.boxCache(2.6, 0.42, span5), concourseMat);
+      esc5.position.copy(midP).add(new THREE.Vector3(0, -0.32, 0));
+      esc5.lookAt(endP.clone().add(new THREE.Vector3(0, -0.32, 0)));
       this.scene.add(esc5);
 
-      this.scene.add(this.sharedBox(1.8, 0.65, 2.95, concreteMat, st.sx - 17.0, 0.32, entryZ));
-      for (let es = 0; es < 22; es++) {
-        const ft = (es + 0.5) / 22;
+      this.scene.add(this.sharedBox(1.9, 0.22, 2.95, concourseMat, st.sx - 17.1, 0.11, entryZ));
+      for (let es = 0; es < 28; es++) {
+        const ft = (es + 0.5) / 28;
         const sx = THREE.MathUtils.lerp(startP.x, endP.x, ft);
-        const sy = THREE.MathUtils.lerp(0.22, endP.y, ft);
+        const sy = THREE.MathUtils.lerp(0.10, endP.y - 0.15, ft);
         const sz = THREE.MathUtils.lerp(startP.z, endP.z, ft);
-        const tread = new THREE.Mesh(this.boxCache(0.72, 0.22, 2.12), afcGateMat);
-        tread.position.set(sx, sy + 0.06, sz);
+        const tread = new THREE.Mesh(this.boxCache(0.76, 0.44, 2.14), afcGateMat);
+        tread.position.set(sx, sy, sz);
         this.scene.add(tread);
-        this.scene.add(this.sharedBox(0.09, 0.04, 2.08, yellowLineMat, sx + 0.28, sy + 0.18, sz));
+        this.scene.add(this.sharedBox(0.09, 0.035, 2.10, yellowLineMat, sx - 0.30, sy + 0.23, sz));
       }
 
       // Upper Walkable Concourse Landing Balcony bridging South Sidewalk Escalator into open Line-5 Concourse Doorway
@@ -3544,12 +3582,40 @@ export class DhakaCityEngine {
       escRoof5.lookAt(endP.clone().add(new THREE.Vector3(0, 2.75, 0)));
       this.scene.add(escRoof5);
 
-      this.scene.add(this.sharedBox(5.0, 0.22, 4.2, concourseMat, st.sx - 19.6, 0.11, entryZ));
+      this.scene.add(this.sharedBox(5.2, 0.22, 4.5, concourseMat, st.sx - 19.6, 0.11, entryZ));
+      this.scene.add(this.sharedBox(4.8, 0.03, 2.4, graniteTileMat, st.sx - 19.6, 0.23, entryZ));
       this.scene.add(this.sharedBox(5.2, 0.55, 4.6, mrtRedTrimMat, st.sx - 19.6, 3.85, entryZ));
       this.scene.add(this.sharedBox(5.4, 0.18, 4.8, trussSteelMat, st.sx - 19.6, 4.18, entryZ));
       this.scene.add(this.sharedBox(3.6, 0.1, 3.0, concourseGlowMat, st.sx - 19.6, 3.55, entryZ));
-      [-2.0, 2.0].forEach((oz) => {
-        this.scene.add(this.sharedBox(4.4, 3.6, 0.3, concourseMat, st.sx - 19.6, 1.9, entryZ + oz));
+      [-2.05, 2.05].forEach((oz) => {
+        this.scene.add(this.sharedBox(4.8, 0.95, 0.24, graniteTileMat, st.sx - 19.6, 0.6, entryZ + oz));
+        this.scene.add(this.sharedBox(4.4, 2.55, 0.14, glassMat, st.sx - 19.6, 2.35, entryZ + oz));
+        [-2.2, 0, 2.2].forEach((cx) => {
+          this.scene.add(this.sharedBox(0.26, 3.65, 0.26, mastSteelMat, st.sx - 19.6 + cx, 2.0, entryZ + oz));
+        });
+        this.buildingColliders.push({
+          minX: st.sx - 22.1,
+          maxX: st.sx - 17.1,
+          minZ: entryZ + oz - 0.18,
+          maxZ: entryZ + oz + 0.18,
+          minY: 0,
+          maxY: 4.3,
+          tag: 'metro_kiosk_wall',
+        });
+      });
+      [-1.08, 1.08].forEach((tz) => {
+        this.scene.add(this.sharedBox(1.48, 0.98, 0.28, trussSteelMat, st.sx - 19.6, 0.71, entryZ + tz));
+        this.scene.add(this.sharedBox(1.50, 0.16, 0.30, mrtRedTrimMat, st.sx - 19.6, 1.15, entryZ + tz));
+        this.scene.add(this.sharedBox(0.24, 0.12, 0.24, ledGreenMat, st.sx - 20.15, 1.25, entryZ + tz));
+        this.buildingColliders.push({
+          minX: st.sx - 20.36,
+          maxX: st.sx - 18.84,
+          minZ: entryZ + tz - 0.16,
+          maxZ: entryZ + tz + 0.16,
+          minY: 0,
+          maxY: 1.5,
+          tag: 'metro_turnstile',
+        });
       });
 
       this.metroEscalators.push({
