@@ -388,7 +388,7 @@ export class DhakaCityEngine {
   private static readonly SKY_DAY = new THREE.Color('#38bdf8');
   private static readonly SKY_NIGHT = new THREE.Color('#0a0f1a');
   private static readonly SKY_RAIN = new THREE.Color('#334155');
-  private static readonly SKY_GOLDEN = new THREE.Color('#ea580c');
+  private static readonly SKY_GOLDEN = new THREE.Color('#d4bfa8');
 
   // 3D Firearm Ballistics, Muzzle Flash & Explosion FX
   public isAiming = false;
@@ -2011,6 +2011,12 @@ export class DhakaCityEngine {
       color: '#cbd5e1',
       roughness: 0.72,
     });
+    const bridgeAsphaltMat = new THREE.MeshStandardMaterial({
+      map: loadRealTexture('/textures/dhaka_asphalt.jpg', 3, 18, true),
+      color: '#334155',
+      roughness: 0.88,
+    });
+    const whiteLaneMat = new THREE.MeshBasicMaterial({ color: '#f8fafc' });
     const pierMat = new THREE.MeshStandardMaterial({
       color: '#94a3b8',
       roughness: 0.82,
@@ -2056,10 +2062,18 @@ export class DhakaCityEngine {
       const t = (midZ - zStart) / bridgeLen;
       const segElev = 0.08 + 2.75 * Math.sin(t * Math.PI);
 
-      // Deck Slab
-      const slab = this.sharedBox(bridgeW, 0.75, segLen + 0.1, bridgeConcreteMat, bridgeX, segElev - 0.35, midZ);
+      // Concrete Structural Girder + Dark Dhaka Asphalt Surface + Center Yellow Divider + Sidewalks
+      const slab = this.sharedBox(bridgeW, 0.65, segLen + 0.1, bridgeConcreteMat, bridgeX, segElev - 0.42, midZ);
       slab.receiveShadow = true;
-      this.scene.add(slab);
+      const roadTop = this.sharedBox(bridgeW - 2.6, 0.14, segLen + 0.1, bridgeAsphaltMat, bridgeX, segElev - 0.06, midZ);
+      roadTop.receiveShadow = true;
+      const centerLineW = this.sharedBox(0.16, 0.02, segLen + 0.1, yellowStripeMat, bridgeX - 0.16, segElev + 0.02, midZ);
+      const centerLineE = this.sharedBox(0.16, 0.02, segLen + 0.1, yellowStripeMat, bridgeX + 0.16, segElev + 0.02, midZ);
+      const laneDashL = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, bridgeX - 4.6, segElev + 0.02, midZ);
+      const laneDashR = this.sharedBox(0.14, 0.02, segLen * 0.55, whiteLaneMat, bridgeX + 4.6, segElev + 0.02, midZ);
+      const walkL = this.sharedBox(1.1, 0.22, segLen + 0.1, bridgeConcreteMat, bridgeX - bridgeW / 2 + 0.95, segElev + 0.02, midZ);
+      const walkR = this.sharedBox(1.1, 0.22, segLen + 0.1, bridgeConcreteMat, bridgeX + bridgeW / 2 - 0.95, segElev + 0.02, midZ);
+      this.scene.add(slab, roadTop, centerLineW, centerLineE, laneDashL, laneDashR, walkL, walkR);
 
       // Side Crash Barriers with Hazard Markings
       [-bridgeW / 2 + 0.3, bridgeW / 2 - 0.3].forEach((bx) => {
@@ -2091,14 +2105,15 @@ export class DhakaCityEngine {
       tag: 'buriganga_bridge_guardrail',
     });
 
-    // Heavy Concrete Piers in the Buriganga River Channel
+    // Heavy Concrete Piers in the Buriganga River Channel (Top tucked strictly beneath bridge slab at pierElev - 0.55)
     for (let pz = 320; pz <= 430; pz += 36) {
       const t = (pz - zStart) / bridgeLen;
       const pierElev = 0.08 + 2.75 * Math.sin(t * Math.PI);
+      const pierH = pierElev + 2.4;
 
       [-bridgeW / 3, bridgeW / 3].forEach((px) => {
-        const pier = new THREE.Mesh(this.cylCache(1.4, 1.7, pierElev + 3.0, 14), pierMat);
-        pier.position.set(bridgeX + px, (pierElev - 3.0) / 2 + 0.5, pz);
+        const pier = new THREE.Mesh(this.cylCache(1.4, 1.7, pierH, 14), pierMat);
+        pier.position.set(bridgeX + px, pierElev - 0.55 - pierH / 2, pz);
         pier.castShadow = true;
         this.scene.add(pier);
 
@@ -2168,7 +2183,7 @@ export class DhakaCityEngine {
       const oW = oRoad ? oRoad.width : 18;
 
       // 2.1 North Approach Ramp (Z: 265 to 285, rising Y: 0.08 -> 1.0)
-      const northRamp = new THREE.Mesh(this.boxCache(oW, 0.8, rampLen2 + 0.2), bridgeConcreteMat);
+      const northRamp = new THREE.Mesh(this.boxCache(oW - 1.8, 0.8, rampLen2 + 0.2), bridgeAsphaltMat);
       northRamp.position.set(ox, 0.54, 275);
       northRamp.rotation.x = -rampAngle;
       northRamp.receiveShadow = true;
@@ -2182,10 +2197,14 @@ export class DhakaCityEngine {
         this.scene.add(rail);
       });
 
-      // 2.2 Solid Main Bridge Deck Slab (Z: 285 to 460 at Y = 1.0, flush with embankment)
-      const oDeck = this.sharedBox(oW, 0.8, bridgeLen, bridgeConcreteMat, ox, 0.6, (zStart + zEnd) / 2);
+      // 2.2 Solid Concrete Structural Bridge Deck + Dark Asphalt Roadway + Lane Stripes (Z: 285 to 460 at Y = 1.0)
+      const oDeck = this.sharedBox(oW, 0.68, bridgeLen, bridgeConcreteMat, ox, 0.54, (zStart + zEnd) / 2);
       oDeck.receiveShadow = true;
-      this.scene.add(oDeck);
+      const oAsphalt = this.sharedBox(oW - 2.2, 0.14, bridgeLen, bridgeAsphaltMat, ox, 0.94, (zStart + zEnd) / 2);
+      oAsphalt.receiveShadow = true;
+      const oCenterN = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox - 0.15, 1.02, (zStart + zEnd) / 2);
+      const oCenterS = this.sharedBox(0.16, 0.02, bridgeLen, yellowStripeMat, ox + 0.15, 1.02, (zStart + zEnd) / 2);
+      this.scene.add(oDeck, oAsphalt, oCenterN, oCenterS);
 
       // Side Guardrails along main span
       [-oW / 2 + 0.25, oW / 2 - 0.25].forEach((gx) => {
@@ -2201,7 +2220,7 @@ export class DhakaCityEngine {
       });
 
       // 2.3 South Approach Ramp (Z: 460 to 480, declining Y: 1.0 -> 0.08)
-      const southRamp = new THREE.Mesh(this.boxCache(oW, 0.8, rampLen2 + 0.2), bridgeConcreteMat);
+      const southRamp = new THREE.Mesh(this.boxCache(oW - 1.8, 0.8, rampLen2 + 0.2), bridgeAsphaltMat);
       southRamp.position.set(ox, 0.54, 470);
       southRamp.rotation.x = rampAngle;
       southRamp.receiveShadow = true;
@@ -2235,10 +2254,10 @@ export class DhakaCityEngine {
         tag: 'buriganga_bridge_guardrail',
       });
 
-      // 2.4 Concrete Water Piers in the Buriganga River Channel
+      // 2.4 Concrete Water Piers in the Buriganga River Channel (strictly below deck underside y = 0.55)
       for (let pz = 320; pz <= 430; pz += 36) {
-        const pier = new THREE.Mesh(this.cylCache(1.3, 1.5, 4.2, 12), pierMat);
-        pier.position.set(ox, 0.1, pz);
+        const pier = new THREE.Mesh(this.cylCache(1.3, 1.5, 2.8, 12), pierMat);
+        pier.position.set(ox, -0.85, pz);
         pier.castShadow = true;
         this.scene.add(pier);
 
@@ -2680,8 +2699,11 @@ export class DhakaCityEngine {
       // Exclude cross streets, flyover intersections, and SAARC Fountain Roundabout (-28)
       if (line6CrossRoads.some((cr) => Math.abs(z - cr) < (cr === -28 ? 26 : 18))) continue;
 
+      const nearBurigangaBridge = z >= 278 && z <= 468;
+      const pierX = nearBurigangaBridge ? -15.2 : -12.2;
+
       this.circleColliders.push({
-        x: -12.2,
+        x: pierX,
         z,
         radius: 1.15,
         tag: 'metro_pillar',
@@ -2690,15 +2712,15 @@ export class DhakaCityEngine {
         new THREE.CylinderGeometry(1.05, 1.25, 11.5, 14),
         concreteMat
       );
-      pier.position.set(-12.2, 5.75, z);
+      pier.position.set(pierX, 5.75, z);
       pier.castShadow = true;
       this.scene.add(pier);
 
       const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(6.4, 1.4, 3.4),
+        new THREE.BoxGeometry(nearBurigangaBridge ? 7.8 : 6.4, 1.4, 3.4),
         concreteMat
       );
-      cap.position.set(-12.2, 11.5, z);
+      cap.position.set(nearBurigangaBridge ? -12.9 : -12.2, 11.5, z);
       this.scene.add(cap);
 
       // Steel Catenary Overhead Mast (Line-6)
@@ -13571,7 +13593,7 @@ export class DhakaCityEngine {
     (this.scene.background as THREE.Color).lerp(targetSky, dt * 2.5);
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.color.lerp(targetSky, dt * 2.5);
-      this.scene.fog.density = isRain ? 0.0046 : 0.0019;
+      this.scene.fog.density = isRain ? 0.0042 : 0.00095;
     }
 
 
